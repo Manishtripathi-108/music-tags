@@ -1,0 +1,45 @@
+{
+    "name": "music-tags",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "format": "prettier --write .",
+        "lint": "eslint"
+    },
+    "dependencies": {
+        "@ark-ui/react": "^5.38.2",
+        "@hookform/resolvers": "^5.9.1",
+        "@iconify/react": "^6.0.2",
+        "@libsql/client": "^0.17.4",
+        "@tanstack/react-table": "^9.1.2",
+        "@tanstack/react-virtual": "^3.14.9",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
+        "drizzle-orm": "^0.45.2",
+        "next": "16.3.1",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "react-hook-form": "^7.85.0",
+        "tailwind-merge": "^3.6.0",
+        "tailwindcss-animate": "^1.0.7",
+        "zod": "^4.4.3",
+        "zustand": "^5.0.15"
+    },
+    "devDependencies": {
+        "@tailwindcss/postcss": "^4",
+        "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "drizzle-kit": "^0.18.1",
+        "eslint": "^9",
+        "eslint-config-next": "16.3.1",
+        "prettier": "^3.9.6",
+        "prettier-plugin-tailwindcss": "^0.8.1",
+        "tailwindcss": "^4",
+        "typescript": "^5"
+    }
+}
