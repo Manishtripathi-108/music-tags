@@ -105,7 +105,7 @@ export function AudioInspector() {
 
     if (!activeTrackId || (!metadata && !isLoading)) {
         return (
-            <aside className="flex w-80 select-none flex-col items-center justify-center border-l border-zinc-800 bg-zinc-950/90 p-6 text-center text-zinc-500">
+            <aside className="flex w-80 flex-col items-center justify-center border-l border-zinc-800 bg-zinc-950/90 p-6 text-center text-zinc-500 select-none">
                 <Icon icon="audio" className="mb-2 h-8 w-8 opacity-20" />
                 <span className="text-xs font-medium">Select a track to inspect tags</span>
             </aside>
@@ -120,7 +120,7 @@ export function AudioInspector() {
     );
 
     return (
-        <aside className="flex h-full w-80 select-none flex-col overflow-hidden border-l border-zinc-800 bg-zinc-950 text-xs">
+        <aside className="flex h-full w-80 flex-col overflow-hidden border-l border-zinc-800 bg-zinc-950 text-xs select-none">
             {/* Inspector Header & Cover Art Thumbnail */}
             <div className="border-zinc-850 flex items-center gap-3 border-b bg-zinc-900/40 p-3">
                 <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-800 bg-zinc-900 shadow-inner">
@@ -272,7 +272,7 @@ export function AudioInspector() {
                         </div>
                         <div className="flex justify-between py-0.5 text-zinc-400">
                             <span>Codec</span>
-                            <span className="uppercase text-zinc-100">{metadata?.codec || '-'}</span>
+                            <span className="text-zinc-100 uppercase">{metadata?.codec || '-'}</span>
                         </div>
                     </div>
                 </TabsContent>
@@ -280,7 +280,7 @@ export function AudioInspector() {
                 {/* Tab 3: Raw ExifTool Tag Tree */}
                 <TabsContent value="raw" className="flex flex-1 flex-col space-y-2 overflow-hidden p-2 font-mono">
                     <div className="relative">
-                        <Icon icon="search" className="absolute left-2 top-1.5 h-3 w-3 text-zinc-500" />
+                        <Icon icon="search" className="absolute top-1.5 left-2 h-3 w-3 text-zinc-500" />
                         <Input
                             placeholder="Filter tags..."
                             value={rawSearch}
@@ -296,7 +296,7 @@ export function AudioInspector() {
                                     <span className="font-bold text-blue-400">{t.tag}</span>
                                     <span className="bg-zinc-850 rounded px-1 text-[9px] text-zinc-500">{t.group}</span>
                                 </div>
-                                <div className="mt-0.5 select-text break-all text-zinc-200">{String(t.value)}</div>
+                                <div className="mt-0.5 break-all text-zinc-200 select-text">{String(t.value)}</div>
                             </div>
                         ))}
                     </div>

@@ -20,7 +20,7 @@ export function ActivityDrawer() {
     const percent = totalEstimated > 0 ? Math.min(Math.round(((isExtracting ? extractedFiles : scannedFiles) / totalEstimated) * 100), 100) : 0;
 
     return (
-        <div className="flex h-9 select-none items-center justify-between border-t border-zinc-800 bg-zinc-950 px-3 font-mono text-[11px] text-zinc-300">
+        <div className="flex h-9 items-center justify-between border-t border-zinc-800 bg-zinc-950 px-3 font-mono text-[11px] text-zinc-300 select-none">
             <div className="flex min-w-0 flex-1 items-center gap-3">
                 {isCompleted ? (
                     <Icon icon="success" className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
@@ -30,7 +30,7 @@ export function ActivityDrawer() {
                     <Icon icon="loading" className="h-3.5 w-3.5 shrink-0 text-blue-400" />
                 )}
 
-                <span className="shrink-0 font-semibold uppercase tracking-wide text-zinc-100">{status}:</span>
+                <span className="shrink-0 font-semibold tracking-wide text-zinc-100 uppercase">{status}:</span>
 
                 <span className="truncate text-xs text-zinc-400">
                     {isScanning && `Discovered ${scannedFiles.toLocaleString()} audio tracks... (${filesPerSecond} files/s)`}

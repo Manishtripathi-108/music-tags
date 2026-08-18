@@ -22,7 +22,7 @@ const TabsTrigger = React.forwardRef<React.ComponentRef<typeof ArkTabs.Trigger>,
         <ArkTabs.Trigger
             ref={ref}
             className={cn(
-                'inline-flex items-center justify-center whitespace-nowrap rounded px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[selected]:bg-zinc-800 data-[state=active]:bg-zinc-800 data-[selected]:text-zinc-100 data-[state=active]:text-zinc-100 data-[selected]:shadow-sm',
+                'ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center rounded px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-all focus-visible:ring-1 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 data-[selected]:bg-zinc-800 data-[selected]:text-zinc-100 data-[selected]:shadow-sm data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-100',
                 className
             )}
             {...props}
@@ -35,7 +35,7 @@ const TabsContent = React.forwardRef<React.ComponentRef<typeof ArkTabs.Content>,
     ({ className, ...props }, ref) => (
         <ArkTabs.Content
             ref={ref}
-            className={cn('ring-offset-background focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', className)}
+            className={cn('ring-offset-background focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none', className)}
             {...props}
         />
     )

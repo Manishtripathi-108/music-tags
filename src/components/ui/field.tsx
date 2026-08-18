@@ -13,7 +13,7 @@ const FieldLabel = React.forwardRef<React.ComponentRef<typeof ArkField.Label>, R
     ({ className, ...props }, ref) => (
         <ArkField.Label
             ref={ref}
-            className={cn('select-none text-[10px] font-semibold uppercase tracking-wider text-zinc-400', className)}
+            className={cn('text-[10px] font-semibold tracking-wider text-zinc-400 uppercase select-none', className)}
             {...props}
         />
     )
@@ -25,7 +25,7 @@ const FieldInput = React.forwardRef<React.ComponentRef<typeof ArkField.Input>, R
         <ArkField.Input
             ref={ref}
             className={cn(
-                'flex h-7 w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 shadow-sm transition-colors file:border-0 file:bg-transparent file:text-xs file:font-medium placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-red-500/70 data-[invalid]:focus-visible:ring-red-500',
+                'flex h-7 w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 shadow-sm transition-colors file:border-0 file:bg-transparent file:text-xs file:font-medium placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-red-500/70 data-[invalid]:focus-visible:ring-red-500',
                 className
             )}
             {...props}
@@ -39,7 +39,7 @@ const FieldTextarea = React.forwardRef<React.ComponentRef<typeof ArkField.Textar
         <ArkField.Textarea
             ref={ref}
             className={cn(
-                'flex min-h-[60px] w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 shadow-sm transition-colors placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-red-500/70 data-[invalid]:focus-visible:ring-red-500',
+                'flex min-h-[60px] w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 shadow-sm transition-colors placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-red-500/70 data-[invalid]:focus-visible:ring-red-500',
                 className
             )}
             {...props}

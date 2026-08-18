@@ -86,7 +86,7 @@ export function VirtualizedTrackGrid() {
     }
 
     return (
-        <div className="flex min-w-0 flex-1 select-none flex-col overflow-hidden bg-zinc-950">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-950 select-none">
             {/* Sticky Table Header */}
             <div className="flex h-7 items-center border-b border-zinc-800 bg-zinc-900/90 px-2 font-mono text-[11px] font-semibold text-zinc-400">
                 <div className="w-7 text-center">#</div>

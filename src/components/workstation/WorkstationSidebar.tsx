@@ -23,11 +23,11 @@ export function WorkstationSidebar() {
     ];
 
     return (
-        <aside className="flex h-full w-56 select-none flex-col justify-between border-r border-zinc-800 bg-zinc-950/80 text-xs">
+        <aside className="flex h-full w-56 flex-col justify-between border-r border-zinc-800 bg-zinc-950/80 text-xs select-none">
             <div className="space-y-4 p-3">
                 {/* Navigation Categories */}
                 <div>
-                    <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">
                         <Icon icon="playlist" className="h-3 w-3 text-zinc-400" />
                         <span>Library Views</span>
                     </div>
@@ -60,7 +60,7 @@ export function WorkstationSidebar() {
 
                 {/* Audio Workflow Shortcuts */}
                 <div>
-                    <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">
                         <Icon icon="presentation" className="h-3 w-3 text-zinc-400" />
                         <span>Workstation Tasks</span>
                     </div>

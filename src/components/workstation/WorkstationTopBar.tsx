@@ -33,10 +33,10 @@ export function WorkstationTopBar() {
     }, []);
 
     return (
-        <header className="flex h-10 select-none items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3">
+        <header className="flex h-10 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3 select-none">
             {/* Brand & Stats */}
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-100">
+                <div className="flex items-center gap-1.5 text-xs font-bold tracking-wider text-zinc-100 uppercase">
                     <Icon icon="audio" className="h-4 w-4 text-blue-500" />
                     <span>MetaTagStudio</span>
                     <Badge variant="outline" className="px-1 py-0 font-mono text-[9px] text-zinc-400">
@@ -55,7 +55,7 @@ export function WorkstationTopBar() {
             {/* Center Search Input */}
             <div className="mx-4 max-w-md flex-1">
                 <div className="relative">
-                    <Icon icon="search" className="absolute left-2 top-2 h-3.5 w-3.5 text-zinc-500" />
+                    <Icon icon="search" className="absolute top-2 left-2 h-3.5 w-3.5 text-zinc-500" />
                     <Input
                         type="text"
                         placeholder="Search titles, artists, albums, genres..."
@@ -64,7 +64,7 @@ export function WorkstationTopBar() {
                         className="h-7 border-zinc-800 bg-zinc-900/80 pl-7 text-xs focus-visible:ring-blue-500"
                     />
                     {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1.5 text-[10px] text-zinc-500 hover:text-zinc-300">
+                        <button onClick={() => setSearchQuery('')} className="absolute top-1.5 right-2 text-[10px] text-zinc-500 hover:text-zinc-300">
                             CLEAR
                         </button>
                     )}
