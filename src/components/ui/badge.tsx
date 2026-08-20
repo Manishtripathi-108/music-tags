@@ -90,7 +90,7 @@ export type BadgeProps = ComponentProps<'span'> &
 
 /* ---------------------------------- Component --------------------------------- */
 
-function Badge({ ref, className, size, variant, color, shape, stroke, children, ...props }: BadgeProps) {
+const Badge = ({ ref, className, size, variant, color, shape, stroke, children, ...props }: BadgeProps) => {
     const activeVariant = variant ?? color ?? 'default';
 
     return (
@@ -109,7 +109,7 @@ function Badge({ ref, className, size, variant, color, shape, stroke, children, 
             {children}
         </span>
     );
-}
+};
 
 export { Badge };
 export default Badge;
