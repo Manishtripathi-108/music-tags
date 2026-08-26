@@ -4,26 +4,34 @@ import React, { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import ThemeToggler from '@/components/ui/ThemeToggler';
+
 import { useAudioStore } from '@/store/audioStore';
+import { FieldInput } from '../ui/Field';
+import { MediaStatusResponse } from '@/types/client.types';
+import axios from 'axios';
+
+type SystemStatus = {
+    exiftool?: boolean;
+    ffprobe?: boolean;
+    ffmpeg?: boolean;
+};
 
 export function WorkstationTopBar() {
     const { totalTracks, searchQuery, setSearchQuery, fetchTracks, setIsScanModalOpen, isLoadingTracks } = useAudioStore();
 
-    const [systemStatus, setSystemStatus] = useState<{
-        exiftool?: boolean;
-        ffprobe?: boolean;
-        ffmpeg?: boolean;
-    }>({
+    const [systemStatus, setSystemStatus] = useState<SystemStatus>({
         exiftool: true,
         ffprobe: true,
         ffmpeg: true,
     });
 
     useEffect(() => {
-        fetch('/api/status')
-            .then((res) => res.json())
-            .then((data) => {
+        // Fetch system status
+        axios
+            .get<MediaStatusResponse>('/api/status')
+            .then((res) => {
+                const data = res.data;
                 if (data.binaries) {
                     setSystemStatus({
                         exiftool: data.binaries.exiftool?.found,
@@ -32,25 +40,31 @@ export function WorkstationTopBar() {
                     });
                 }
             })
-            .catch(() => {});
+            .catch(() => {
+                setSystemStatus({
+                    exiftool: false,
+                    ffprobe: false,
+                    ffmpeg: false,
+                });
+            });
     }, []);
 
     return (
-        <header className="flex h-10 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3 select-none">
+        <header className="bg-background text-foreground flex h-10 items-center justify-between border-b px-3 select-none">
             {/* Brand & Stats */}
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold tracking-wider text-zinc-100 uppercase">
-                    <Icon icon="audio" className="h-4 w-4 text-blue-500" />
+                <div className="text-muted-foreground flex items-center gap-1.5 text-xs leading-0 font-bold tracking-wider uppercase">
+                    <Icon icon="audio" className="text-primary h-4 w-4" />
                     <span>MetaTagStudio</span>
-                    <Badge variant="outline" className="px-1 py-0 font-mono text-[9px] text-zinc-400">
+                    <Badge variant="outline" size="xs" className="text-muted-foreground">
                         AUDIO
                     </Badge>
                 </div>
 
-                <div className="h-4 w-[1px] bg-zinc-800" />
+                <div className="bg-border h-4 w-px" />
 
-                <div className="flex items-center gap-1 font-mono text-xs text-zinc-400">
-                    <Icon icon="audio" className="h-3.5 w-3.5 text-zinc-500" />
+                <div className="text-muted-foreground flex items-center gap-1 font-mono text-xs leading-0">
+                    <Icon icon="audio" className="size-3.5" />
                     <span>{totalTracks.toLocaleString()} tracks</span>
                 </div>
             </div>
@@ -58,16 +72,18 @@ export function WorkstationTopBar() {
             {/* Center Search Input */}
             <div className="mx-4 max-w-md flex-1">
                 <div className="relative">
-                    <Icon icon="search" className="absolute top-2 left-2 h-3.5 w-3.5 text-zinc-500" />
-                    <Input
+                    <Icon icon="search" className="text-muted-foreground absolute top-1.5 left-2 size-3.5" />
+                    <FieldInput
                         type="text"
                         placeholder="Search titles, artists, albums, genres..."
                         value={searchQuery}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                        className="h-7 border-zinc-800 bg-zinc-900/80 pl-7 text-xs text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-500"
+                        className="placeholder:text-muted-foreground h-7 pr-12 pl-7 text-xs"
                     />
                     {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="absolute top-1.5 right-2 text-[10px] text-zinc-500 hover:text-zinc-300">
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="text-muted-foreground absolute top-2 right-2 text-[10px] hover:text-zinc-300">
                             CLEAR
                         </button>
                     )}
@@ -76,34 +92,26 @@ export function WorkstationTopBar() {
 
             {/* Action Controls & Engine Status */}
             <div className="flex items-center gap-2">
-                <div className="mr-2 hidden items-center gap-1 font-mono text-[10px] text-zinc-500 lg:flex">
-                    <span
-                        className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${
-                            systemStatus.exiftool ? 'bg-emerald-950/30 text-emerald-400' : 'bg-amber-950/30 text-amber-500'
-                        }`}>
-                        <Icon icon="success" className="h-3 w-3" /> ExifTool
-                    </span>
-                    <span
-                        className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${
-                            systemStatus.ffprobe ? 'bg-emerald-950/30 text-emerald-400' : 'bg-amber-950/30 text-amber-500'
-                        }`}>
-                        <Icon icon="processing" className="h-3 w-3" /> FFprobe
-                    </span>
+                <div className="mr-2 hidden items-center gap-1 font-mono lg:flex">
+                    <Badge variant={systemStatus.exiftool ? 'success' : 'warning'} size="sm" className="flex items-center gap-1">
+                        <Icon icon={systemStatus.exiftool ? 'success' : 'warning'} className="size-3" /> ExifTool
+                    </Badge>
+                    <Badge variant={systemStatus.ffprobe ? 'success' : 'warning'} size="sm" className="flex items-center gap-1">
+                        <Icon icon={systemStatus.ffprobe ? 'success' : 'warning'} className="size-3" /> FFprobe
+                    </Badge>
                 </div>
 
                 <Button variant="outline" size="sm" onClick={() => fetchTracks()} disabled={isLoadingTracks} className="h-7 gap-1.5 text-xs">
-                    <Icon icon="refresh" className={`h-3.5 w-3.5 ${isLoadingTracks ? 'animate-spin' : ''}`} />
+                    <Icon icon={isLoadingTracks ? 'loading' : 'refresh'} className={`size-3.5`} />
                     <span>Refresh</span>
                 </Button>
 
-                <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setIsScanModalOpen(true)}
-                    className="h-7 gap-1.5 bg-blue-600 text-xs text-white shadow-sm hover:bg-blue-500">
-                    <Icon icon="open" className="h-3.5 w-3.5" />
+                <Button variant="primary" size="sm" onClick={() => setIsScanModalOpen(true)}>
+                    <Icon icon="open" className="size-3.5" />
                     <span>Scan Music Folder</span>
                 </Button>
+
+                <ThemeToggler />
             </div>
         </header>
     );

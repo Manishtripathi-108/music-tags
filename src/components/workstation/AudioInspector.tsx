@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { Controller, useForm } from 'react-hook-form';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { Input } from '@/components/ui/Input';
-import { Field, FieldInput, FieldLabel, FieldTextarea } from '@/components/ui/Field';
+import { Field, FieldInput, FieldLabel, FieldTextarea, FieldError } from '@/components/ui/Field';
 import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
 import { NumberInputField } from '@/components/ui/NumberInput';
 import { formatBitrate, formatDuration, formatSampleRate } from '@/lib/utils';
@@ -34,7 +34,14 @@ export function AudioInspector() {
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
-    const { register, handleSubmit, reset, watch, control } = useForm<TagFormValues>({
+    const {
+        register,
+        handleSubmit,
+        reset,
+        watch,
+        control,
+        formState: { errors },
+    } = useForm<TagFormValues>({
         defaultValues: {
             title: '',
             artist: '',
@@ -121,7 +128,7 @@ export function AudioInspector() {
 
     if (!activeTrackId || (!metadata && !isLoading)) {
         return (
-            <aside className="flex w-80 flex-col items-center justify-center border-l border-zinc-800 bg-zinc-950/90 p-6 text-center text-zinc-500 select-none">
+            <aside className="bg-card text-muted-foreground flex w-80 flex-col items-center justify-center border border-l p-6 text-center select-none">
                 <Icon icon="audio" className="mb-2 h-8 w-8 opacity-20" />
                 <span className="text-xs font-medium">Select a track to inspect tags</span>
             </aside>
@@ -136,32 +143,35 @@ export function AudioInspector() {
     );
 
     return (
-        <aside className="flex h-full w-80 flex-col overflow-hidden border-l border-zinc-800 bg-zinc-950 text-xs select-none">
+        <aside className="bg-background flex h-full w-80 flex-col overflow-hidden border border-l text-xs select-none">
             {/* Inspector Header & Cover Art Thumbnail */}
-            <div className="border-zinc-850 flex items-center gap-3 border-b bg-zinc-900/40 p-3">
-                <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-zinc-800 bg-zinc-900 shadow-inner">
+            <div className="bg-background flex items-center gap-3 border-b p-3">
+                <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border shadow-inner">
                     {metadata?.hasCoverArt ? (
-                        <img
+                        <Image
                             src={`/api/media/art/${activeTrackId}.jpg`}
                             alt="Cover Art"
+                            fill
+                            sizes="56px"
                             className="h-full w-full object-cover"
                             onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
+                                e.currentTarget.style.display = 'none';
                             }}
                         />
                     ) : (
-                        <Icon icon="audio" className="h-6 w-6 text-zinc-700" />
+                        <Icon icon="audio" className="text-border h-6 w-6" />
                     )}
                 </div>
+
                 <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-semibold text-zinc-100">{watchedTitle || metadata?.title || 'Untitled'}</div>
-                    <div className="truncate text-[11px] text-zinc-400">{watchedArtist || metadata?.artist || 'Unknown Artist'}</div>
+                    <div className="text-muted-foreground truncate text-xs font-semibold">{watchedTitle || metadata?.title || 'Untitled'}</div>
+                    <div className="text-muted-foreground truncate text-[11px]">{watchedArtist || metadata?.artist || 'Unknown Artist'}</div>
                     <div className="mt-1 flex items-center gap-1">
-                        <Badge variant="outline" className="px-1 py-0 font-mono text-[9px] text-zinc-400">
+                        <Badge variant="outline" size="xs" className="text-muted-foreground font-mono">
                             {metadata?.codec ? metadata.codec.toUpperCase() : 'AUDIO'}
                         </Badge>
                         {metadata?.lossless && (
-                            <Badge variant="success" className="px-1 py-0 font-mono text-[9px]">
+                            <Badge variant="success" size="xs" className="font-mono">
                                 LOSSLESS
                             </Badge>
                         )}
@@ -172,7 +182,7 @@ export function AudioInspector() {
             {/* Tabs Container */}
             <Tabs defaultValue="tags" className="flex min-h-0 flex-1 flex-col">
                 <div className="px-3 pt-2">
-                    <TabsList className="grid h-7 w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="tags" className="text-xs">
                             <Icon icon="document" className="size-3" />
                             Tags
@@ -182,49 +192,52 @@ export function AudioInspector() {
                             Specs
                         </TabsTrigger>
                         <TabsTrigger value="raw" className="text-xs">
-                            <Icon icon="code" className="size-3" />
+                            <Icon icon="raw" className="size-3" />
                             Raw ({rawTags.length})
                         </TabsTrigger>
                         <TabsIndicator />
                     </TabsList>
                 </div>
 
-                {/* Tab 1: Canonical Audio Tags Editor with Ark UI Fieldset, Field, NumberInput */}
                 <TabsContent value="tags" className="flex-1 space-y-3 overflow-auto p-3 font-mono">
                     <form onSubmit={handleSubmit(onSave)} className="space-y-3">
                         {/* Fieldset: Track Identification */}
-                        <Fieldset className="border-zinc-800/80 bg-zinc-900/30 p-2.5">
-                            <FieldsetLegend className="text-[10px] text-blue-400">
+                        <Fieldset className="border p-2.5">
+                            <FieldsetLegend className="text-primary text-[10px]">
                                 <Icon icon="audio" className="size-3" />
                                 Track Information
                             </FieldsetLegend>
                             <FieldsetContent className="gap-2">
-                                <Field>
+                                <Field invalid={!!errors.title}>
                                     <FieldLabel>Title</FieldLabel>
-                                    <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('title')} />
+                                    <FieldInput {...register('title')} />
+                                    <FieldError>{errors.title?.message}</FieldError>
                                 </Field>
 
                                 <div className="grid grid-cols-2 gap-2">
-                                    <Field>
+                                    <Field invalid={!!errors.artist}>
                                         <FieldLabel>Artist</FieldLabel>
-                                        <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('artist')} />
+                                        <FieldInput {...register('artist')} />
+                                        <FieldError>{errors.artist?.message}</FieldError>
                                     </Field>
-                                    <Field>
+                                    <Field invalid={!!errors.albumArtist}>
                                         <FieldLabel>Album Artist</FieldLabel>
-                                        <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('albumArtist')} />
+                                        <FieldInput {...register('albumArtist')} />
+                                        <FieldError>{errors.albumArtist?.message}</FieldError>
                                     </Field>
                                 </div>
 
-                                <Field>
+                                <Field invalid={!!errors.album}>
                                     <FieldLabel>Album</FieldLabel>
-                                    <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('album')} />
+                                    <FieldInput {...register('album')} />
+                                    <FieldError>{errors.album?.message}</FieldError>
                                 </Field>
                             </FieldsetContent>
                         </Fieldset>
 
                         {/* Fieldset: Track Numerical & Musical Specs with NumberInput */}
-                        <Fieldset className="border-zinc-800/80 bg-zinc-900/30 p-2.5">
-                            <FieldsetLegend className="text-[10px] text-emerald-400">
+                        <Fieldset className="border not-first:p-2.5">
+                            <FieldsetLegend className="text-primary text-[10px]">
                                 <Icon icon="settings" className="size-3" />
                                 Numerical & Musical
                             </FieldsetLegend>
@@ -240,7 +253,6 @@ export function AudioInspector() {
                                                 min={1}
                                                 max={999}
                                                 onValueChange={(details) => onChange(details.value)}
-                                                inputClassName="h-7 border-zinc-800 bg-zinc-900 text-xs"
                                             />
                                         )}
                                     />
@@ -254,7 +266,6 @@ export function AudioInspector() {
                                                 min={1900}
                                                 max={2099}
                                                 onValueChange={(details) => onChange(details.value)}
-                                                inputClassName="h-7 border-zinc-800 bg-zinc-900 text-xs"
                                             />
                                         )}
                                     />
@@ -269,54 +280,53 @@ export function AudioInspector() {
                                                 max={300}
                                                 step={0.5}
                                                 onValueChange={(details) => onChange(details.value)}
-                                                inputClassName="h-7 border-zinc-800 bg-zinc-900 text-xs"
                                             />
                                         )}
                                     />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2">
-                                    <Field>
+                                    <Field invalid={!!errors.genre}>
                                         <FieldLabel>Genre</FieldLabel>
-                                        <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('genre')} />
+                                        <FieldInput {...register('genre')} />
+                                        <FieldError>{errors.genre?.message}</FieldError>
                                     </Field>
-                                    <Field>
+                                    <Field invalid={!!errors.initialKey}>
                                         <FieldLabel>Key</FieldLabel>
-                                        <FieldInput placeholder="8A / Am" className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('initialKey')} />
+                                        <FieldInput
+                                            placeholder="8A / Am"
+
+                                            {...register('initialKey')}
+                                        />
+                                        <FieldError>{errors.initialKey?.message}</FieldError>
                                     </Field>
                                 </div>
                             </FieldsetContent>
                         </Fieldset>
 
                         {/* Fieldset: Notes & Extra Info */}
-                        <Fieldset className="border-zinc-800/80 bg-zinc-900/30 p-2.5">
-                            <FieldsetLegend className="text-[10px] text-zinc-400">
+                        <Fieldset className="border p-2.5">
+                            <FieldsetLegend className="text-foreground text-[10px]">
                                 <Icon icon="document" className="size-3" />
                                 Notes
                             </FieldsetLegend>
                             <FieldsetContent className="gap-2">
-                                <Field>
+                                <Field invalid={!!errors.comment}>
                                     <FieldLabel>Comment</FieldLabel>
-                                    <FieldTextarea
-                                        rows={2}
-                                        className="min-h-[50px] border-zinc-800 bg-zinc-900 text-xs"
-                                        {...register('comment')}
-                                    />
+                                    <FieldTextarea rows={2} {...register('comment')} />
+                                    <FieldError>{errors.comment?.message}</FieldError>
                                 </Field>
                             </FieldsetContent>
                         </Fieldset>
 
                         <div className="pt-1">
-                            <Button
-                                type="submit"
-                                disabled={isSaving}
-                                className="h-8 w-full gap-1.5 bg-blue-600 text-xs font-medium text-white hover:bg-blue-500">
+                            <Button type="submit" disabled={isSaving} variant="info" className="w-full">
                                 {isSaving ? (
-                                    <Icon icon="loading" className="h-3.5 w-3.5" />
+                                    <Icon icon="loading" className="size-3.5" />
                                 ) : saveSuccess ? (
-                                    <Icon icon="success" className="h-3.5 w-3.5 text-emerald-300" />
+                                    <Icon icon="success" className="size-3.5 text-emerald-400" />
                                 ) : (
-                                    <Icon icon="diskImage" className="h-3.5 w-3.5" />
+                                    <Icon icon="diskImage" className="size-3.5" />
                                 )}
                                 <span>{isSaving ? 'Writing Tags...' : saveSuccess ? 'Saved Successfully' : 'Write Tags'}</span>
                             </Button>
@@ -326,32 +336,32 @@ export function AudioInspector() {
 
                 {/* Tab 2: Technical Stream Specs (FFprobe) */}
                 <TabsContent value="specs" className="flex-1 space-y-2 overflow-auto p-3 font-mono text-[11px]">
-                    <div className="border-zinc-850 space-y-1.5 rounded border bg-zinc-900/60 p-2.5">
-                        <div className="border-zinc-850 flex justify-between border-b py-0.5 text-zinc-400">
+                    <div className="space-y-1.5 rounded border p-2.5">
+                        <div className="text-foreground flex justify-between border-b py-0.5">
                             <span>Duration</span>
-                            <span className="text-zinc-100">{formatDuration(metadata?.durationSeconds)}</span>
+                            <span className="text-muted-foreground">{formatDuration(metadata?.durationSeconds)}</span>
                         </div>
-                        <div className="border-zinc-850 flex justify-between border-b py-0.5 text-zinc-400">
+                        <div className="text-foreground flex justify-between border-b py-0.5">
                             <span>Bitrate</span>
-                            <span className="text-zinc-100">{formatBitrate(metadata?.bitrateKbps)}</span>
+                            <span className="text-muted-foreground">{formatBitrate(metadata?.bitrateKbps)}</span>
                         </div>
-                        <div className="border-zinc-850 flex justify-between border-b py-0.5 text-zinc-400">
+                        <div className="text-foreground flex justify-between border-b py-0.5">
                             <span>Sample Rate</span>
-                            <span className="text-zinc-100">{formatSampleRate(metadata?.sampleRateHz)}</span>
+                            <span className="text-muted-foreground">{formatSampleRate(metadata?.sampleRateHz)}</span>
                         </div>
-                        <div className="border-zinc-850 flex justify-between border-b py-0.5 text-zinc-400">
+                        <div className="text-foreground flex justify-between border-b py-0.5">
                             <span>Channels</span>
-                            <span className="text-zinc-100">
+                            <span className="text-muted-foreground">
                                 {metadata?.channels ? `${metadata.channels}ch (${metadata.channelLayout || 'standard'})` : '-'}
                             </span>
                         </div>
-                        <div className="border-zinc-850 flex justify-between border-b py-0.5 text-zinc-400">
+                        <div className="text-foreground flex justify-between border-b py-0.5">
                             <span>Bit Depth</span>
-                            <span className="text-zinc-100">{metadata?.bitDepth ? `${metadata.bitDepth}-bit` : '-'}</span>
+                            <span className="text-muted-foreground">{metadata?.bitDepth ? `${metadata.bitDepth}-bit` : '-'}</span>
                         </div>
-                        <div className="flex justify-between py-0.5 text-zinc-400">
+                        <div className="text-foreground flex justify-between py-0.5">
                             <span>Codec</span>
-                            <span className="text-zinc-100 uppercase">{metadata?.codec || '-'}</span>
+                            <span className="text-muted-foreground uppercase">{metadata?.codec || '-'}</span>
                         </div>
                     </div>
                 </TabsContent>
@@ -359,23 +369,26 @@ export function AudioInspector() {
                 {/* Tab 3: Raw ExifTool Tag Tree */}
                 <TabsContent value="raw" className="flex flex-1 flex-col space-y-2 overflow-hidden p-2 font-mono">
                     <div className="relative">
-                        <Icon icon="search" className="absolute top-1.5 left-2 h-3 w-3 text-zinc-500" />
-                        <Input
+                        <Icon icon="search" className="text-muted-foreground absolute top-2.5 left-2 size-3" />
+                        <FieldInput
                             placeholder="Filter tags..."
                             value={rawSearch}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRawSearch(e.target.value)}
-                            className="h-6 border-zinc-800 bg-zinc-900 pl-6 text-[11px]"
+                            className="pl-6"
                         />
                     </div>
 
-                    <div className="border-zinc-850 flex-1 space-y-1 overflow-auto rounded border bg-zinc-950 p-1 text-[10px]">
+                    <div className="flex-1 space-y-1 overflow-auto rounded border p-1 text-[10px]">
+                        {filteredRawTags.length === 0 && (
+                            <div className="text-muted-foreground flex h-full items-center justify-center">No matching tags found</div>
+                        )}
                         {filteredRawTags.map((t, idx) => (
-                            <div key={idx} className="flex flex-col rounded border-b border-zinc-900/50 p-1 hover:bg-zinc-900">
-                                <div className="flex items-center justify-between text-zinc-400">
-                                    <span className="font-bold text-blue-400">{t.tag}</span>
-                                    <span className="bg-zinc-850 rounded px-1 text-[9px] text-zinc-500">{t.group}</span>
+                            <div key={idx} className="hover:bg-muted flex flex-col rounded border-b p-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-primary font-bold">{t.tag}</span>
+                                    <span className="text-muted-foreground rounded px-1 text-[9px]">{t.group}</span>
                                 </div>
-                                <div className="mt-0.5 break-all text-zinc-200 select-text">{String(t.value)}</div>
+                                <div className="text-foreground mt-0.5 break-all select-text">{String(t.value)}</div>
                             </div>
                         ))}
                     </div>

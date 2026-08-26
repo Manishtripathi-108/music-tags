@@ -24,7 +24,7 @@ export const TabsTrigger = ({ className, ...props }: ComponentProps<typeof ArkTa
     return (
         <ArkTabs.Trigger
             className={cn(
-                'min-h-9 gap-1.5 rounded-md px-2.5 py-1 text-xs',
+                'min-h-7 gap-1.5 rounded-md px-2.5 py-1 text-xs',
                 'relative z-10 inline-flex shrink-0 cursor-pointer items-center justify-center font-medium whitespace-nowrap select-none',
                 'transition-colors duration-150 outline-none',
                 'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',

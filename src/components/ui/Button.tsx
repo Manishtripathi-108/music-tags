@@ -8,7 +8,6 @@ const buttonVariants = cva(
         'group relative inline-flex shrink-0 items-center justify-center',
         'cursor-pointer select-none',
         'overflow-hidden',
-        'font-medium',
         'transition-all duration-200',
         'outline-none',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-70',
@@ -126,8 +125,8 @@ const buttonVariants = cva(
 
             size: {
                 xs: ['min-h-7', 'rounded-sm', 'p-px', 'text-xs'],
-                sm: ['min-h-8', 'rounded-md', 'p-0.5', 'text-sm'],
-                md: ['min-h-10', 'rounded-2xl', 'p-0.5', 'text-sm'],
+                sm: ['min-h-8', 'rounded-md', 'p-0.5', 'text-xs'],
+                md: ['min-h-10', 'rounded-2xl', 'p-0.5', 'text-xs'],
                 lg: ['min-h-11', 'rounded-2xl', 'p-0.5', 'text-base'],
                 xl: ['min-h-12', 'rounded-2xl', 'p-0.5', 'text-lg'],
             },
@@ -178,9 +177,12 @@ const buttonInnerVariants = cva(
     }
 );
 
-export type ButtonProps = ComponentProps<'button'> & VariantProps<typeof buttonVariants>;
+export type ButtonProps = ComponentProps<'button'> &
+    VariantProps<typeof buttonVariants> & {
+        innerClassName?: string;
+    };
 
-const Button = ({ className, variant, size, fullWidth, children, type = 'button', ...props }: ButtonProps) => {
+const Button = ({ className, innerClassName, variant, size, fullWidth, children, type = 'button', ...props }: ButtonProps) => {
     return (
         <button
             type={type}
@@ -198,7 +200,8 @@ const Button = ({ className, variant, size, fullWidth, children, type = 'button'
                     buttonInnerVariants({
                         variant,
                         size,
-                    })
+                    }),
+                    innerClassName
                 )}>
                 {children}
             </span>

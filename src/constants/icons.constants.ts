@@ -27,7 +27,7 @@ enum IconSet {
     /* ------------------------------------ D ----------------------------------- */
     database = 'solar:database-outline',
     diskImage = 'solar:diskette-outline',
-    desktop = 'noto:desktop-computer',
+    desktop = 'basil:desktop-solid',
     document = 'solar:document-text-outline',
     down = 'solar:alt-arrow-down-outline',
     download = 'solar:download-bold',
@@ -84,7 +84,7 @@ enum IconSet {
     menu = 'hugeicons:menu-02',
     mic = 'solar:microphone-2-bold',
     minus = 'line-md:minus',
-    moon = 'meteocons:clear-night-fill',
+    moon = 'solar:moon-bold',
     moreDots = 'pepicons-pop:dots-y',
     mouse = 'solar:mouse-minimalistic-bold',
     myanimelist = 'simple-icons:myanimelist',
@@ -115,6 +115,7 @@ enum IconSet {
     quitFullscreen = 'solar:quit-full-screen-bold',
 
     /* ------------------------------------ R ----------------------------------- */
+    raw = 'fluent-mdl2:raw-source',
     right = 'solar:alt-arrow-right-linear',
     rightArrow = 'solar:arrow-right-bold',
     refresh = 'solar:refresh-bold',
@@ -133,9 +134,10 @@ enum IconSet {
     spotify = 'line-md:spotify-filled',
     spreadsheet = 'tabler:file-spreadsheet',
     success = 'line-md:confirm-circle-filled',
-    sun = 'meteocons:clear-day-fill',
+    sun = 'solar:sun-bold',
 
     /* ------------------------------------ T ----------------------------------- */
+    tags = 'fa7-solid:tags',
     text = 'solar:file-text-outline',
     trash = 'solar:trash-bin-trash-bold',
 
@@ -153,7 +155,7 @@ enum IconSet {
     vector = 'bi:filetype-psd',
 
     /* ------------------------------------ W ----------------------------------- */
-    warning = 'meteocons:code-yellow-fill',
+    warning = 'material-symbols:warning-rounded',
 }
 
 export default IconSet;

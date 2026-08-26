@@ -10,7 +10,7 @@ export const Field = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <ArkField.Root
         ref={ref}
-        className={cn('group flex w-full flex-col gap-1 text-xs data-[disabled]:opacity-60', className)}
+        className={cn('group flex w-full flex-col gap-1 text-xs data-disabled:opacity-60', className)}
         {...props}
     />
 ));
@@ -23,7 +23,7 @@ export const FieldLabel = React.forwardRef<
     <ArkField.Label
         ref={ref}
         className={cn(
-            'flex items-center gap-1 font-mono text-[11px] font-semibold text-muted-foreground select-none group-data-[disabled]:cursor-not-allowed group-data-[invalid]:text-destructive',
+            'flex items-center gap-1 font-mono text-[11px] font-semibold text-muted-foreground select-none group-data-disabled:cursor-not-allowed group-data-invalid:text-destructive',
             className
         )}
         {...props}
@@ -38,10 +38,10 @@ export const FieldInput = React.forwardRef<
     <ArkField.Input
         ref={ref}
         className={cn(
-            'flex h-8 w-full rounded-md border border-border bg-input/40 px-2.5 py-1 text-xs text-foreground shadow-2xs transition-all duration-150 placeholder:text-muted-foreground/60',
+            'flex h-8 w-full rounded-md border border-border bg-input px-2.5 py-1 text-xs text-foreground shadow-2xs transition-all duration-150 placeholder:text-muted-foreground/60',
             'focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:outline-none',
             'disabled:cursor-not-allowed disabled:opacity-50',
-            'data-[invalid]:border-destructive/70 data-[invalid]:focus-visible:ring-destructive/20',
+            'data-invalid:border-destructive/70 data-invalid:focus-visible:ring-destructive/20',
             className
         )}
         {...props}
@@ -56,10 +56,10 @@ export const FieldTextarea = React.forwardRef<
     <ArkField.Textarea
         ref={ref}
         className={cn(
-            'flex min-h-[64px] w-full rounded-md border border-border bg-input/40 px-2.5 py-1.5 text-xs text-foreground shadow-2xs transition-all duration-150 placeholder:text-muted-foreground/60',
+            'flex min-h-16 w-full rounded-md border border-border bg-input px-2.5 py-1.5 text-xs text-foreground shadow-2xs transition-all duration-150 placeholder:text-muted-foreground/60',
             'focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:outline-none',
             'disabled:cursor-not-allowed disabled:opacity-50',
-            'data-[invalid]:border-destructive/70 data-[invalid]:focus-visible:ring-destructive/20',
+            'data-invalid:border-destructive/70 data-invalid:focus-visible:ring-destructive/20',
             className
         )}
         {...props}
@@ -74,10 +74,10 @@ export const FieldSelect = React.forwardRef<
     <ArkField.Select
         ref={ref}
         className={cn(
-            'flex h-8 w-full appearance-none rounded-md border border-border bg-input/40 px-2.5 py-1 text-xs text-foreground shadow-2xs transition-all duration-150',
+            'flex h-8 w-full appearance-none rounded-md border border-border bg-input px-2.5 py-1 text-xs text-foreground shadow-2xs transition-all duration-150',
             'focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:outline-none',
             'disabled:cursor-not-allowed disabled:opacity-50',
-            'data-[invalid]:border-destructive/70 data-[invalid]:focus-visible:ring-destructive/20',
+            'data-invalid:border-destructive/70 data-invalid:focus-visible:ring-destructive/20',
             className
         )}
         {...props}
@@ -123,5 +123,3 @@ FieldRequiredIndicator.displayName = 'FieldRequiredIndicator';
 
 export const FieldHelper = FieldHelperText;
 export const FieldError = FieldErrorText;
-
-export default Field;
