@@ -218,15 +218,10 @@ export interface Sidebar001GroupProps {
 }
 
 export function Sidebar001Group({ label, children, defaultOpen = false, icon, className }: Sidebar001GroupProps) {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(defaultOpen);
     const id = useId();
     const { setHovered, containerRef } = useContext(HoverContext);
     const buttonRef = useRef<HTMLButtonElement>(null);
-
-    useEffect(() => {
-        setIsOpen(defaultOpen);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     const handleMouseEnter = useCallback(() => {
         const el = buttonRef.current;
@@ -308,10 +303,16 @@ export function Sidebar001Section({ label, children, className }: { label?: Reac
 
 export function Sidebar001Content({ children, className }: { children: React.ReactNode; className?: string }) {
     const containerRef = useContext(HoverContext).containerRef;
+    const setContainerRef = useCallback(
+        (node: HTMLDivElement | null) => {
+            containerRef.current = node;
+        },
+        [containerRef]
+    );
 
     return (
         <div className={cn('no-scrollbar flex-1 overflow-y-auto py-4', className)} data-scroll-viewport>
-            <div ref={containerRef} className="relative px-1">
+            <div ref={setContainerRef} className="relative px-1">
                 <HoverHighlight />
                 {children}
             </div>

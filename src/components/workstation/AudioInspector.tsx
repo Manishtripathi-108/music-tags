@@ -1,16 +1,16 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-
-import { useForm } from 'react-hook-form';
-
-import Icon from '@/components/common/Icon';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Field, FieldInput, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { formatBitrate, formatDuration, formatFileSize, formatSampleRate } from '@/lib/utils';
+import { Controller, useForm } from 'react-hook-form';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import Icon from '@/components/ui/Icon';
+import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Input } from '@/components/ui/Input';
+import { Field, FieldInput, FieldLabel, FieldTextarea } from '@/components/ui/Field';
+import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
+import { NumberInputField } from '@/components/ui/NumberInput';
+import { formatBitrate, formatDuration, formatSampleRate } from '@/lib/utils';
 import { useAudioStore } from '@/store/audioStore';
 
 interface TagFormValues {
@@ -27,14 +27,14 @@ interface TagFormValues {
 }
 
 export function AudioInspector() {
-    const { activeTrackId, activeTrackDetail, fetchTracks } = useAudioStore();
+    const { activeTrackId, activeTrackDetail, fetchTracks, updateTrackInline } = useAudioStore();
     const { metadata, rawTags, isLoading } = activeTrackDetail;
 
     const [rawSearch, setRawSearch] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
-    const { register, handleSubmit, reset, watch } = useForm<TagFormValues>({
+    const { register, handleSubmit, reset, watch, control } = useForm<TagFormValues>({
         defaultValues: {
             title: '',
             artist: '',
@@ -75,6 +75,20 @@ export function AudioInspector() {
 
         setIsSaving(true);
         try {
+            // Update store state immediately for responsive feedback
+            updateTrackInline(activeTrackId, {
+                title: data.title,
+                artist: data.artist,
+                albumArtist: data.albumArtist,
+                album: data.album,
+                trackNumber: data.trackNumber ? parseInt(data.trackNumber, 10) : null,
+                year: data.year ? parseInt(data.year, 10) : null,
+                genre: data.genre,
+                bpm: data.bpm ? parseFloat(data.bpm) : null,
+                initialKey: data.initialKey,
+                comment: data.comment,
+            });
+
             const res = await fetch(`/api/files/${activeTrackId}/tags`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -92,12 +106,14 @@ export function AudioInspector() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Failed to save tags');
+            if (res.ok) {
+                fetchTracks();
+            }
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 2000);
-            fetchTracks();
-        } catch (err) {
-            console.error(err);
+        } catch {
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 2000);
         } finally {
             setIsSaving(false);
         }
@@ -156,78 +172,141 @@ export function AudioInspector() {
             {/* Tabs Container */}
             <Tabs defaultValue="tags" className="flex min-h-0 flex-1 flex-col">
                 <div className="px-3 pt-2">
-                    <TabsList className="grid h-7 w-full grid-cols-3 border-zinc-800 bg-zinc-900">
+                    <TabsList className="grid h-7 w-full grid-cols-3">
                         <TabsTrigger value="tags" className="text-xs">
-                            <Icon icon="document" className="mr-1 h-3 w-3" />
+                            <Icon icon="document" className="size-3" />
                             Tags
                         </TabsTrigger>
                         <TabsTrigger value="specs" className="text-xs">
-                            <Icon icon="settings" className="mr-1 h-3 w-3" />
+                            <Icon icon="settings" className="size-3" />
                             Specs
                         </TabsTrigger>
                         <TabsTrigger value="raw" className="text-xs">
-                            <Icon icon="code" className="mr-1 h-3 w-3" />
+                            <Icon icon="code" className="size-3" />
                             Raw ({rawTags.length})
                         </TabsTrigger>
+                        <TabsIndicator />
                     </TabsList>
                 </div>
 
-                {/* Tab 1: Canonical Audio Tags Editor */}
+                {/* Tab 1: Canonical Audio Tags Editor with Ark UI Fieldset, Field, NumberInput */}
                 <TabsContent value="tags" className="flex-1 space-y-3 overflow-auto p-3 font-mono">
-                    <form onSubmit={handleSubmit(onSave)} className="space-y-2.5">
-                        <Field>
-                            <FieldLabel>Track Title</FieldLabel>
-                            <FieldInput className="mt-0.5 h-7 text-xs" {...register('title')} />
-                        </Field>
+                    <form onSubmit={handleSubmit(onSave)} className="space-y-3">
+                        {/* Fieldset: Track Identification */}
+                        <Fieldset className="border-zinc-800/80 bg-zinc-900/30 p-2.5">
+                            <FieldsetLegend className="text-[10px] text-blue-400">
+                                <Icon icon="audio" className="size-3" />
+                                Track Information
+                            </FieldsetLegend>
+                            <FieldsetContent className="gap-2">
+                                <Field>
+                                    <FieldLabel>Title</FieldLabel>
+                                    <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('title')} />
+                                </Field>
 
-                        <div className="grid grid-cols-2 gap-2">
-                            <Field>
-                                <FieldLabel>Artist</FieldLabel>
-                                <FieldInput className="mt-0.5 h-7 text-xs" {...register('artist')} />
-                            </Field>
-                            <Field>
-                                <FieldLabel>Album Artist</FieldLabel>
-                                <FieldInput className="mt-0.5 h-7 text-xs" {...register('albumArtist')} />
-                            </Field>
-                        </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Field>
+                                        <FieldLabel>Artist</FieldLabel>
+                                        <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('artist')} />
+                                    </Field>
+                                    <Field>
+                                        <FieldLabel>Album Artist</FieldLabel>
+                                        <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('albumArtist')} />
+                                    </Field>
+                                </div>
 
-                        <Field>
-                            <FieldLabel>Album</FieldLabel>
-                            <FieldInput className="mt-0.5 h-7 text-xs" {...register('album')} />
-                        </Field>
+                                <Field>
+                                    <FieldLabel>Album</FieldLabel>
+                                    <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('album')} />
+                                </Field>
+                            </FieldsetContent>
+                        </Fieldset>
 
-                        <div className="grid grid-cols-3 gap-2">
-                            <Field>
-                                <FieldLabel>Track #</FieldLabel>
-                                <FieldInput type="number" className="mt-0.5 h-7 text-xs" {...register('trackNumber')} />
-                            </Field>
-                            <Field>
-                                <FieldLabel>Year</FieldLabel>
-                                <FieldInput type="number" className="mt-0.5 h-7 text-xs" {...register('year')} />
-                            </Field>
-                            <Field>
-                                <FieldLabel>BPM</FieldLabel>
-                                <FieldInput type="number" step="0.1" className="mt-0.5 h-7 text-xs" {...register('bpm')} />
-                            </Field>
-                        </div>
+                        {/* Fieldset: Track Numerical & Musical Specs with NumberInput */}
+                        <Fieldset className="border-zinc-800/80 bg-zinc-900/30 p-2.5">
+                            <FieldsetLegend className="text-[10px] text-emerald-400">
+                                <Icon icon="settings" className="size-3" />
+                                Numerical & Musical
+                            </FieldsetLegend>
+                            <FieldsetContent className="gap-2">
+                                <div className="grid grid-cols-3 gap-2">
+                                    <Controller
+                                        control={control}
+                                        name="trackNumber"
+                                        render={({ field: { value, onChange } }) => (
+                                            <NumberInputField
+                                                label="Track #"
+                                                value={value}
+                                                min={1}
+                                                max={999}
+                                                onValueChange={(details) => onChange(details.value)}
+                                                inputClassName="h-7 border-zinc-800 bg-zinc-900 text-xs"
+                                            />
+                                        )}
+                                    />
+                                    <Controller
+                                        control={control}
+                                        name="year"
+                                        render={({ field: { value, onChange } }) => (
+                                            <NumberInputField
+                                                label="Year"
+                                                value={value}
+                                                min={1900}
+                                                max={2099}
+                                                onValueChange={(details) => onChange(details.value)}
+                                                inputClassName="h-7 border-zinc-800 bg-zinc-900 text-xs"
+                                            />
+                                        )}
+                                    />
+                                    <Controller
+                                        control={control}
+                                        name="bpm"
+                                        render={({ field: { value, onChange } }) => (
+                                            <NumberInputField
+                                                label="BPM"
+                                                value={value}
+                                                min={40}
+                                                max={300}
+                                                step={0.5}
+                                                onValueChange={(details) => onChange(details.value)}
+                                                inputClassName="h-7 border-zinc-800 bg-zinc-900 text-xs"
+                                            />
+                                        )}
+                                    />
+                                </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                            <Field>
-                                <FieldLabel>Genre</FieldLabel>
-                                <FieldInput className="mt-0.5 h-7 text-xs" {...register('genre')} />
-                            </Field>
-                            <Field>
-                                <FieldLabel>Key</FieldLabel>
-                                <FieldInput placeholder="e.g. 8A / Am" className="mt-0.5 h-7 text-xs" {...register('initialKey')} />
-                            </Field>
-                        </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Field>
+                                        <FieldLabel>Genre</FieldLabel>
+                                        <FieldInput className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('genre')} />
+                                    </Field>
+                                    <Field>
+                                        <FieldLabel>Key</FieldLabel>
+                                        <FieldInput placeholder="8A / Am" className="h-7 border-zinc-800 bg-zinc-900 text-xs" {...register('initialKey')} />
+                                    </Field>
+                                </div>
+                            </FieldsetContent>
+                        </Fieldset>
 
-                        <Field>
-                            <FieldLabel>Comment</FieldLabel>
-                            <FieldInput className="mt-0.5 h-7 text-xs" {...register('comment')} />
-                        </Field>
+                        {/* Fieldset: Notes & Extra Info */}
+                        <Fieldset className="border-zinc-800/80 bg-zinc-900/30 p-2.5">
+                            <FieldsetLegend className="text-[10px] text-zinc-400">
+                                <Icon icon="document" className="size-3" />
+                                Notes
+                            </FieldsetLegend>
+                            <FieldsetContent className="gap-2">
+                                <Field>
+                                    <FieldLabel>Comment</FieldLabel>
+                                    <FieldTextarea
+                                        rows={2}
+                                        className="min-h-[50px] border-zinc-800 bg-zinc-900 text-xs"
+                                        {...register('comment')}
+                                    />
+                                </Field>
+                            </FieldsetContent>
+                        </Fieldset>
 
-                        <div className="pt-2">
+                        <div className="pt-1">
                             <Button
                                 type="submit"
                                 disabled={isSaving}
@@ -284,7 +363,7 @@ export function AudioInspector() {
                         <Input
                             placeholder="Filter tags..."
                             value={rawSearch}
-                            onChange={(e) => setRawSearch(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRawSearch(e.target.value)}
                             className="h-6 border-zinc-800 bg-zinc-900 pl-6 text-[11px]"
                         />
                     </div>

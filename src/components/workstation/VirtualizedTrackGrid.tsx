@@ -1,23 +1,32 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef } from 'react';
-
 import { useVirtualizer } from '@tanstack/react-virtual';
-
-import Icon from '@/components/common/Icon';
 import { formatDuration } from '@/lib/utils';
 import { useAudioStore } from '@/store/audioStore';
+import { Icon } from '@/components/ui/Icon';
+import { InlineTableCellEditable } from '@/components/ui/Editable';
 
 export function VirtualizedTrackGrid() {
-    const { tracks, isLoadingTracks, selectedTrackIds, activeTrackId, selectTrack, sortBy, sortOrder, setSorting, setIsScanModalOpen } =
-        useAudioStore();
+    const {
+        tracks,
+        isLoadingTracks,
+        selectedTrackIds,
+        activeTrackId,
+        selectTrack,
+        sortBy,
+        sortOrder,
+        setSorting,
+        setIsScanModalOpen,
+        updateTrackInline,
+    } = useAudioStore();
 
     const parentRef = useRef<HTMLDivElement>(null);
 
     const rowVirtualizer = useVirtualizer({
         count: tracks.length,
         getScrollElement: () => parentRef.current,
-        estimateSize: () => 28, // High-density row height
+        estimateSize: () => 32, // Density row height with editable padding
         overscan: 20,
     });
 
@@ -25,6 +34,11 @@ export function VirtualizedTrackGrid() {
     const handleKeyDown = useCallback(
         (e: KeyboardEvent) => {
             if (!tracks.length) return;
+            // Ignore if active element is an input
+            if (['INPUT', 'TEXTAREA'].includes((document.activeElement as HTMLElement)?.tagName)) {
+                return;
+            }
+
             const currentIndex = activeTrackId ? tracks.findIndex((t) => t.id === activeTrackId) : -1;
 
             if (e.key === 'ArrowDown') {
@@ -92,41 +106,41 @@ export function VirtualizedTrackGrid() {
                 <div className="w-7 text-center">#</div>
                 <div
                     onClick={() => toggleSort('title')}
-                    className="group flex min-w-[140px] flex-1 cursor-pointer items-center justify-between px-2 hover:text-zinc-100">
-                    <span>TITLE</span>
+                    className="group flex min-w-[150px] flex-1 cursor-pointer items-center justify-between px-2 hover:text-zinc-100">
+                    <span>TITLE (DBL-CLICK TO EDIT)</span>
                     {renderSortIcon('title')}
                 </div>
                 <div
                     onClick={() => toggleSort('artist')}
-                    className="group flex hidden w-36 cursor-pointer items-center justify-between px-2 hover:text-zinc-100 md:flex">
+                    className="group hidden w-36 cursor-pointer items-center justify-between px-2 hover:text-zinc-100 md:flex">
                     <span>ARTIST</span>
                     {renderSortIcon('artist')}
                 </div>
                 <div
                     onClick={() => toggleSort('album')}
-                    className="group flex hidden w-36 cursor-pointer items-center justify-between px-2 hover:text-zinc-100 lg:flex">
+                    className="group hidden w-36 cursor-pointer items-center justify-between px-2 hover:text-zinc-100 lg:flex">
                     <span>ALBUM</span>
                     {renderSortIcon('album')}
                 </div>
                 <div
                     onClick={() => toggleSort('year')}
-                    className="group hidden w-14 cursor-pointer items-center justify-center gap-0.5 px-1 text-center hover:text-zinc-100 sm:flex">
+                    className="group hidden w-16 cursor-pointer items-center justify-center gap-0.5 px-1 text-center hover:text-zinc-100 sm:flex">
                     <span>YEAR</span>
                     {renderSortIcon('year')}
                 </div>
                 <div
                     onClick={() => toggleSort('bpm')}
-                    className="group hidden w-14 cursor-pointer items-center justify-center gap-0.5 px-1 text-center hover:text-zinc-100 xl:flex">
+                    className="group hidden w-16 cursor-pointer items-center justify-center gap-0.5 px-1 text-center hover:text-zinc-100 xl:flex">
                     <span>BPM</span>
                     {renderSortIcon('bpm')}
                 </div>
                 <div className="hidden w-12 px-1 text-center xl:block">KEY</div>
                 <div className="hidden w-16 px-1 text-center sm:block">FORMAT</div>
                 <div
-                    onClick={() => toggleSort('duration')}
+                    onClick={() => toggleSort('durationSeconds')}
                     className="group flex w-14 cursor-pointer items-center justify-end gap-0.5 px-1 pr-2 text-right hover:text-zinc-100">
                     <span>TIME</span>
-                    {renderSortIcon('duration')}
+                    {renderSortIcon('durationSeconds')}
                 </div>
             </div>
 
@@ -148,7 +162,12 @@ export function VirtualizedTrackGrid() {
                         return (
                             <div
                                 key={track.id}
-                                onClick={(e) => selectTrack(track.id, e.ctrlKey || e.metaKey, e.shiftKey)}
+                                onClick={(e) => {
+                                    // Only select if not directly clicking inside an active editable input
+                                    if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                                        selectTrack(track.id, e.ctrlKey || e.metaKey, e.shiftKey);
+                                    }
+                                }}
                                 style={{
                                     position: 'absolute',
                                     top: 0,
@@ -163,8 +182,8 @@ export function VirtualizedTrackGrid() {
                                         : isSelected
                                           ? 'border-blue-900/30 bg-blue-950/50 text-blue-200'
                                           : virtualRow.index % 2 === 0
-                                            ? 'bg-zinc-950 text-zinc-300 hover:bg-zinc-900'
-                                            : 'bg-zinc-925/40 text-zinc-300 hover:bg-zinc-900'
+                                            ? 'bg-zinc-950 text-zinc-300 hover:bg-zinc-900/80'
+                                            : 'bg-zinc-925/40 text-zinc-300 hover:bg-zinc-900/80'
                                 }`}>
                                 {/* Track Number / Icon */}
                                 <div className="w-7 truncate text-center text-zinc-500">
@@ -177,32 +196,66 @@ export function VirtualizedTrackGrid() {
                                     )}
                                 </div>
 
-                                {/* Title & Cover Indicator */}
-                                <div className="flex min-w-[140px] flex-1 items-center gap-1.5 truncate px-2">
+                                {/* Title & Cover Indicator with Ark UI Editable */}
+                                <div className="flex min-w-[150px] flex-1 items-center gap-1.5 truncate px-2">
                                     {track.hasCoverArt && (
                                         <Icon icon="image" className={`h-3 w-3 shrink-0 ${isActive ? 'text-blue-200' : 'text-emerald-500/70'}`} />
                                     )}
-                                    <span className="truncate">{track.title || track.filename}</span>
+                                    <InlineTableCellEditable
+                                        value={track.title || track.filename}
+                                        onValueCommit={(newTitle: string) => updateTrackInline(track.id, { title: newTitle })}
+                                        isActiveRow={isActive}
+                                    />
                                 </div>
 
-                                {/* Artist */}
-                                <div className={`hidden w-36 truncate px-2 md:block ${isActive ? 'text-blue-100' : 'text-zinc-400'}`}>
-                                    {track.artist || '-'}
+                                {/* Artist with Ark UI Editable */}
+                                <div className="hidden w-36 truncate px-2 md:block">
+                                    <InlineTableCellEditable
+                                        value={track.artist || ''}
+                                        placeholder="Unknown Artist"
+                                        onValueCommit={(newArtist: string) => updateTrackInline(track.id, { artist: newArtist })}
+                                        isActiveRow={isActive}
+                                    />
                                 </div>
 
-                                {/* Album */}
-                                <div className={`hidden w-36 truncate px-2 lg:block ${isActive ? 'text-blue-100' : 'text-zinc-500'}`}>
-                                    {track.album || '-'}
+                                {/* Album with Ark UI Editable */}
+                                <div className="hidden w-36 truncate px-2 lg:block">
+                                    <InlineTableCellEditable
+                                        value={track.album || ''}
+                                        placeholder="Unknown Album"
+                                        onValueCommit={(newAlbum: string) => updateTrackInline(track.id, { album: newAlbum })}
+                                        isActiveRow={isActive}
+                                    />
                                 </div>
 
-                                {/* Year */}
-                                <div className={`hidden w-14 truncate px-1 text-center sm:block ${isActive ? 'text-blue-200' : 'text-zinc-500'}`}>
-                                    {track.year || '-'}
+                                {/* Year with Ark UI Editable */}
+                                <div className="hidden w-16 truncate px-1 text-center sm:block">
+                                    <InlineTableCellEditable
+                                        value={track.year ? String(track.year) : ''}
+                                        placeholder="-"
+                                        onValueCommit={(newYear: string) => {
+                                            const parsed = parseInt(newYear, 10);
+                                            updateTrackInline(track.id, { year: isNaN(parsed) ? null : parsed });
+                                        }}
+                                        isActiveRow={isActive}
+                                        previewClassName="text-center"
+                                        inputClassName="text-center"
+                                    />
                                 </div>
 
-                                {/* BPM */}
-                                <div className={`hidden w-14 truncate px-1 text-center xl:block ${isActive ? 'text-blue-200' : 'text-zinc-400'}`}>
-                                    {track.bpm ? Math.round(track.bpm) : '-'}
+                                {/* BPM with Ark UI Editable */}
+                                <div className="hidden w-16 truncate px-1 text-center xl:block">
+                                    <InlineTableCellEditable
+                                        value={track.bpm ? String(Math.round(track.bpm)) : ''}
+                                        placeholder="-"
+                                        onValueCommit={(newBpm: string) => {
+                                            const parsed = parseFloat(newBpm);
+                                            updateTrackInline(track.id, { bpm: isNaN(parsed) ? null : parsed });
+                                        }}
+                                        isActiveRow={isActive}
+                                        previewClassName="text-center"
+                                        inputClassName="text-center"
+                                    />
                                 </div>
 
                                 {/* Key */}

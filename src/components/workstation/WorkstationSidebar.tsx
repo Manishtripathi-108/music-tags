@@ -2,8 +2,8 @@
 
 import React from 'react';
 
-import Icon from '@/components/common/Icon';
-import { Badge } from '@/components/ui/badge';
+import Icon from '@/components/ui/Icon';
+import { Badge } from '@/components/ui/Badge';
 import { type T_IconType } from '@/lib/types/client.types';
 import { useAudioStore } from '@/store/audioStore';
 

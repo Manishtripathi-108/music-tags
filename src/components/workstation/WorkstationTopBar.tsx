@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-
-import Icon from '@/components/common/Icon';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import Icon from '@/components/ui/Icon';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { useAudioStore } from '@/store/audioStore';
 
 export function WorkstationTopBar() {
@@ -15,7 +14,11 @@ export function WorkstationTopBar() {
         exiftool?: boolean;
         ffprobe?: boolean;
         ffmpeg?: boolean;
-    }>({});
+    }>({
+        exiftool: true,
+        ffprobe: true,
+        ffmpeg: true,
+    });
 
     useEffect(() => {
         fetch('/api/status')
@@ -60,8 +63,8 @@ export function WorkstationTopBar() {
                         type="text"
                         placeholder="Search titles, artists, albums, genres..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-7 border-zinc-800 bg-zinc-900/80 pl-7 text-xs focus-visible:ring-blue-500"
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                        className="h-7 border-zinc-800 bg-zinc-900/80 pl-7 text-xs text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-500"
                     />
                     {searchQuery && (
                         <button onClick={() => setSearchQuery('')} className="absolute top-1.5 right-2 text-[10px] text-zinc-500 hover:text-zinc-300">
@@ -94,7 +97,7 @@ export function WorkstationTopBar() {
                 </Button>
 
                 <Button
-                    variant="default"
+                    variant="primary"
                     size="sm"
                     onClick={() => setIsScanModalOpen(true)}
                     className="h-7 gap-1.5 bg-blue-600 text-xs text-white shadow-sm hover:bg-blue-500">
