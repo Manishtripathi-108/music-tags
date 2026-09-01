@@ -48,7 +48,14 @@ export const FOCUS_RING_ERROR = [
 /**
  * Works for native disabled controls.
  */
-export const DISABLED = ['disabled:pointer-events-none', 'disabled:cursor-not-allowed', 'disabled:opacity-60'].join(' ');
+export const DISABLED = [
+    'disabled:pointer-events-none',
+    'disabled:cursor-not-allowed',
+    'disabled:opacity-40',
+
+    'data-disabled:pointer-events-none',
+    'data-disabled:opacity-40',
+].join(' ');
 
 export const READONLY = ['read-only:cursor-default', 'read-only:bg-muted/40', 'read-only:opacity-80'].join(' ');
 
