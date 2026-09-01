@@ -2,75 +2,57 @@
 
 import * as React from 'react';
 import { Field as ArkField } from '@ark-ui/react/field';
+
 import Icon from '@/components/ui/Icon';
 import { cn } from '@/lib/utils';
-import { DATA_INVALID, DISABLED, FOCUS_RING_PRIMARY } from '@/lib/styles/tailwind.helpers';
+import { FIELD_CONTROL_STYLES } from '@/lib/styles/tailwind.helpers';
 
-const FieldStyles =
-    'border-border bg-input text-foreground placeholder:text-muted-foreground/60 flex h-8 w-full px-2.5 py-1 rounded-md border text-xs shadow-2xs transition-all duration-150';
+/* ------------------------------- Components ------------------------------- */
+export function Field({ className, ...props }: React.ComponentProps<typeof ArkField.Root>) {
+    return <ArkField.Root {...props} className={cn('group flex w-full flex-col gap-1 text-xs', 'data-disabled:opacity-60', className)} />;
+}
 
-export const Field = React.forwardRef<React.ComponentRef<typeof ArkField.Root>, React.ComponentPropsWithoutRef<typeof ArkField.Root>>(
-    ({ className, ...props }, ref) => (
-        <ArkField.Root ref={ref} className={cn('group flex w-full flex-col gap-1 text-xs data-disabled:opacity-60', className)} {...props} />
-    )
-);
-Field.displayName = 'Field';
-
-export const FieldLabel = React.forwardRef<React.ComponentRef<typeof ArkField.Label>, React.ComponentPropsWithoutRef<typeof ArkField.Label>>(
-    ({ className, ...props }, ref) => (
+export function FieldLabel({ className, ...props }: React.ComponentProps<typeof ArkField.Label>) {
+    return (
         <ArkField.Label
-            ref={ref}
+            {...props}
             className={cn(
-                'text-muted-foreground group-data-invalid:text-destructive flex items-center gap-1 font-mono text-[11px] font-semibold select-none group-data-disabled:cursor-not-allowed',
+                'text-muted-foreground',
+                'group-data-invalid:text-destructive',
+                'flex items-center gap-1',
+                'font-mono text-[11px] font-semibold',
+                'select-none',
+                'group-data-disabled:cursor-not-allowed',
                 className
             )}
-            {...props}
         />
-    )
-);
-FieldLabel.displayName = 'FieldLabel';
+    );
+}
 
-export const FieldInput = React.forwardRef<React.ComponentRef<typeof ArkField.Input>, React.ComponentPropsWithoutRef<typeof ArkField.Input>>(
-    ({ className, ...props }, ref) => (
-        <ArkField.Input ref={ref} className={cn(FieldStyles, FOCUS_RING_PRIMARY, DATA_INVALID, DISABLED, className)} {...props} />
-    )
-);
-FieldInput.displayName = 'FieldInput';
+export function FieldInput({ ref, className, ...props }: React.ComponentProps<typeof ArkField.Input>) {
+    return <ArkField.Input {...props} ref={ref} className={cn(FIELD_CONTROL_STYLES, className)} />;
+}
 
-export const FieldTextarea = React.forwardRef<React.ComponentRef<typeof ArkField.Textarea>, React.ComponentPropsWithoutRef<typeof ArkField.Textarea>>(
-    ({ className, ...props }, ref) => (
-        <ArkField.Textarea ref={ref} className={cn(FieldStyles, FOCUS_RING_PRIMARY, DATA_INVALID, DISABLED, 'min-h-16', className)} {...props} />
-    )
-);
-FieldTextarea.displayName = 'FieldTextarea';
+export function FieldTextarea({ ref, className, ...props }: React.ComponentProps<typeof ArkField.Textarea>) {
+    return <ArkField.Textarea {...props} ref={ref} className={cn(FIELD_CONTROL_STYLES, 'min-h-16 resize-y', className)} />;
+}
 
-export const FieldSelect = React.forwardRef<React.ComponentRef<typeof ArkField.Select>, React.ComponentPropsWithoutRef<typeof ArkField.Select>>(
-    ({ className, ...props }, ref) => (
-        <ArkField.Select ref={ref} className={cn(FieldStyles, FOCUS_RING_PRIMARY, DATA_INVALID, DISABLED, className)} {...props} />
-    )
-);
-FieldSelect.displayName = 'FieldSelect';
+export function FieldSelect({ ref, className, ...props }: React.ComponentProps<typeof ArkField.Select>) {
+    return <ArkField.Select {...props} ref={ref} className={cn(FIELD_CONTROL_STYLES, className)} />;
+}
 
-export const FieldHelperText = React.forwardRef<
-    React.ComponentRef<typeof ArkField.HelperText>,
-    React.ComponentPropsWithoutRef<typeof ArkField.HelperText>
->(({ className, ...props }, ref) => (
-    <ArkField.HelperText ref={ref} className={cn('text-muted-foreground text-[11px] leading-normal', className)} {...props} />
-));
-FieldHelperText.displayName = 'FieldHelperText';
+export function FieldHelperText({ className, ...props }: React.ComponentProps<typeof ArkField.HelperText>) {
+    return <ArkField.HelperText {...props} className={cn('text-muted-foreground', 'text-[11px] leading-normal', className)} />;
+}
 
-export const FieldErrorText = React.forwardRef<
-    React.ComponentRef<typeof ArkField.ErrorText>,
-    React.ComponentPropsWithoutRef<typeof ArkField.ErrorText>
->(({ className, children, ...props }, ref) => {
+export function FieldErrorText({ className, children, ...props }: React.ComponentProps<typeof ArkField.ErrorText>) {
     return (
         <ArkField.ErrorText
-            ref={ref}
-            className={cn('text-destructive flex items-center gap-1 text-[11px] leading-tight font-medium', className)}
-            {...props}>
+            {...props}
+            className={cn('text-destructive', 'flex items-center gap-1', 'text-[11px] leading-tight font-medium', className)}>
             {typeof children === 'string' ? (
                 <>
-                    <Icon icon="warning" className="size-3 shrink-0" />
+                    <Icon icon="warning" aria-hidden="true" className="size-3 shrink-0" />
                     <span>{children}</span>
                 </>
             ) : (
@@ -78,16 +60,11 @@ export const FieldErrorText = React.forwardRef<
             )}
         </ArkField.ErrorText>
     );
-});
-FieldErrorText.displayName = 'FieldErrorText';
+}
 
-export const FieldRequiredIndicator = React.forwardRef<
-    React.ComponentRef<typeof ArkField.RequiredIndicator>,
-    React.ComponentPropsWithoutRef<typeof ArkField.RequiredIndicator>
->(({ className, ...props }, ref) => (
-    <ArkField.RequiredIndicator ref={ref} className={cn('text-destructive ml-0.5 font-bold', className)} {...props} />
-));
-FieldRequiredIndicator.displayName = 'FieldRequiredIndicator';
+export function FieldRequiredIndicator({ className, ...props }: React.ComponentProps<typeof ArkField.RequiredIndicator>) {
+    return <ArkField.RequiredIndicator {...props} className={cn('text-destructive ml-0.5', className)} />;
+}
 
 export const FieldHelper = FieldHelperText;
 export const FieldError = FieldErrorText;
