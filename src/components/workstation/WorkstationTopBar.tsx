@@ -83,7 +83,7 @@ export function WorkstationTopBar() {
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery('')}
-                            className="text-muted-foreground absolute top-2 right-2 text-[10px] hover:text-zinc-300">
+                            className="text-muted-foreground absolute top-2 right-2 cursor-pointer text-[10px] hover:text-foreground">
                             CLEAR
                         </button>
                     )}

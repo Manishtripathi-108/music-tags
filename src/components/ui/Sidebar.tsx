@@ -4,9 +4,11 @@ import * as React from 'react';
 import { createContext, memo, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
-import { Icon } from '@/components/ui/Icon';
+import Icon from '@/components/ui/Icon';
+import { Badge } from '@/components/ui/Badge';
+import { type T_IconType } from '@/types/client.types';
 
-const EFFECTS_KEY = 'sidebar-001-effects';
+const EFFECTS_KEY = 'sidebar-effects-enabled';
 
 const EffectsContext = createContext<{ enabled: boolean; toggle: () => void }>({
     enabled: true,
@@ -32,11 +34,12 @@ function EffectsProvider({ children, defaultEnabled = true }: { children: React.
     return <EffectsContext.Provider value={value}>{children}</EffectsContext.Provider>;
 }
 
-export function useSidebar001Effects() {
+export function useSidebarEffects() {
     return useContext(EffectsContext);
 }
+export const useSidebar001Effects = useSidebarEffects;
 
-// ─── Hover context ────────────────────────────────────────────────────────────
+// ─── Hover Context ────────────────────────────────────────────────────────────
 
 interface HoverRect {
     top: number;
@@ -70,7 +73,7 @@ function HoverProvider({ children, containerRef }: { children: React.ReactNode; 
     return <HoverContext.Provider value={value}>{children}</HoverContext.Provider>;
 }
 
-// ─── Scroll to active ─────────────────────────────────────────────────────────
+// ─── Scroll To Active ─────────────────────────────────────────────────────────
 
 function useScrollToActive(active: boolean) {
     const ref = useRef<HTMLDivElement>(null);
@@ -101,7 +104,7 @@ function useScrollToActive(active: boolean) {
     return ref;
 }
 
-// ─── HoverHighlight ───────────────────────────────────────────────────────────
+// ─── Hover Highlight ──────────────────────────────────────────────────────────
 
 function HoverHighlight() {
     const { hoverRect, hovered } = useContext(HoverContext);
@@ -111,113 +114,178 @@ function HoverHighlight() {
         <AnimatePresence>
             {enabled && hovered && hoverRect && (
                 <motion.div
-                    key="sb001-hover-bg"
-                    className="bg-accent/50 pointer-events-none absolute z-0 rounded-md"
-                    style={{ right: 0 }}
+                    key="sidebar-hover-bg"
+                    className="bg-accent/60 pointer-events-none absolute z-0 rounded-md"
+                    style={{ right: 4 }}
                     initial={false}
                     animate={{
-                        top: hoverRect.top + 2,
-                        height: hoverRect.height - 4,
+                        top: hoverRect.top + 1,
+                        height: hoverRect.height - 2,
                         left: hoverRect.left,
                         opacity: 1,
                     }}
                     exit={{ opacity: 0 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    transition={{ type: 'spring', stiffness: 350, damping: 32 }}
                 />
             )}
         </AnimatePresence>
     );
 }
 
-// ─── Sidebar001Item ───────────────────────────────────────────────────────────
+// ─── Sidebar Item ─────────────────────────────────────────────────────────────
 
-export interface Sidebar001ItemProps {
-    href: string;
+export interface SidebarItemProps {
+    id?: string;
     label: React.ReactNode;
-    isActive: boolean;
+    icon?: T_IconType | React.ReactNode;
+    isActive?: boolean;
     isNew?: boolean;
+    badge?: React.ReactNode;
+    count?: number;
+    href?: string;
     className?: string;
-    onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+    onClick?: React.MouseEventHandler<HTMLElement>;
 }
 
-export const Sidebar001Item = memo(function Sidebar001Item({ href, label, isActive, isNew, className, onClick }: Sidebar001ItemProps) {
+export const SidebarItem = memo(function SidebarItem({
+    id: explicitId,
+    label,
+    icon,
+    isActive = false,
+    isNew,
+    badge,
+    count,
+    href,
+    className,
+    onClick,
+}: SidebarItemProps) {
+    const generatedId = useId();
+    const itemId = explicitId || href || generatedId;
     const { hovered, setHovered, containerRef } = useContext(HoverContext);
-    const isHovered = hovered === href;
+    const isHovered = hovered === itemId;
     const itemRef = useScrollToActive(isActive);
 
-    const opacity = isActive ? 1 : hovered !== null ? (isHovered ? 1 : 0.3) : 0.55;
-    const x = isActive ? 8 : isHovered ? 6 : 0;
+    const opacity = isActive ? 1 : hovered !== null ? (isHovered ? 1 : 0.45) : 0.75;
+    const x = isActive ? 4 : isHovered ? 2 : 0;
+
+    const handleMouseEnter = () => {
+        const el = itemRef.current;
+        const container = containerRef.current;
+        if (el && container) {
+            const elRect = el.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            setHovered(itemId, {
+                top: elRect.top - containerRect.top,
+                height: elRect.height,
+                left: 4,
+            });
+        } else {
+            setHovered(itemId);
+        }
+    };
+
+    const handleMouseLeave = () => setHovered(null);
+
+    const content = (
+        <div className="relative flex w-full items-center justify-between">
+            <div className="flex min-w-0 items-center gap-2 truncate">
+                {icon && (
+                    <span className={cn('shrink-0 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')}>
+                        {typeof icon === 'string' ? <Icon icon={icon as T_IconType} className="size-3.5" /> : icon}
+                    </span>
+                )}
+                <span className={cn('truncate font-medium transition-colors', isActive ? 'text-primary font-semibold' : 'text-foreground')}>
+                    {label}
+                </span>
+                {isNew && <span className="bg-primary size-1.5 shrink-0 rounded-full" />}
+            </div>
+
+            <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                {count !== undefined && (
+                    <span className={cn('font-mono text-[10px] tabular-nums', isActive ? 'text-primary/90' : 'text-muted-foreground')}>
+                        {count.toLocaleString()}
+                    </span>
+                )}
+                {badge && (
+                    <Badge variant={isActive ? 'primary' : 'outline'} size="xs" className="px-1 py-0 text-[9px]">
+                        {badge}
+                    </Badge>
+                )}
+            </div>
+        </div>
+    );
 
     return (
-        <div className="relative">
+        <div className="relative my-0.5">
             {isActive && (
                 <motion.span
-                    layoutId="sb001-active-bar"
-                    className="bg-accent-pro pointer-events-none absolute top-1/2 left-1 z-10 h-[1.8px] -translate-y-1/2 rounded-full"
-                    animate={{ width: 23 }}
-                    transition={{ type: 'spring', stiffness: 800, damping: 40 }}
+                    layoutId="sidebar-active-indicator"
+                    className="bg-primary pointer-events-none absolute top-1/2 left-0 z-10 h-3.5 w-0.5 -translate-y-1/2 rounded-r-full"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
             )}
-
-            <motion.span
-                className="bg-foreground/50 pointer-events-none absolute top-1/2 left-0 h-px -translate-y-1/2"
-                animate={{ width: isActive ? 0 : isHovered ? 26 : 18 }}
-                transition={{ type: 'spring', stiffness: 600, damping: 30 }}
-            />
-            <motion.span className="bg-foreground/30 pointer-events-none absolute top-1/4 left-0 h-px w-3.25" />
-            <motion.span className="bg-foreground/30 pointer-events-none absolute top-0 left-0 h-px w-4" />
-            <motion.span className="bg-foreground/30 pointer-events-none absolute top-3/4 left-0 h-px w-3.25" />
 
             <motion.div
                 ref={itemRef}
                 animate={{ opacity, x }}
-                transition={{ type: 'spring', stiffness: 700, damping: 30 }}
+                transition={{ type: 'spring', stiffness: 600, damping: 35 }}
                 style={{ transformOrigin: 'left center' }}>
-                <a
-                    href={href}
-                    onClick={onClick}
-                    onMouseEnter={() => {
-                        const el = itemRef.current;
-                        const container = containerRef.current;
-                        if (el && container) {
-                            const elRect = el.getBoundingClientRect();
-                            const containerRect = container.getBoundingClientRect();
-                            setHovered(href, {
-                                top: elRect.top - containerRect.top,
-                                height: elRect.height,
-                                left: 25,
-                            });
-                        } else {
-                            setHovered(href);
-                        }
-                    }}
-                    onMouseLeave={() => setHovered(null)}
-                    className={cn('relative ml-2 flex items-center gap-2 py-1.5 pl-4 text-sm select-none', className)}>
-                    <span className="relative z-1 truncate">{label}</span>
-                    {isNew && <span className="bg-accent-pro size-1.5 shrink-0 rounded-full" />}
-                </a>
+                {href ? (
+                    <a
+                        href={href}
+                        onClick={onClick as React.MouseEventHandler<HTMLAnchorElement>}
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                        className={cn(
+                            'group relative z-1 flex w-full items-center rounded-md px-2.5 py-1.5 text-xs select-none transition-colors duration-150',
+                            isActive ? 'bg-primary/10 text-primary' : 'hover:text-foreground text-muted-foreground',
+                            className
+                        )}>
+                        {content}
+                    </a>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={onClick as React.MouseEventHandler<HTMLButtonElement>}
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                        className={cn(
+                            'group relative z-1 flex w-full cursor-pointer items-center rounded-md px-2.5 py-1.5 text-xs select-none transition-colors duration-150',
+                            isActive ? 'bg-primary/10 text-primary' : 'hover:text-foreground text-muted-foreground',
+                            className
+                        )}>
+                        {content}
+                    </button>
+                )}
             </motion.div>
         </div>
     );
 });
 
-// ─── Sidebar001Separator ──────────────────────────────────────────────────────
+export const Sidebar001Item = SidebarItem;
 
-export function Sidebar001Separator({ children, className }: { children?: React.ReactNode; className?: string }) {
-    return <div className={cn('text-foreground/40 mt-2 px-0 py-3.5 text-sm font-medium', className)}>{children}</div>;
+// ─── Sidebar Separator ────────────────────────────────────────────────────────
+
+export function SidebarSeparator({ children, className }: { children?: React.ReactNode; className?: string }) {
+    return (
+        <div className={cn('text-muted-foreground flex items-center gap-1.5 px-2 pt-3 pb-1 text-[10px] font-semibold tracking-wider uppercase', className)}>
+            {children}
+        </div>
+    );
 }
+export const Sidebar001Separator = SidebarSeparator;
 
-// ─── Sidebar001Group ──────────────────────────────────────────────────────────
+// ─── Sidebar Group ────────────────────────────────────────────────────────────
 
-export interface Sidebar001GroupProps {
+export interface SidebarGroupProps {
     label: React.ReactNode;
     children: React.ReactNode;
     defaultOpen?: boolean;
-    icon?: React.ReactNode;
+    icon?: T_IconType | React.ReactNode;
     className?: string;
 }
 
-export function Sidebar001Group({ label, children, defaultOpen = false, icon, className }: Sidebar001GroupProps) {
+export function SidebarGroup({ label, children, defaultOpen = true, icon, className }: SidebarGroupProps) {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     const id = useId();
     const { setHovered, containerRef } = useContext(HoverContext);
@@ -251,25 +319,21 @@ export function Sidebar001Group({ label, children, defaultOpen = false, icon, cl
                 onClick={() => setIsOpen((v) => !v)}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
-                className="group relative z-1 flex w-full items-center gap-1.5 py-1.5 pr-2 text-left select-none">
-                {icon ? (
-                    <>
-                        <span className="text-foreground/35 shrink-0 [&_svg]:size-3.5">{icon}</span>
-                        <span className="text-foreground/45 group-hover:text-foreground/70 flex-1 text-sm transition-colors duration-150">
-                            {label}
+                className="group relative z-1 flex w-full cursor-pointer items-center justify-between gap-1.5 px-2 py-1 text-left select-none">
+                <div className="flex items-center gap-1.5 truncate">
+                    {icon && (
+                        <span className="text-muted-foreground size-3 shrink-0">
+                            {typeof icon === 'string' ? <Icon icon={icon as T_IconType} className="size-3" /> : icon}
                         </span>
-                        <motion.svg animate={{ rotate: isOpen ? 90 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }}>
-                            <Icon icon="right" className="text-foreground/25 size-3.5 shrink-0" />
-                        </motion.svg>
-                    </>
-                ) : (
-                    <>
-                        <motion.svg animate={{ rotate: isOpen ? 90 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }}>
-                            <Icon icon="right" className="text-foreground/25 size-3 shrink-0" />
-                        </motion.svg>
-                        <span className="text-foreground/45 group-hover:text-foreground/70 text-sm transition-colors duration-150">{label}</span>
-                    </>
-                )}
+                    )}
+                    <span className="text-muted-foreground group-hover:text-foreground text-[10px] font-bold tracking-wider uppercase transition-colors">
+                        {label}
+                    </span>
+                </div>
+
+                <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ type: 'spring', stiffness: 450, damping: 30 }}>
+                    <Icon icon="right" className="text-muted-foreground/60 size-3 shrink-0" />
+                </motion.div>
             </button>
 
             <AnimatePresence initial={false}>
@@ -278,30 +342,32 @@ export function Sidebar001Group({ label, children, defaultOpen = false, icon, cl
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                         style={{ overflow: 'hidden' }}>
-                        <div className="flex flex-col pl-3">{children}</div>
+                        <div className="flex flex-col pt-0.5">{children}</div>
                     </motion.div>
                 )}
             </AnimatePresence>
         </div>
     );
 }
+export const Sidebar001Group = SidebarGroup;
 
-// ─── Sidebar001Section ────────────────────────────────────────────────────────
+// ─── Sidebar Section ──────────────────────────────────────────────────────────
 
-export function Sidebar001Section({ label, children, className }: { label?: React.ReactNode; children: React.ReactNode; className?: string }) {
+export function SidebarSection({ label, children, className }: { label?: React.ReactNode; children: React.ReactNode; className?: string }) {
     return (
-        <div className={cn('flex flex-col', className)}>
-            {label && <Sidebar001Separator>{label}</Sidebar001Separator>}
+        <div className={cn('flex flex-col space-y-1', className)}>
+            {label && <SidebarSeparator>{label}</SidebarSeparator>}
             {children}
         </div>
     );
 }
+export const Sidebar001Section = SidebarSection;
 
-// ─── Sidebar001Content ────────────────────────────────────────────────────────
+// ─── Sidebar Content ──────────────────────────────────────────────────────────
 
-export function Sidebar001Content({ children, className }: { children: React.ReactNode; className?: string }) {
+export function SidebarContent({ children, className }: { children: React.ReactNode; className?: string }) {
     const containerRef = useContext(HoverContext).containerRef;
     const setContainerRef = useCallback(
         (node: HTMLDivElement | null) => {
@@ -311,37 +377,40 @@ export function Sidebar001Content({ children, className }: { children: React.Rea
     );
 
     return (
-        <div className={cn('no-scrollbar flex-1 overflow-y-auto py-4', className)} data-scroll-viewport>
-            <div ref={setContainerRef} className="relative px-1">
+        <div className={cn('flex-1 overflow-y-auto p-2', className)} data-scroll-viewport>
+            <div ref={setContainerRef} className="relative flex flex-col gap-3">
                 <HoverHighlight />
                 {children}
             </div>
         </div>
     );
 }
+export const Sidebar001Content = SidebarContent;
 
-// ─── Sidebar001 (with resize) ─────────────────────────────────────────────────
+// ─── Sidebar Root (with resize) ───────────────────────────────────────────────
 
-export interface Sidebar001Props {
+export interface SidebarProps {
     children: React.ReactNode;
     className?: string;
     defaultEffectsEnabled?: boolean;
-    /** Initial width in px. Default: 240 */
+    /** Initial width in px. Default: 224 */
     defaultWidth?: number;
     /** Min resize width in px. Default: 160 */
     minWidth?: number;
     /** Max resize width in px. Default: 400 */
     maxWidth?: number;
+    resizable?: boolean;
 }
 
-export function Sidebar001({
+export function Sidebar({
     children,
     className,
     defaultEffectsEnabled = true,
-    defaultWidth = 240,
+    defaultWidth = 224,
     minWidth = 160,
-    maxWidth = 400,
-}: Sidebar001Props) {
+    maxWidth = 380,
+    resizable = true,
+}: SidebarProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [width, setWidth] = useState(defaultWidth);
     const dragging = useRef(false);
@@ -350,13 +419,14 @@ export function Sidebar001({
 
     const onPointerDown = useCallback(
         (e: React.PointerEvent) => {
+            if (!resizable) return;
             e.preventDefault();
             dragging.current = true;
             startX.current = e.clientX;
             startW.current = width;
             (e.target as HTMLElement).setPointerCapture(e.pointerId);
         },
-        [width]
+        [resizable, width]
     );
 
     const onPointerMove = useCallback(
@@ -375,31 +445,43 @@ export function Sidebar001({
     return (
         <EffectsProvider defaultEnabled={defaultEffectsEnabled}>
             <HoverProvider containerRef={containerRef}>
-                <aside className={cn('bg-background relative flex h-full shrink-0 flex-col', className)} style={{ width }}>
+                <aside
+                    className={cn(
+                        'bg-card/60 border-border relative flex h-full shrink-0 flex-col justify-between border-r text-xs select-none backdrop-blur-xs',
+                        className
+                    )}
+                    style={{ width }}>
                     {children}
 
                     {/* Resize handle */}
-                    <div
-                        className="group/handle absolute top-0 right-0 z-20 h-full w-1 cursor-col-resize"
-                        onPointerDown={onPointerDown}
-                        onPointerMove={onPointerMove}
-                        onPointerUp={onPointerUp}>
-                        <div className="bg-border/50 group-hover/handle:bg-border absolute top-0 right-0 h-full w-px transition-colors duration-150" />
-                    </div>
+                    {resizable && (
+                        <div
+                            className="group/handle absolute top-0 right-0 z-20 h-full w-1.5 cursor-col-resize"
+                            onPointerDown={onPointerDown}
+                            onPointerMove={onPointerMove}
+                            onPointerUp={onPointerUp}>
+                            <div className="bg-border/60 group-hover/handle:bg-primary absolute top-0 right-0 h-full w-px transition-colors duration-150" />
+                        </div>
+                    )}
                 </aside>
             </HoverProvider>
         </EffectsProvider>
     );
 }
+export const Sidebar001 = Sidebar;
 
-// ─── Sidebar001Header ─────────────────────────────────────────────────────────
+// ─── Sidebar Header ───────────────────────────────────────────────────────────
 
-export function Sidebar001Header({ children, className }: { children?: React.ReactNode; className?: string }) {
-    return <div className={cn('shrink-0 px-3 pt-4 pb-2', className)}>{children}</div>;
+export function SidebarHeader({ children, className }: { children?: React.ReactNode; className?: string }) {
+    return <div className={cn('shrink-0 p-3 pb-1', className)}>{children}</div>;
 }
+export const Sidebar001Header = SidebarHeader;
 
-// ─── Sidebar001Footer ─────────────────────────────────────────────────────────
+// ─── Sidebar Footer ───────────────────────────────────────────────────────────
 
-export function Sidebar001Footer({ children, className }: { children?: React.ReactNode; className?: string }) {
-    return <div className={cn('border-border/50 shrink-0 border-t px-3 pt-2 pb-4', className)}>{children}</div>;
+export function SidebarFooter({ children, className }: { children?: React.ReactNode; className?: string }) {
+    return <div className={cn('border-border shrink-0 border-t bg-card/40 p-3', className)}>{children}</div>;
 }
+export const Sidebar001Footer = SidebarFooter;
+
+export default Sidebar;

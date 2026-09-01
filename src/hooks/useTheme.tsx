@@ -23,44 +23,57 @@ type ThemeChangeDetail = {
 };
 
 const THEME_KEY = 'theme';
-const THEME_CHANGE_EVENT = 'barbell-theme-change';
+const THEME_CHANGE_EVENT = 'meta-tags-theme-change';
+const VALID_THEMES: ReadonlySet<string> = new Set(['light', 'dark', 'system']);
 
 /* Read theme from localStorage. Falls back to system. */
 const getStoredTheme = (): ThemeType => {
     if (isBrowser) {
-        const stored = localStorage.getItem(THEME_KEY) as ThemeType | null;
+        const stored = localStorage.getItem(THEME_KEY);
 
-        if (stored === 'light' || stored === 'dark' || stored === 'system') {
-            return stored;
+        if (stored && VALID_THEMES.has(stored)) {
+            return stored as ThemeType;
         }
     }
 
     return 'system';
 };
 
-const getSystemTheme = (): 'light' | 'dark' => (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+const getSystemTheme = (): 'light' | 'dark' => {
+    if (!isBrowser) return 'light';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
 
-/* Convert system theme to concrete light or dark. */
+/**
+ * Convert system theme to concrete light or dark.
+ */
 const resolveTheme = (theme: ThemeType): 'light' | 'dark' => (theme === 'system' ? getSystemTheme() : theme);
 
-/* Apply theme to DOM root and update meta theme color. */
+/**
+ * Apply theme to DOM root and update meta theme color.
+ */
 const applyThemeToDOM = (theme: 'light' | 'dark', metaConfig: ThemeMetaConfig | undefined) => {
     const root = document.documentElement;
 
+    // Avoid unnecessary DOM writes if the theme is already applied.
     if (root.dataset.theme === theme) return;
 
+    // Set data-theme attribute and toggle dark class for Tailwind compatibility.
     root.dataset.theme = theme;
     root.classList.toggle('dark', theme === 'dark');
 
+    // Update meta[name="theme-color"]
     const meta = document.querySelector('meta[name="theme-color"]');
 
     if (!meta) return;
 
     let color = '';
 
+    // Apply custom color
     if (metaConfig?.mode === 'custom') {
         color = theme === 'dark' ? (metaConfig.dark ?? '') : (metaConfig.light ?? '');
     } else {
+        // Apply css variable
         const variable = metaConfig?.cssVar ?? '--color-primary';
         color = getComputedStyle(root).getPropertyValue(variable);
     }
@@ -74,7 +87,9 @@ const getNextTheme = (theme: ThemeType): ThemeType => {
     return 'light';
 };
 
-/* Sync theme across tabs and within the same tab via custom event. */
+/**
+ * Sync theme across tabs and within the same tab via custom event.
+ */
 const subscribeToTheme = (onStoreChange: () => void) => {
     if (!isBrowser) {
         return () => undefined;
@@ -192,7 +207,7 @@ const useTheme = ({
     meta?: ThemeMetaConfig;
 } = {}) => {
     const theme = useSyncExternalStore<ThemeType>(subscribeToTheme, getStoredTheme, () => 'system');
-
+    const resolvedTheme = resolveTheme(theme);
     const nextTheme = getNextTheme(theme);
 
     const applyTheme = useCallback(
@@ -215,7 +230,7 @@ const useTheme = ({
                 window.dispatchEvent(event);
             }
         },
-        [meta, duration]
+        [duration, meta]
     );
 
     const setTheme = useCallback(
@@ -227,20 +242,27 @@ const useTheme = ({
         [applyTheme]
     );
 
+    // Sync DOM on mount and when theme changes.
+    // Only touches the DOM - does NOT write to localStorage,
+    // so it can't overwrite the user's stored preference during hydration.
     useEffect(() => {
         if (!isBrowser) return;
 
-        applyTheme(theme);
+        const resolved = resolveTheme(theme);
+        applyThemeToDOM(resolved, meta);
 
-        /* When theme is system listen to OS preference changes. */
+        // When theme is system listen to OS preference changes.
         if (theme !== 'system') return;
 
         const media = window.matchMedia('(prefers-color-scheme: dark)');
-        const handleChange = () => applyTheme('system');
+        const handleChange = () => {
+            const resolved = resolveTheme('system');
+            applyThemeToDOM(resolved, meta);
+        };
 
         media.addEventListener('change', handleChange);
         return () => media.removeEventListener('change', handleChange);
-    }, [theme, applyTheme]);
+    }, [theme, meta]);
 
     const cycleTheme = useCallback(() => {
         setTheme((currentTheme) => getNextTheme(currentTheme));
@@ -248,7 +270,7 @@ const useTheme = ({
 
     const animateToggleTheme = useCallback(
         (x?: number, y?: number) => {
-            /* Fallback when View Transition API is not supported. */
+            // Fallback when View Transition API is not supported.
             if (typeof document === 'undefined' || !('startViewTransition' in document)) {
                 cycleTheme();
                 return;
@@ -281,6 +303,7 @@ const useTheme = ({
 
     return {
         theme,
+        resolvedTheme,
         nextTheme,
         setTheme,
         cycleTheme,
@@ -310,9 +333,10 @@ export const ThemeScript = () => {
                 __html: `
                     (function () {
                         try {
-                            const theme = localStorage.getItem('theme') || 'system';
-                            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                            const appliedTheme = theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;
+                            var stored = localStorage.getItem('theme') || 'system';
+                            var theme = (stored === 'light' || stored === 'dark' || stored === 'system') ? stored : 'system';
+                            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                            var appliedTheme = theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;
 
                             document.documentElement.setAttribute('data-theme', appliedTheme);
                             document.documentElement.classList.toggle('dark', appliedTheme === 'dark');

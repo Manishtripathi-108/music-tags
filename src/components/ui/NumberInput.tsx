@@ -28,7 +28,7 @@ export function NumberInputLabel({ ref, className, ...props }: React.ComponentPr
                 'font-mono text-[11px] font-semibold',
                 'select-none',
                 'group-data-disabled:cursor-not-allowed',
-                'group-data-invalid:text-danger',
+                'group-data-invalid:text-destructive',
                 className
             )}
         />
@@ -40,7 +40,7 @@ export function NumberInputControl({ ref, className, ...props }: React.Component
         <ArkNumberInput.Control
             {...props}
             ref={ref}
-            className={cn('relative isolate flex w-full items-center', 'group-data-invalid:text-danger', className)}
+            className={cn('relative isolate flex w-full items-center', 'group-data-invalid:text-destructive', className)}
         />
     );
 }
@@ -145,7 +145,7 @@ export function NumberInputValueText({ ref, className, ...props }: React.Compone
         <ArkNumberInput.ValueText
             {...props}
             ref={ref}
-            className={cn('text-foreground', 'font-mono text-xs tabular-nums', 'data-invalid:text-danger', className)}
+            className={cn('text-foreground', 'font-mono text-xs tabular-nums', 'data-invalid:text-destructive', className)}
         />
     );
 }
@@ -183,7 +183,7 @@ export function NumberInputField({ ref, label, placeholder, inputClassName, clas
             </NumberInputControl>
 
             {error && (
-                <div role="alert" className={cn('text-danger', 'flex items-center gap-1', 'font-mono text-[10px]', 'leading-tight font-medium')}>
+                <div role="alert" className={cn('text-destructive', 'flex items-center gap-1', 'font-mono text-[10px]', 'leading-tight font-medium')}>
                     <Icon icon="warning" aria-hidden="true" className="size-2.5 shrink-0" />
 
                     <span className="min-w-0 truncate">{error}</span>

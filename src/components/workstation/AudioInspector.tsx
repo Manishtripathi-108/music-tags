@@ -300,7 +300,7 @@ export function AudioInspector() {
                             </FieldsetContent>
                         </Fieldset>
 
-                        <Button type="submit" disabled={!isDirty || isSubmitting} variant="info" className="mt-1 w-full">
+                        <Button type="submit" disabled={!isDirty || isSubmitting} variant="primary" className="mt-1 w-full">
                             <Icon icon={isSubmitting ? 'loading' : isSaved && !isDirty ? 'success' : 'save'} className="size-3.5" />
 
                             <span>{isSubmitting ? 'Writing Tags...' : isSaved && !isDirty ? 'Saved Successfully' : 'Write Tags'}</span>

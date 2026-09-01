@@ -33,12 +33,12 @@ const buttonVariants = cva(
                     'hover:[--button-to:color-mix(in_oklch,var(--color-primary)_78%,white)]',
                 ],
                 secondary: [
-                    '[--button-from:color-mix(in_oklch,var(--color-surface-900)_90%,black)]',
-                    '[--button-via:var(--color-surface-700)]',
-                    '[--button-to:var(--color-surface-500)]',
-                    '[--button-inner-from:var(--color-surface-800)]',
-                    '[--button-inner-to:var(--color-surface-700)]',
-                    '[--button-ring:var(--color-surface-500)]',
+                    '[--button-from:color-mix(in_oklch,var(--color-secondary)_90%,black)]',
+                    '[--button-via:var(--color-secondary)]',
+                    '[--button-to:color-mix(in_oklch,var(--color-secondary)_80%,white)]',
+                    '[--button-inner-from:var(--color-secondary)]',
+                    '[--button-inner-to:color-mix(in_oklch,var(--color-secondary)_90%,white)]',
+                    '[--button-ring:var(--color-secondary)]',
 
                     'bg-linear-to-t',
                     'from-(--button-from)',
@@ -49,29 +49,28 @@ const buttonVariants = cva(
                     '[--button-ring:var(--color-primary)]',
 
                     'bg-transparent',
-                    'text-primary',
-                    'ring-1 ring-inset ring-primary/30',
+                    'text-foreground',
+                    'border border-border',
 
-                    'hover:bg-primary/5',
-                    'hover:ring-primary/50',
+                    'hover:bg-muted/80',
+                    'hover:text-foreground',
                 ],
                 ghost: [
                     '[--button-ring:var(--color-primary)]',
 
                     'bg-transparent',
-                    'text-surface-700',
-                    'dark:text-surface-300',
+                    'text-muted-foreground',
 
-                    'hover:bg-surface-100',
-                    'dark:hover:bg-surface-800',
+                    'hover:bg-muted/80',
+                    'hover:text-foreground',
                 ],
                 destructive: [
-                    '[--button-from:color-mix(in_oklch,var(--color-red-600)_75%,black)]',
-                    '[--button-via:var(--color-red-600)]',
-                    '[--button-to:color-mix(in_oklch,var(--color-red-600)_82%,white)]',
-                    '[--button-inner-from:color-mix(in_oklch,var(--color-red-600)_88%,black)]',
-                    '[--button-inner-to:color-mix(in_oklch,var(--color-red-600)_94%,white)]',
-                    '[--button-ring:var(--color-red-500)]',
+                    '[--button-from:color-mix(in_oklch,var(--color-destructive)_75%,black)]',
+                    '[--button-via:var(--color-destructive)]',
+                    '[--button-to:color-mix(in_oklch,var(--color-destructive)_82%,white)]',
+                    '[--button-inner-from:color-mix(in_oklch,var(--color-destructive)_88%,black)]',
+                    '[--button-inner-to:color-mix(in_oklch,var(--color-destructive)_94%,white)]',
+                    '[--button-ring:var(--color-destructive)]',
 
                     'bg-linear-to-t',
                     'from-(--button-from)',
@@ -80,12 +79,12 @@ const buttonVariants = cva(
                 ],
 
                 success: [
-                    '[--button-from:color-mix(in_oklch,var(--color-green-600)_75%,black)]',
-                    '[--button-via:var(--color-green-600)]',
-                    '[--button-to:color-mix(in_oklch,var(--color-green-600)_82%,white)]',
-                    '[--button-inner-from:color-mix(in_oklch,var(--color-green-600)_88%,black)]',
-                    '[--button-inner-to:color-mix(in_oklch,var(--color-green-600)_94%,white)]',
-                    '[--button-ring:var(--color-green-500)]',
+                    '[--button-from:color-mix(in_oklch,var(--color-success)_75%,black)]',
+                    '[--button-via:var(--color-success)]',
+                    '[--button-to:color-mix(in_oklch,var(--color-success)_82%,white)]',
+                    '[--button-inner-from:color-mix(in_oklch,var(--color-success)_88%,black)]',
+                    '[--button-inner-to:color-mix(in_oklch,var(--color-success)_94%,white)]',
+                    '[--button-ring:var(--color-success)]',
 
                     'bg-linear-to-t',
                     'from-(--button-from)',
@@ -93,25 +92,12 @@ const buttonVariants = cva(
                     'to-(--button-to)',
                 ],
                 warning: [
-                    '[--button-from:color-mix(in_oklch,var(--color-yellow-600)_75%,black)]',
-                    '[--button-via:var(--color-yellow-500)]',
-                    '[--button-to:color-mix(in_oklch,var(--color-yellow-500)_82%,white)]',
-                    '[--button-inner-from:color-mix(in_oklch,var(--color-yellow-500)_88%,black)]',
-                    '[--button-inner-to:color-mix(in_oklch,var(--color-yellow-500)_94%,white)]',
-                    '[--button-ring:var(--color-yellow-500)]',
-
-                    'bg-linear-to-t',
-                    'from-(--button-from)',
-                    'via-(--button-via)',
-                    'to-(--button-to)',
-                ],
-                info: [
-                    '[--button-from:color-mix(in_oklch,var(--color-blue-600)_75%,black)]',
-                    '[--button-via:var(--color-blue-600)]',
-                    '[--button-to:color-mix(in_oklch,var(--color-blue-600)_82%,white)]',
-                    '[--button-inner-from:color-mix(in_oklch,var(--color-blue-600)_88%,black)]',
-                    '[--button-inner-to:color-mix(in_oklch,var(--color-blue-600)_94%,white)]',
-                    '[--button-ring:var(--color-blue-500)]',
+                    '[--button-from:color-mix(in_oklch,var(--color-warning)_75%,black)]',
+                    '[--button-via:var(--color-warning)]',
+                    '[--button-to:color-mix(in_oklch,var(--color-warning)_82%,white)]',
+                    '[--button-inner-from:color-mix(in_oklch,var(--color-warning)_88%,black)]',
+                    '[--button-inner-to:color-mix(in_oklch,var(--color-warning)_94%,white)]',
+                    '[--button-ring:var(--color-warning)]',
 
                     'bg-linear-to-t',
                     'from-(--button-from)',
@@ -144,18 +130,17 @@ const buttonVariants = cva(
 );
 
 const buttonInnerVariants = cva(
-    ['flex h-full w-full items-center justify-center', 'gap-2', 'rounded-[inherit]', 'text-white', 'wg-antialiased', 'transition-all duration-200'],
+    ['flex h-full w-full items-center justify-center', 'gap-2', 'rounded-[inherit]', 'wg-antialiased', 'transition-all duration-200'],
     {
         variants: {
             variant: {
-                primary: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'shadow-sm', 'group-hover:brightness-105'],
-                secondary: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)'],
-                outline: ['bg-transparent', 'text-primary'],
+                primary: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-primary-foreground', 'shadow-xs', 'group-hover:brightness-105'],
+                secondary: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-secondary-foreground'],
+                outline: ['bg-transparent', 'text-foreground'],
                 ghost: ['bg-transparent', 'text-inherit'],
-                destructive: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'shadow-sm', 'group-hover:brightness-105'],
-                success: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'shadow-sm', 'group-hover:brightness-105'],
-                warning: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-surface-950', 'shadow-sm'],
-                info: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'shadow-sm', 'group-hover:brightness-105'],
+                destructive: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-destructive-foreground', 'shadow-xs', 'group-hover:brightness-105'],
+                success: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-success-foreground', 'shadow-xs', 'group-hover:brightness-105'],
+                warning: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-warning-foreground', 'shadow-xs'],
                 link: ['bg-transparent', 'text-primary'],
             },
 

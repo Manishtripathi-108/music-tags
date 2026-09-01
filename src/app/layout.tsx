@@ -9,6 +9,11 @@ const spaceGrotesk = Space_Grotesk({
     display: 'swap',
 });
 
+export const metadata = {
+    title: 'Music Tags',
+    description: 'A web-based music tagging application built with Next.js, React, and TypeScript.',
+};
+
 const RootLayout = ({ children }: { children: React.ReactNode }) => {
     return (
         <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth" className="scroll-smooth">

@@ -37,11 +37,11 @@ export const FOCUS_RING_PRIMARY = [
  * Error / invalid focus.
  */
 export const FOCUS_RING_ERROR = [
-    'focus-visible:border-danger',
+    'focus-visible:border-destructive',
     'focus-visible:bg-background',
     'focus-visible:outline-hidden',
     'focus-visible:ring-2',
-    'focus-visible:ring-danger/20',
+    'focus-visible:ring-destructive/20',
     'focus-visible:ring-offset-1',
 ].join(' ');
 
@@ -69,14 +69,15 @@ export const READONLY = ['read-only:cursor-default', 'read-only:bg-muted/40', 'r
  * + Zod/Ark validation should be the source of truth for this component.
  */
 export const DATA_INVALID = [
-    'data-[invalid]:border-danger',
-    'data-[invalid]:text-danger',
-    'data-[invalid]:ring-danger/10',
+    'data-[invalid]:border-destructive',
+    'data-[invalid]:text-destructive',
+    'data-[invalid]:ring-destructive/10',
 
-    'aria-[invalid=true]:border-danger',
-    'aria-[invalid=true]:text-danger',
-    'aria-[invalid=true]:ring-danger/10',
+    'aria-[invalid=true]:border-destructive',
+    'aria-[invalid=true]:text-destructive',
+    'aria-[invalid=true]:ring-destructive/10',
 ].join(' ');
+
 
 /**
  * Optional success state for controls that explicitly expose `data-valid`.

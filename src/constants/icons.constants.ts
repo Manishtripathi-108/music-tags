@@ -122,6 +122,7 @@ export enum IconSet {
     heartShine = 'solar:heart-shine-bold',
 
     /* ------------------------------------ I ----------------------------------- */
+    image = 'solar:gallery-bold',
     info = 'solar:info-circle-bold',
     infoOutlined = 'solar:info-circle-outline',
 
