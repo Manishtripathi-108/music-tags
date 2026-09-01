@@ -2,6 +2,7 @@ import type { ComponentProps } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils/cn';
+import { DISABLED, FOCUS_RING } from '@/lib/styles/tailwind.helpers';
 
 const buttonVariants = cva(
     [
@@ -10,9 +11,6 @@ const buttonVariants = cva(
         'overflow-hidden',
         'transition-all duration-200',
         'outline-none',
-        'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-70',
-        'focus-visible:ring-2 focus-visible:ring-primary/50',
-        'focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
         'active:scale-90',
     ],
     {
@@ -192,6 +190,8 @@ const Button = ({ className, innerClassName, variant, size, fullWidth, children,
                     size,
                     fullWidth,
                 }),
+                DISABLED,
+                FOCUS_RING,
                 className
             )}
             {...props}>

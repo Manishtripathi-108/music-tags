@@ -12,6 +12,7 @@ import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Field
 import { NumberInputField } from '@/components/ui/NumberInput';
 import { formatBitrate, formatDuration, formatSampleRate } from '@/lib/utils';
 import { useAudioStore } from '@/store/audioStore';
+import axios from 'axios';
 
 interface TagFormValues {
     title: string;
@@ -31,8 +32,6 @@ export function AudioInspector() {
     const { metadata, rawTags, isLoading } = activeTrackDetail;
 
     const [rawSearch, setRawSearch] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [saveSuccess, setSaveSuccess] = useState(false);
 
     const {
         register,
@@ -40,7 +39,7 @@ export function AudioInspector() {
         reset,
         watch,
         control,
-        formState: { errors },
+        formState: { errors, isSubmitting, isSubmitSuccessful, isDirty },
     } = useForm<TagFormValues>({
         defaultValues: {
             title: '',
@@ -73,14 +72,12 @@ export function AudioInspector() {
                 initialKey: metadata.initialKey || '',
                 comment: metadata.comment || '',
             });
-            setSaveSuccess(false);
         }
     }, [metadata, reset]);
 
     const onSave = async (data: TagFormValues) => {
         if (!activeTrackId) return;
 
-        setIsSaving(true);
         try {
             // Update store state immediately for responsive feedback
             updateTrackInline(activeTrackId, {
@@ -96,40 +93,31 @@ export function AudioInspector() {
                 comment: data.comment,
             });
 
-            const res = await fetch(`/api/files/${activeTrackId}/tags`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: data.title,
-                    artist: data.artist,
-                    albumArtist: data.albumArtist,
-                    album: data.album,
-                    trackNumber: data.trackNumber ? parseInt(data.trackNumber, 10) : null,
-                    year: data.year ? parseInt(data.year, 10) : null,
-                    genre: data.genre,
-                    bpm: data.bpm ? parseFloat(data.bpm) : null,
-                    initialKey: data.initialKey,
-                    comment: data.comment,
-                }),
+            const res = await axios.patch(`/api/files/${activeTrackId}/tags`, {
+                title: data.title,
+                artist: data.artist,
+                albumArtist: data.albumArtist,
+                album: data.album,
+                trackNumber: data.trackNumber ? parseInt(data.trackNumber, 10) : null,
+                year: data.year ? parseInt(data.year, 10) : null,
+                genre: data.genre,
+                bpm: data.bpm ? parseFloat(data.bpm) : null,
+                initialKey: data.initialKey,
+                comment: data.comment,
             });
 
-            if (res.ok) {
+            if (res.status === 200) {
                 fetchTracks();
             }
-            setSaveSuccess(true);
-            setTimeout(() => setSaveSuccess(false), 2000);
-        } catch {
-            setSaveSuccess(true);
-            setTimeout(() => setSaveSuccess(false), 2000);
-        } finally {
-            setIsSaving(false);
+        } catch (error) {
+            console.error('Error updating track tags:', error);
         }
     };
 
     if (!activeTrackId || (!metadata && !isLoading)) {
         return (
             <aside className="bg-card text-muted-foreground flex w-80 flex-col items-center justify-center border border-l p-6 text-center select-none">
-                <Icon icon="audio" className="mb-2 h-8 w-8 opacity-20" />
+                <Icon icon="audio" className="mb-2 size-8 opacity-20" />
                 <span className="text-xs font-medium">Select a track to inspect tags</span>
             </aside>
         );
@@ -159,7 +147,7 @@ export function AudioInspector() {
                             }}
                         />
                     ) : (
-                        <Icon icon="audio" className="text-border h-6 w-6" />
+                        <Icon icon="audio" className="text-border size-6" />
                     )}
                 </div>
 
@@ -320,15 +308,15 @@ export function AudioInspector() {
                         </Fieldset>
 
                         <div className="pt-1">
-                            <Button type="submit" disabled={isSaving} variant="info" className="w-full">
-                                {isSaving ? (
+                            <Button type="submit" disabled={!isDirty || isSubmitting} variant="info" className="w-full">
+                                {isSubmitting ? (
                                     <Icon icon="loading" className="size-3.5" />
-                                ) : saveSuccess ? (
+                                ) : isSubmitSuccessful && !isDirty ? (
                                     <Icon icon="success" className="size-3.5 text-emerald-400" />
                                 ) : (
                                     <Icon icon="diskImage" className="size-3.5" />
                                 )}
-                                <span>{isSaving ? 'Writing Tags...' : saveSuccess ? 'Saved Successfully' : 'Write Tags'}</span>
+                                <span>{isSubmitting ? 'Writing Tags...' : isSubmitSuccessful ? 'Saved Successfully' : 'Write Tags'}</span>
                             </Button>
                         </div>
                     </form>

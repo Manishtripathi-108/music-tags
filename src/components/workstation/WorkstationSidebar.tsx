@@ -2,10 +2,10 @@
 
 import React from 'react';
 
-import Icon from '@/components/ui/Icon';
 import { Badge } from '@/components/ui/Badge';
-import { type T_IconType } from '@/lib/types/client.types';
+import Icon from '@/components/ui/Icon';
 import { useAudioStore } from '@/store/audioStore';
+import { type T_IconType } from '@/types/client.types';
 
 export function WorkstationSidebar() {
     const { activeFilter, setActiveFilter, tracks, totalTracks } = useAudioStore();
