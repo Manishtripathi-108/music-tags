@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import Icon from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
-import { Field, FieldError, FieldInput, FieldLabel } from '@/components/ui/Field';
+import { Field, FieldError, FieldInput, FieldLabel, FieldRequiredIndicator } from '@/components/ui/Field';
 import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
 import { useAudioStore } from '@/store/audioStore';
 import { type ScanFolderRequest, ScanFolderRequestSchema } from '@/types/audio';
@@ -117,19 +117,16 @@ export function ScanModal() {
                         </FieldsetLegend>
                         <FieldsetContent>
                             <Field invalid={!!errors.folderPath}>
-                                <FieldLabel className="text-[11px] font-semibold text-zinc-300">Absolute Folder Path</FieldLabel>
+                                <FieldLabel className="text-[11px] font-semibold text-zinc-300">
+                                    Absolute Folder Path <FieldRequiredIndicator />
+                                </FieldLabel>
                                 <FieldInput
                                     type="text"
                                     placeholder="e.g. C:\Music or E:\AudioLibrary"
                                     className="mt-1 border-zinc-800 bg-zinc-900 font-mono text-xs text-zinc-100"
                                     {...register('folderPath')}
                                 />
-                                {errors.folderPath?.message && (
-                                    <FieldError className="mt-1 flex items-center gap-1">
-                                        <Icon icon="warning" className="h-3.5 w-3.5" />
-                                        <span>{errors.folderPath.message}</span>
-                                    </FieldError>
-                                )}
+                                <FieldError className="mt-1">{errors.folderPath?.message}</FieldError>
                                 {serverError && (
                                     <div className="mt-1.5 flex items-center gap-1 text-[11px] text-red-400">
                                         <Icon icon="warning" className="h-3.5 w-3.5" />

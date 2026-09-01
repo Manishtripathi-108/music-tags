@@ -3,34 +3,24 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { Field, FieldInput, FieldLabel, FieldTextarea, FieldError } from '@/components/ui/Field';
+import { Field, FieldInput, FieldLabel, FieldTextarea, FieldError, FieldRequiredIndicator } from '@/components/ui/Field';
 import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
 import { NumberInputField } from '@/components/ui/NumberInput';
 import { formatBitrate, formatDuration, formatSampleRate } from '@/lib/utils';
 import { useAudioStore } from '@/store/audioStore';
+import { TagFormSchema, type TagFormValues } from '@/types/audio';
 import axios from 'axios';
-
-interface TagFormValues {
-    title: string;
-    artist: string;
-    albumArtist: string;
-    album: string;
-    trackNumber: string;
-    year: string;
-    genre: string;
-    bpm: string;
-    initialKey: string;
-    comment: string;
-}
 
 export function AudioInspector() {
     const { activeTrackId, activeTrackDetail, fetchTracks, updateTrackInline } = useAudioStore();
     const { metadata, rawTags, isLoading } = activeTrackDetail;
 
+    const [isSaved, setIsSaved] = useState(false);
     const [rawSearch, setRawSearch] = useState('');
 
     const {
@@ -39,8 +29,10 @@ export function AudioInspector() {
         reset,
         watch,
         control,
-        formState: { errors, isSubmitting, isSubmitSuccessful, isDirty },
+        formState: { errors, isSubmitting, isDirty },
     } = useForm<TagFormValues>({
+        resolver: zodResolver(TagFormSchema),
+        mode: 'onTouched',
         defaultValues: {
             title: '',
             artist: '',
@@ -55,8 +47,7 @@ export function AudioInspector() {
         },
     });
 
-    const watchedTitle = watch('title');
-    const watchedArtist = watch('artist');
+    const [watchedTitle, watchedArtist] = watch(['title', 'artist']);
 
     useEffect(() => {
         if (metadata) {
@@ -78,37 +69,32 @@ export function AudioInspector() {
     const onSave = async (data: TagFormValues) => {
         if (!activeTrackId) return;
 
+        setIsSaved(false);
+
+        const payload = {
+            title: data.title,
+            artist: data.artist || '',
+            albumArtist: data.albumArtist || '',
+            album: data.album || '',
+            trackNumber: data.trackNumber ? parseInt(data.trackNumber, 10) : null,
+            year: data.year ? parseInt(data.year, 10) : null,
+            genre: data.genre || '',
+            bpm: data.bpm ? parseFloat(data.bpm) : null,
+            initialKey: data.initialKey || '',
+            comment: data.comment || '',
+        };
+
         try {
-            // Update store state immediately for responsive feedback
-            updateTrackInline(activeTrackId, {
-                title: data.title,
-                artist: data.artist,
-                albumArtist: data.albumArtist,
-                album: data.album,
-                trackNumber: data.trackNumber ? parseInt(data.trackNumber, 10) : null,
-                year: data.year ? parseInt(data.year, 10) : null,
-                genre: data.genre,
-                bpm: data.bpm ? parseFloat(data.bpm) : null,
-                initialKey: data.initialKey,
-                comment: data.comment,
-            });
+            await axios.patch(`/api/files/${activeTrackId}/tags`, payload);
 
-            const res = await axios.patch(`/api/files/${activeTrackId}/tags`, {
-                title: data.title,
-                artist: data.artist,
-                albumArtist: data.albumArtist,
-                album: data.album,
-                trackNumber: data.trackNumber ? parseInt(data.trackNumber, 10) : null,
-                year: data.year ? parseInt(data.year, 10) : null,
-                genre: data.genre,
-                bpm: data.bpm ? parseFloat(data.bpm) : null,
-                initialKey: data.initialKey,
-                comment: data.comment,
-            });
+            updateTrackInline(activeTrackId, payload);
 
-            if (res.status === 200) {
-                fetchTracks();
-            }
+            // Form is now clean because server accepted the values
+            reset(data);
+            setIsSaved(true);
+
+            // Refresh in background
+            fetchTracks().catch(console.error);
         } catch (error) {
             console.error('Error updating track tags:', error);
         }
@@ -196,28 +182,30 @@ export function AudioInspector() {
                                 Track Information
                             </FieldsetLegend>
                             <FieldsetContent className="gap-2">
-                                <Field invalid={!!errors.title}>
-                                    <FieldLabel>Title</FieldLabel>
-                                    <FieldInput {...register('title')} />
+                                <Field invalid={!!errors.title} required>
+                                    <FieldLabel>
+                                        Title <FieldRequiredIndicator />
+                                    </FieldLabel>
+                                    <FieldInput placeholder="Track title..." {...register('title')} />
                                     <FieldError>{errors.title?.message}</FieldError>
                                 </Field>
 
                                 <div className="grid grid-cols-2 gap-2">
                                     <Field invalid={!!errors.artist}>
                                         <FieldLabel>Artist</FieldLabel>
-                                        <FieldInput {...register('artist')} />
+                                        <FieldInput placeholder="Artist name..." {...register('artist')} />
                                         <FieldError>{errors.artist?.message}</FieldError>
                                     </Field>
                                     <Field invalid={!!errors.albumArtist}>
                                         <FieldLabel>Album Artist</FieldLabel>
-                                        <FieldInput {...register('albumArtist')} />
+                                        <FieldInput placeholder="Album artist..." {...register('albumArtist')} />
                                         <FieldError>{errors.albumArtist?.message}</FieldError>
                                     </Field>
                                 </div>
 
                                 <Field invalid={!!errors.album}>
                                     <FieldLabel>Album</FieldLabel>
-                                    <FieldInput {...register('album')} />
+                                    <FieldInput placeholder="Album name..." {...register('album')} />
                                     <FieldError>{errors.album?.message}</FieldError>
                                 </Field>
                             </FieldsetContent>
@@ -237,9 +225,12 @@ export function AudioInspector() {
                                         render={({ field: { value, onChange } }) => (
                                             <NumberInputField
                                                 label="Track #"
+                                                placeholder="1"
                                                 value={value}
                                                 min={1}
                                                 max={999}
+                                                invalid={!!errors.trackNumber}
+                                                error={errors.trackNumber?.message}
                                                 onValueChange={(details) => onChange(details.value)}
                                             />
                                         )}
@@ -250,9 +241,12 @@ export function AudioInspector() {
                                         render={({ field: { value, onChange } }) => (
                                             <NumberInputField
                                                 label="Year"
+                                                placeholder="2024"
                                                 value={value}
-                                                min={1900}
+                                                min={1000}
                                                 max={2099}
+                                                invalid={!!errors.year}
+                                                error={errors.year?.message}
                                                 onValueChange={(details) => onChange(details.value)}
                                             />
                                         )}
@@ -263,10 +257,13 @@ export function AudioInspector() {
                                         render={({ field: { value, onChange } }) => (
                                             <NumberInputField
                                                 label="BPM"
+                                                placeholder="128.0"
                                                 value={value}
-                                                min={40}
-                                                max={300}
+                                                min={20}
+                                                max={400}
                                                 step={0.5}
+                                                invalid={!!errors.bpm}
+                                                error={errors.bpm?.message}
                                                 onValueChange={(details) => onChange(details.value)}
                                             />
                                         )}
@@ -276,16 +273,12 @@ export function AudioInspector() {
                                 <div className="grid grid-cols-2 gap-2">
                                     <Field invalid={!!errors.genre}>
                                         <FieldLabel>Genre</FieldLabel>
-                                        <FieldInput {...register('genre')} />
+                                        <FieldInput placeholder="e.g. Pop" {...register('genre')} />
                                         <FieldError>{errors.genre?.message}</FieldError>
                                     </Field>
                                     <Field invalid={!!errors.initialKey}>
                                         <FieldLabel>Key</FieldLabel>
-                                        <FieldInput
-                                            placeholder="8A / Am"
-
-                                            {...register('initialKey')}
-                                        />
+                                        <FieldInput placeholder="8A / Am / C#m" {...register('initialKey')} />
                                         <FieldError>{errors.initialKey?.message}</FieldError>
                                     </Field>
                                 </div>
@@ -301,24 +294,17 @@ export function AudioInspector() {
                             <FieldsetContent className="gap-2">
                                 <Field invalid={!!errors.comment}>
                                     <FieldLabel>Comment</FieldLabel>
-                                    <FieldTextarea rows={2} {...register('comment')} />
+                                    <FieldTextarea rows={2} placeholder="Add comments or notes..." {...register('comment')} />
                                     <FieldError>{errors.comment?.message}</FieldError>
                                 </Field>
                             </FieldsetContent>
                         </Fieldset>
 
-                        <div className="pt-1">
-                            <Button type="submit" disabled={!isDirty || isSubmitting} variant="info" className="w-full">
-                                {isSubmitting ? (
-                                    <Icon icon="loading" className="size-3.5" />
-                                ) : isSubmitSuccessful && !isDirty ? (
-                                    <Icon icon="success" className="size-3.5 text-emerald-400" />
-                                ) : (
-                                    <Icon icon="diskImage" className="size-3.5" />
-                                )}
-                                <span>{isSubmitting ? 'Writing Tags...' : isSubmitSuccessful ? 'Saved Successfully' : 'Write Tags'}</span>
-                            </Button>
-                        </div>
+                        <Button type="submit" disabled={!isDirty || isSubmitting} variant="info" className="mt-1 w-full">
+                            <Icon icon={isSubmitting ? 'loading' : isSaved && !isDirty ? 'success' : 'save'} className="size-3.5" />
+
+                            <span>{isSubmitting ? 'Writing Tags...' : isSaved && !isDirty ? 'Saved Successfully' : 'Write Tags'}</span>
+                        </Button>
                     </form>
                 </TabsContent>
 

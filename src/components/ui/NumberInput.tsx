@@ -125,13 +125,14 @@ export interface NumberInputFieldProps extends React.ComponentPropsWithoutRef<ty
     label?: string;
     placeholder?: string;
     inputClassName?: string;
+    error?: string;
 }
 
 export const NumberInputField = React.forwardRef<
     React.ComponentRef<typeof ArkNumberInput.Root>,
     NumberInputFieldProps
->(({ label, placeholder, inputClassName, className, ...props }, ref) => (
-    <NumberInput ref={ref} className={className} {...props}>
+>(({ label, placeholder, inputClassName, className, error, invalid, ...props }, ref) => (
+    <NumberInput ref={ref} className={className} invalid={invalid || !!error} {...props}>
         {label && <NumberInputLabel>{label}</NumberInputLabel>}
         <NumberInputControl>
             <NumberInputInput placeholder={placeholder} className={inputClassName} />
@@ -140,6 +141,12 @@ export const NumberInputField = React.forwardRef<
                 <NumberInputDecrementTrigger />
             </div>
         </NumberInputControl>
+        {error && (
+            <span className="flex items-center gap-1 font-mono text-[10px] font-medium text-destructive leading-tight">
+                <Icon icon="warning" className="size-2.5 shrink-0" />
+                <span className="truncate">{error}</span>
+            </span>
+        )}
     </NumberInput>
 ));
 NumberInputField.displayName = 'NumberInputField';
