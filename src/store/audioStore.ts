@@ -265,22 +265,9 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     },
 
     setSorting: (column: string, order: 'asc' | 'desc') => {
-        const { tracks } = get();
-        const sorted = [...tracks].sort((a, b) => {
-            const valA = (a as unknown as Record<string, unknown>)[column];
-            const valB = (b as unknown as Record<string, unknown>)[column];
-            if (valA == null) return 1;
-            if (valB == null) return -1;
-            if (typeof valA === 'string' && typeof valB === 'string') {
-                return order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-            }
-            if (typeof valA === 'number' && typeof valB === 'number') {
-                return order === 'asc' ? valA - valB : valB - valA;
-            }
-            return 0;
-        });
-
-        set({ sortBy: column, sortOrder: order, tracks: sorted });
+        // TanStack Table's sortedRowModel handles the actual sorting.
+        // The store just persists the sort configuration.
+        set({ sortBy: column, sortOrder: order });
     },
 
     setSearchQuery: (query: string) => set({ searchQuery: query }),
