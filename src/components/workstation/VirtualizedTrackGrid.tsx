@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatDuration } from '@/lib/utils';
 import { useAudioStore } from '@/store/audioStore';
 import { Icon } from '@/components/ui/Icon';
+import { Button } from '@/components/ui/Button';
 import { InlineTableCellEditable } from '@/components/ui/Editable';
+import Badge from '../ui/Badge';
 
 export function VirtualizedTrackGrid() {
     const {
@@ -77,60 +79,59 @@ export function VirtualizedTrackGrid() {
         if (sortBy !== column) {
             return <Icon icon="down" className="h-3 w-3 opacity-30 transition-opacity group-hover:opacity-100" />;
         }
-        return sortOrder === 'asc' ? <Icon icon="up" className="h-3 w-3 text-blue-400" /> : <Icon icon="down" className="h-3 w-3 text-blue-400" />;
+        return sortOrder === 'asc' ? <Icon icon="up" className="text-primary h-3 w-3" /> : <Icon icon="down" className="text-primary h-3 w-3" />;
     };
 
     if (!isLoadingTracks && tracks.length === 0) {
         return (
-            <div className="flex flex-1 flex-col items-center justify-center bg-zinc-950/50 p-8 text-center">
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900">
-                    <Icon icon="audio" className="h-6 w-6 text-zinc-500" />
+            <div className="bg-card/40 flex flex-1 flex-col items-center justify-center p-8 text-center select-none">
+                <div className="bg-card mb-3 flex h-12 w-12 items-center justify-center rounded-full border">
+                    <Icon icon="audio" className="text-muted-foreground h-6 w-6" />
                 </div>
-                <h3 className="mb-1 text-sm font-semibold text-zinc-200">No Audio Tracks In View</h3>
-                <p className="mb-4 max-w-sm text-xs leading-relaxed text-zinc-500">
+                <h3 className="text-foreground mb-1 text-sm font-semibold">No Audio Tracks In View</h3>
+                <p className="text-muted-foreground mb-4 max-w-sm text-xs leading-relaxed">
                     Select a local music folder to scan and index your audio files with ExifTool and FFprobe.
                 </p>
-                <button
-                    onClick={() => setIsScanModalOpen(true)}
-                    className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow transition-colors hover:bg-blue-500">
-                    Scan Music Folder
-                </button>
+                <Button variant="primary" size="sm" onClick={() => setIsScanModalOpen(true)}>
+                    <Icon icon="open" className="size-3.5" />
+                    <span>Scan Music Folder</span>
+                </Button>
             </div>
         );
     }
 
     return (
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-950 select-none">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden select-none">
             {/* Sticky Table Header */}
-            <div className="flex h-7 items-center border-b border-zinc-800 bg-zinc-900/90 px-2 font-mono text-[11px] font-semibold text-zinc-400">
+            <div className="bg-muted/60 text-muted-foreground flex h-7 items-center border-b px-2 font-mono text-[11px] font-semibold">
                 <div className="w-7 text-center">#</div>
                 <div
                     onClick={() => toggleSort('title')}
-                    className="group flex min-w-[150px] flex-1 cursor-pointer items-center justify-between px-2 hover:text-zinc-100">
+                    className="group hover:text-foreground flex min-w-37.5 flex-1 cursor-pointer items-center justify-between px-2">
                     <span>TITLE (DBL-CLICK TO EDIT)</span>
                     {renderSortIcon('title')}
                 </div>
                 <div
                     onClick={() => toggleSort('artist')}
-                    className="group hidden w-36 cursor-pointer items-center justify-between px-2 hover:text-zinc-100 md:flex">
+                    className="group hover:text-foreground hidden w-36 cursor-pointer items-center justify-between px-2 md:flex">
                     <span>ARTIST</span>
                     {renderSortIcon('artist')}
                 </div>
                 <div
                     onClick={() => toggleSort('album')}
-                    className="group hidden w-36 cursor-pointer items-center justify-between px-2 hover:text-zinc-100 lg:flex">
+                    className="group hover:text-foreground hidden w-36 cursor-pointer items-center justify-between px-2 lg:flex">
                     <span>ALBUM</span>
                     {renderSortIcon('album')}
                 </div>
                 <div
                     onClick={() => toggleSort('year')}
-                    className="group hidden w-16 cursor-pointer items-center justify-center gap-0.5 px-1 text-center hover:text-zinc-100 sm:flex">
+                    className="group hover:text-foreground hidden w-16 cursor-pointer items-center justify-center gap-0.5 px-1 text-center sm:flex">
                     <span>YEAR</span>
                     {renderSortIcon('year')}
                 </div>
                 <div
                     onClick={() => toggleSort('bpm')}
-                    className="group hidden w-16 cursor-pointer items-center justify-center gap-0.5 px-1 text-center hover:text-zinc-100 xl:flex">
+                    className="group hover:text-foreground hidden w-16 cursor-pointer items-center justify-center gap-0.5 px-1 text-center xl:flex">
                     <span>BPM</span>
                     {renderSortIcon('bpm')}
                 </div>
@@ -138,14 +139,14 @@ export function VirtualizedTrackGrid() {
                 <div className="hidden w-16 px-1 text-center sm:block">FORMAT</div>
                 <div
                     onClick={() => toggleSort('durationSeconds')}
-                    className="group flex w-14 cursor-pointer items-center justify-end gap-0.5 px-1 pr-2 text-right hover:text-zinc-100">
+                    className="group hover:text-foreground flex w-14 cursor-pointer items-center justify-end gap-0.5 px-1 pr-2 text-right">
                     <span>TIME</span>
                     {renderSortIcon('durationSeconds')}
                 </div>
             </div>
 
             {/* Virtualized Rows Container */}
-            <div ref={parentRef} className="flex-1 overflow-auto bg-zinc-950 font-mono text-xs">
+            <div ref={parentRef} className="bg-background flex-1 overflow-auto font-mono text-xs">
                 <div
                     style={{
                         height: `${rowVirtualizer.getTotalSize()}px`,
@@ -176,19 +177,19 @@ export function VirtualizedTrackGrid() {
                                     height: `${virtualRow.size}px`,
                                     transform: `translateY(${virtualRow.start}px)`,
                                 }}
-                                className={`flex cursor-pointer items-center border-b border-zinc-900/60 px-2 text-[11px] transition-colors ${
+                                className={`border-border/60 flex cursor-pointer items-center border-b px-2 text-[11px] transition-colors ${
                                     isActive
-                                        ? 'bg-blue-600 font-medium text-white shadow-sm'
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
                                         : isSelected
-                                          ? 'border-blue-900/30 bg-blue-950/50 text-blue-200'
+                                          ? 'border-primary/30 bg-primary/25 text-foreground'
                                           : virtualRow.index % 2 === 0
-                                            ? 'bg-zinc-950 text-zinc-300 hover:bg-zinc-900/80'
-                                            : 'bg-zinc-925/40 text-zinc-300 hover:bg-zinc-900/80'
+                                            ? 'bg-background text-foreground hover:bg-muted/60'
+                                            : 'bg-background/80 text-foreground hover:bg-muted/60'
                                 }`}>
                                 {/* Track Number / Icon */}
-                                <div className="w-7 truncate text-center text-zinc-500">
+                                <div className="text-muted-foreground w-7 truncate text-center">
                                     {track.trackNumber != null ? (
-                                        <span className={isActive ? 'text-blue-200' : 'text-zinc-400'}>
+                                        <span className={isActive ? 'text-primary-foreground/90' : 'text-muted-foreground'}>
                                             {track.trackNumber.toString().padStart(2, '0')}
                                         </span>
                                     ) : (
@@ -196,45 +197,48 @@ export function VirtualizedTrackGrid() {
                                     )}
                                 </div>
 
-                                {/* Title & Cover Indicator with Ark UI Editable */}
-                                <div className="flex min-w-[150px] flex-1 items-center gap-1.5 truncate px-2">
-                                    {track.hasCoverArt && (
-                                        <Icon icon="image" className={`h-3 w-3 shrink-0 ${isActive ? 'text-blue-200' : 'text-emerald-500/70'}`} />
-                                    )}
+                                {/* Title & Cover Indicator */}
+                                <div className="flex min-w-37.5 flex-1 items-center gap-1.5 truncate px-2">
+                                    <Icon
+                                        icon={track.hasCoverArt ? 'gallery' : 'galleryRemove'}
+                                        className={`h-3 w-3 shrink-0 ${isActive ? 'text-primary-foreground' : track.hasCoverArt ? 'text-success' : 'text-destructive'}`}
+                                    />
                                     <InlineTableCellEditable
-                                        value={track.title || track.filename}
-                                        onValueCommit={(newTitle: string) => updateTrackInline(track.id, { title: newTitle })}
+                                        required
+                                        defaultValue={track.title || ''}
+                                        placeholder="Unknown Title"
+                                        onValueCommit={(newTitle) => updateTrackInline(track.id, { title: newTitle.value })}
                                         isActiveRow={isActive}
                                     />
                                 </div>
 
-                                {/* Artist with Ark UI Editable */}
+                                {/* Artist */}
                                 <div className="hidden w-36 truncate px-2 md:block">
                                     <InlineTableCellEditable
-                                        value={track.artist || ''}
+                                        defaultValue={track.artist || ''}
                                         placeholder="Unknown Artist"
-                                        onValueCommit={(newArtist: string) => updateTrackInline(track.id, { artist: newArtist })}
+                                        onValueCommit={(newArtist) => updateTrackInline(track.id, { artist: newArtist.value })}
                                         isActiveRow={isActive}
                                     />
                                 </div>
 
-                                {/* Album with Ark UI Editable */}
+                                {/* Album */}
                                 <div className="hidden w-36 truncate px-2 lg:block">
                                     <InlineTableCellEditable
-                                        value={track.album || ''}
+                                        defaultValue={track.album || ''}
                                         placeholder="Unknown Album"
-                                        onValueCommit={(newAlbum: string) => updateTrackInline(track.id, { album: newAlbum })}
+                                        onValueCommit={(newAlbum) => updateTrackInline(track.id, { album: newAlbum.value })}
                                         isActiveRow={isActive}
                                     />
                                 </div>
 
-                                {/* Year with Ark UI Editable */}
+                                {/* Year */}
                                 <div className="hidden w-16 truncate px-1 text-center sm:block">
                                     <InlineTableCellEditable
-                                        value={track.year ? String(track.year) : ''}
+                                        defaultValue={track.year ? String(track.year) : ''}
                                         placeholder="-"
-                                        onValueCommit={(newYear: string) => {
-                                            const parsed = parseInt(newYear, 10);
+                                        onValueCommit={(newYear) => {
+                                            const parsed = parseInt(newYear.value, 10);
                                             updateTrackInline(track.id, { year: isNaN(parsed) ? null : parsed });
                                         }}
                                         isActiveRow={isActive}
@@ -243,13 +247,13 @@ export function VirtualizedTrackGrid() {
                                     />
                                 </div>
 
-                                {/* BPM with Ark UI Editable */}
+                                {/* BPM */}
                                 <div className="hidden w-16 truncate px-1 text-center xl:block">
                                     <InlineTableCellEditable
-                                        value={track.bpm ? String(Math.round(track.bpm)) : ''}
+                                        defaultValue={track.bpm ? String(Math.round(track.bpm)) : ''}
                                         placeholder="-"
-                                        onValueCommit={(newBpm: string) => {
-                                            const parsed = parseFloat(newBpm);
+                                        onValueCommit={(newBpm) => {
+                                            const parsed = parseFloat(newBpm.value);
                                             updateTrackInline(track.id, { bpm: isNaN(parsed) ? null : parsed });
                                         }}
                                         isActiveRow={isActive}
@@ -259,28 +263,24 @@ export function VirtualizedTrackGrid() {
                                 </div>
 
                                 {/* Key */}
-                                <div className={`hidden w-12 truncate px-1 text-center xl:block ${isActive ? 'text-blue-200' : 'text-zinc-500'}`}>
+                                <div
+                                    className={`hidden w-12 truncate px-1 text-center xl:block ${isActive ? 'text-primary-foreground/90' : 'text-muted-foreground'}`}>
                                     {track.initialKey || '-'}
                                 </div>
 
                                 {/* Format / Lossless Badge */}
                                 <div className="hidden w-16 truncate px-1 text-center sm:block">
-                                    <span
-                                        className={`py-0.2 rounded px-1 text-[9px] font-semibold ${
-                                            track.lossless
-                                                ? isActive
-                                                    ? 'bg-blue-800 text-white'
-                                                    : 'border border-emerald-900/50 bg-emerald-950 text-emerald-400'
-                                                : isActive
-                                                  ? 'bg-blue-800 text-white'
-                                                  : 'bg-zinc-800 text-zinc-400'
-                                        }`}>
+                                    <Badge
+                                        variant={isActive ? 'outline' : track.lossless ? 'success' : 'muted'}
+                                        size="xs"
+                                        className={`px-1 py-0 text-[9px] ${isActive ? 'border-foreground' : ''}`}>
                                         {track.codec ? track.codec.toUpperCase() : track.extension.replace('.', '').toUpperCase()}
-                                    </span>
+                                    </Badge>
                                 </div>
 
                                 {/* Duration */}
-                                <div className={`w-14 truncate px-1 pr-2 text-right ${isActive ? 'text-blue-100' : 'text-zinc-500'}`}>
+                                <div
+                                    className={`w-14 truncate px-1 pr-2 text-right ${isActive ? 'text-primary-foreground/90' : 'text-muted-foreground'}`}>
                                     {formatDuration(track.durationSeconds)}
                                 </div>
                             </div>
@@ -291,3 +291,5 @@ export function VirtualizedTrackGrid() {
         </div>
     );
 }
+
+export default VirtualizedTrackGrid;

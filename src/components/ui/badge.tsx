@@ -14,7 +14,7 @@ const badgeVariants = cva(['inline-flex items-center justify-center font-medium 
             secondary: 'bg-secondary text-secondary-foreground border border-border',
             muted: 'bg-muted text-muted-foreground border border-border',
             destructive: 'bg-destructive/10 text-destructive border border-destructive/20',
-            outline: 'bg-transparent text-foreground border border-border',
+            outline: 'bg-transparent text-foreground border',
             accent: 'bg-accent text-accent-foreground border border-accent/40',
             success: 'bg-success/10 text-success border border-success/20',
             warning: 'bg-warning/10 text-warning border border-warning/20',
