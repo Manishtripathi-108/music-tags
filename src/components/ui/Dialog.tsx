@@ -38,7 +38,6 @@ const contentStyles = [
     'data-[state=open]:duration-200 data-[state=closed]:duration-150',
 ].join(' ');
 
-
 export function Dialog(props: ComponentProps<typeof ArkDialog.Root>) {
     return <ArkDialog.Root lazyMount unmountOnExit {...props} />;
 }
@@ -83,7 +82,6 @@ export function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDiv
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
     return <div className={cn('border-border flex items-center justify-end gap-2 border-t px-6 py-4', className)} {...props} />;
 }
-
 
 export function DialogTitle({ className, ...props }: ComponentProps<typeof ArkDialog.Title>) {
     return <ArkDialog.Title className={cn('text-base leading-6 font-semibold tracking-tight', className)} {...props} />;

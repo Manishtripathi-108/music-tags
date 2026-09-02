@@ -54,4 +54,11 @@ export function FieldsetContent({ ref, className, ...props }: React.ComponentPro
     return <div {...props} ref={ref} className={cn('flex flex-col gap-2.5 pt-0.5', className)} />;
 }
 
+Fieldset.Root = ArkFieldset.Root;
+Fieldset.Legend = FieldsetLegend;
+Fieldset.HelperText = FieldsetHelperText;
+Fieldset.ErrorText = FieldsetErrorText;
+Fieldset.Content = FieldsetContent;
+Fieldset.Context = ArkFieldset.Context;
+
 export default Fieldset;

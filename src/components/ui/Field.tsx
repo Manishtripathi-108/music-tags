@@ -68,3 +68,15 @@ export function FieldRequiredIndicator({ className, ...props }: React.ComponentP
 
 export const FieldHelper = FieldHelperText;
 export const FieldError = FieldErrorText;
+
+Field.Root = ArkField.Root;
+Field.Label = FieldLabel;
+Field.Input = FieldInput;
+Field.Textarea = FieldTextarea;
+Field.Select = FieldSelect;
+Field.HelperText = FieldHelperText;
+Field.ErrorText = FieldErrorText;
+Field.RequiredIndicator = FieldRequiredIndicator;
+Field.Context = ArkField.Context;
+
+export default Field;

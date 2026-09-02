@@ -94,21 +94,19 @@ export enum IconSet {
     filter = 'solar:filter-bold',
     filterMinimalistic = 'solar:filter-minimalistic-outline',
 
-    folder = 'solar:folder-outline',
-    folderAdd = 'solar:folder-add-outline',
-    folderFavourite = 'solar:folder-favourite-outline',
-    folderOpen = 'solar:folder-open-outline',
-    folderPath = 'solar:folder-path-connect-outline',
-    folderWithFiles = 'solar:folder-with-files-outline',
+    folder = 'solar:folder-bold',
+    folderAdd = 'solar:folder-add-bold',
+    folderFavourite = 'solar:folder-favourite-bold',
+    folderOpen = 'solar:folder-open-bold',
+    folderPath = 'solar:folder-path-connect-bold',
+    folderWithFiles = 'solar:folder-with-files-bold',
 
     font = 'hugeicons:tiff-02',
     fullscreen = 'solar:full-screen-bold',
 
     /* ------------------------------------ G ----------------------------------- */
     gallery = 'solar:gallery-bold',
-    galleryAdd = 'solar:gallery-add-outline',
-    galleryEdit = 'solar:gallery-edit-outline',
-    galleryRound = 'solar:gallery-round-outline',
+    galleryRemove = 'solar:gallery-remove-bold',
 
     game = 'solar:gameboy-bold',
     gamepad = 'emojione-monotone:video-game',
@@ -122,7 +120,6 @@ export enum IconSet {
     heartShine = 'solar:heart-shine-bold',
 
     /* ------------------------------------ I ----------------------------------- */
-    image = 'solar:gallery-bold',
     info = 'solar:info-circle-bold',
     infoOutlined = 'solar:info-circle-outline',
 
@@ -250,6 +247,8 @@ export enum IconSet {
 
     script = 'proicons:script',
 
+    scanner = 'solar:scanner-bold',
+
     settings = 'solar:settings-bold',
     settingsMinimalistic = 'solar:settings-minimalistic-outline',
 
@@ -333,8 +332,6 @@ export enum IconSet {
     pinFilled = 'solar:pin-bold',
 
     rocket = 'solar:rocket-outline',
-
-    scanner = 'solar:scanner-outline',
 
     uploadSquare = 'solar:cloud-upload-outline',
 }

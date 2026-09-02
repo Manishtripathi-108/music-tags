@@ -1,0 +1,238 @@
+'use client';
+
+import type { SortingState } from '@tanstack/react-table';
+import {
+    createColumnHelper,
+    createSortedRowModel,
+    flexRender,
+    rowSortingFeature,
+    sortFn_alphanumeric,
+    sortFn_basic,
+    sortFn_text,
+    tableFeatures,
+} from '@tanstack/react-table';
+import { formatDuration } from '@/lib/utils';
+import { InlineEditSchemas, type Track } from '@/types/audio';
+import { Icon } from '@/components/ui/Icon';
+import { InlineTableCellEditable } from '@/components/ui/Editable';
+import Badge from '@/components/ui/Badge';
+
+export type TrackTableMeta = {
+    updateTrackInline: (id: string, fields: Partial<Track>) => void;
+    activeTrackId: string | null;
+    selectedTrackIds: Set<string>;
+};
+
+export const features = tableFeatures({
+    rowSortingFeature,
+    sortedRowModel: createSortedRowModel(),
+    sortFns: {
+        alphanumeric: sortFn_alphanumeric,
+        text: sortFn_text,
+        basic: sortFn_basic,
+    },
+    tableMeta: {} as TrackTableMeta,
+});
+
+const col = createColumnHelper<typeof features, Track>();
+
+function validateAndCommit(meta: TrackTableMeta, trackId: string, field: keyof typeof InlineEditSchemas, rawValue: string) {
+    const result = InlineEditSchemas[field].safeParse(rawValue);
+
+    if (!result.success) {
+        return;
+    }
+
+    const value = result.data as string;
+
+    if (field === 'year') {
+        const year = parseInt(value, 10);
+        meta.updateTrackInline(trackId, { year: isNaN(year) ? null : year });
+        return;
+    }
+
+    if (field === 'bpm') {
+        const bpm = parseFloat(value);
+        meta.updateTrackInline(trackId, { bpm: isNaN(bpm) ? null : bpm });
+        return;
+    }
+
+    meta.updateTrackInline(trackId, { [field]: value });
+}
+
+export const columns = col.columns([
+    col.accessor('trackNumber', {
+        id: 'trackNumber',
+        header: '#',
+        enableSorting: false,
+        cell: ({ getValue, table, row }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+            const value = getValue();
+
+            return value != null ? (
+                <span className={isActive ? 'text-primary-foreground/90' : 'text-muted-foreground'}>{value.toString().padStart(2, '0')}</span>
+            ) : (
+                <span className="text-[10px] opacity-40">-</span>
+            );
+        },
+    }),
+
+    col.accessor('title', {
+        id: 'title',
+        header: 'TITLE (DBL-CLICK TO EDIT)',
+        sortFn: 'text',
+        cell: ({ getValue, row, table }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+            const track = row.original;
+
+            return (
+                <div className="flex min-w-37.5 flex-1 items-center gap-1.5 truncate px-2">
+                    <Icon
+                        icon={track.hasCoverArt ? 'gallery' : 'galleryRemove'}
+                        className={`h-3 w-3 shrink-0 ${
+                            isActive ? 'text-primary-foreground' : track.hasCoverArt ? 'text-success' : 'text-destructive'
+                        }`}
+                    />
+
+                    <InlineTableCellEditable
+                        required
+                        defaultValue={getValue() || ''}
+                        placeholder="Unknown Title"
+                        onValueCommit={(v) => validateAndCommit(meta, track.id, 'title', v.value)}
+                        isActiveRow={isActive}
+                    />
+                </div>
+            );
+        },
+    }),
+
+    col.accessor('artist', {
+        id: 'artist',
+        header: 'ARTIST',
+        sortFn: 'text',
+        cell: ({ getValue, row, table }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+
+            return (
+                <InlineTableCellEditable
+                    defaultValue={getValue() || ''}
+                    placeholder="Unknown Artist"
+                    onValueCommit={(v) => validateAndCommit(meta, row.original.id, 'artist', v.value)}
+                    isActiveRow={isActive}
+                />
+            );
+        },
+    }),
+
+    col.accessor('album', {
+        id: 'album',
+        header: 'ALBUM',
+        sortFn: 'text',
+        cell: ({ getValue, row, table }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+
+            return (
+                <InlineTableCellEditable
+                    defaultValue={getValue() || ''}
+                    placeholder="Unknown Album"
+                    onValueCommit={(v) => validateAndCommit(meta, row.original.id, 'album', v.value)}
+                    isActiveRow={isActive}
+                />
+            );
+        },
+    }),
+
+    col.accessor('year', {
+        id: 'year',
+        header: 'YEAR',
+        sortFn: 'basic',
+        cell: ({ getValue, row, table }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+            const value = getValue();
+
+            return (
+                <InlineTableCellEditable
+                    defaultValue={value ? String(value) : ''}
+                    placeholder="-"
+                    onValueCommit={(v) => validateAndCommit(meta, row.original.id, 'year', v.value)}
+                    isActiveRow={isActive}
+                    previewClassName="text-center"
+                    inputClassName="text-center"
+                />
+            );
+        },
+    }),
+
+    col.accessor('bpm', {
+        id: 'bpm',
+        header: 'BPM',
+        sortFn: 'basic',
+        cell: ({ getValue, row, table }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+            const value = getValue();
+
+            return (
+                <InlineTableCellEditable
+                    defaultValue={value ? String(Math.round(value)) : ''}
+                    placeholder="-"
+                    onValueCommit={(v) => validateAndCommit(meta, row.original.id, 'bpm', v.value)}
+                    isActiveRow={isActive}
+                    previewClassName="text-center"
+                    inputClassName="text-center"
+                />
+            );
+        },
+    }),
+
+    col.accessor('initialKey', {
+        id: 'initialKey',
+        header: 'KEY',
+        enableSorting: false,
+        cell: ({ getValue, row, table }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+
+            return <span className={isActive ? 'text-primary-foreground/90' : 'text-muted-foreground'}>{getValue() || '-'}</span>;
+        },
+    }),
+
+    col.display({
+        id: 'format',
+        header: 'FORMAT',
+        cell: ({ row, table }) => {
+            const track = row.original;
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === track.id;
+
+            return (
+                <Badge
+                    variant={isActive ? 'outline' : track.lossless ? 'success' : 'muted'}
+                    size="xs"
+                    className={`px-1 py-0 text-[9px] ${isActive ? 'border-foreground' : ''}`}>
+                    {track.codec ? track.codec.toUpperCase() : track.extension.replace('.', '').toUpperCase()}
+                </Badge>
+            );
+        },
+    }),
+
+    col.accessor('durationSeconds', {
+        id: 'durationSeconds',
+        header: 'TIME',
+        sortFn: 'basic',
+        cell: ({ getValue, row, table }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+
+            return <span className={isActive ? 'text-primary-foreground/90' : 'text-muted-foreground'}>{formatDuration(getValue())}</span>;
+        },
+    }),
+]);
+
+export { flexRender };
+export type { SortingState };
