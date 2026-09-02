@@ -10,7 +10,7 @@ export function Fieldset({ ref, className, ...props }: React.ComponentProps<type
             {...props}
             ref={ref}
             className={cn(
-                'flex w-full flex-col gap-3 rounded-lg border border-border/80 bg-card/30 p-3.5 shadow-2xs transition-colors data-[disabled]:opacity-60 data-[disabled]:pointer-events-none',
+                'border-border/80 bg-card/30 flex w-full flex-col gap-3 rounded-lg border p-3.5 shadow-2xs transition-colors data-disabled:pointer-events-none data-disabled:opacity-60',
                 className
             )}
         />
@@ -23,7 +23,7 @@ export function FieldsetLegend({ ref, className, ...props }: React.ComponentProp
             {...props}
             ref={ref}
             className={cn(
-                'flex items-center gap-1.5 px-1 font-mono text-[11px] font-bold uppercase tracking-wider text-foreground select-none',
+                'text-foreground flex items-center gap-1.5 px-1 font-mono text-[11px] font-bold tracking-wider uppercase select-none',
                 className
             )}
         />
@@ -31,23 +31,11 @@ export function FieldsetLegend({ ref, className, ...props }: React.ComponentProp
 }
 
 export function FieldsetHelperText({ ref, className, ...props }: React.ComponentProps<typeof ArkFieldset.HelperText>) {
-    return (
-        <ArkFieldset.HelperText
-            {...props}
-            ref={ref}
-            className={cn('px-1 text-[11px] text-muted-foreground leading-normal', className)}
-        />
-    );
+    return <ArkFieldset.HelperText {...props} ref={ref} className={cn('text-muted-foreground px-1 text-[11px] leading-normal', className)} />;
 }
 
 export function FieldsetErrorText({ ref, className, ...props }: React.ComponentProps<typeof ArkFieldset.ErrorText>) {
-    return (
-        <ArkFieldset.ErrorText
-            {...props}
-            ref={ref}
-            className={cn('px-1 text-[11px] font-medium text-destructive leading-normal', className)}
-        />
-    );
+    return <ArkFieldset.ErrorText {...props} ref={ref} className={cn('text-destructive px-1 text-[11px] leading-normal font-medium', className)} />;
 }
 
 export function FieldsetContent({ ref, className, ...props }: React.ComponentProps<'div'>) {
