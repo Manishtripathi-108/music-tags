@@ -13,7 +13,7 @@ import {
 } from '@tanstack/react-table';
 import { formatDuration } from '@/domain/media/formatters';
 import { type Track } from '@/domain/media/track';
-import { InlineEditSchemas } from '@/domain/media/schemas';
+import { InlineEditSchemas } from '@/schemas';
 import { Icon } from '@/components/ui/Icon';
 import { InlineTableCellEditable } from '@/components/ui/Editable';
 import Badge from '@/components/ui/Badge';

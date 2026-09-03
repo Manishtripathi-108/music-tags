@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { globalScanner } from '@/services/scanner/scanner-service';
-import { ScanFolderRequestSchema } from '@/domain/media/schemas';
+import { ScanFolderRequestSchema } from '@/schemas';
 import { type ScanApiResponse } from '@/domain/media/dto';
 import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { createProgressEventStream } from '@/infrastructure/http/sse';

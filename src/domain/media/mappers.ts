@@ -1,20 +1,27 @@
 import { type Track } from './track';
-import { classifyLyricsType } from './lyrics';
+import {
+    parseTrackFromDb,
+    sanitizeFilenameTitle,
+    isTrackModified,
+    deriveYearFromDate,
+} from '@/schemas/track-output.schema';
 
-export interface AudioFileDbRecord {
+export { sanitizeFilenameTitle, isTrackModified, deriveYearFromDate };
+
+export type AudioFileDbRecord = {
     id: string;
     path: string;
     filename: string;
     directory: string;
     extension: string;
     sizeBytes: number;
-    mtimeMs?: number;
-    createdAt?: number;
-    updatedAt?: number;
-}
+    mtimeMs?: number | null;
+    createdAt?: number | null;
+    updatedAt?: number | null;
+};
 
-export interface CanonicalAudioMetadataDbRecord {
-    fileId?: string;
+export type CanonicalAudioMetadataDbRecord = {
+    fileId?: string | null;
     title?: string | null;
     artist?: string | null;
     albumArtist?: string | null;
@@ -25,145 +32,56 @@ export interface CanonicalAudioMetadataDbRecord {
     totalDiscs?: number | null;
     year?: number | null;
     releaseDate?: string | null;
-    dateReleased?: string | null;
+    originalReleaseDate?: string | null;
+    compilation?: boolean | null;
     genre?: string | null;
-    bpm?: number | null;
-    initialKey?: string | null;
-    comment?: string | null;
     composer?: string | null;
     conductor?: string | null;
     lyricist?: string | null;
     publisher?: string | null;
     label?: string | null;
+    catalogNumber?: string | null;
+    barcode?: string | null;
     copyright?: string | null;
     isrc?: string | null;
-    barcode?: string | null;
-    catalogNumber?: string | null;
     mood?: string | null;
-    rating?: number | null;
-    description?: string | null;
+    comment?: string | null;
     lyrics?: string | null;
     lyricsUnsynced?: string | null;
     lyricsSyncedJson?: string | null;
-    lyricsLanguage?: string | null;
+    bpm?: number | null;
+    initialKey?: string | null;
+    rating?: number | null;
     durationSeconds?: number | null;
+    containerFormat?: string | null;
+    codec?: string | null;
+    encoder?: string | null;
     bitrateKbps?: number | null;
+    variableBitrate?: boolean | null;
     sampleRateHz?: number | null;
     channels?: number | null;
     channelLayout?: string | null;
     bitDepth?: number | null;
-    codec?: string | null;
     lossless?: boolean | null;
     hasCoverArt?: boolean | null;
     coverArtMime?: string | null;
-    coverArtWidth?: number | null;
-    coverArtHeight?: number | null;
     coverArtType?: string | null;
     coverArtDescription?: string | null;
+    coverArtWidth?: number | null;
+    coverArtHeight?: number | null;
     createdAt?: number | null;
     updatedAt?: number | null;
-}
+};
 
 /**
- * Strips file extension from a filename to derive a sensible default title.
- */
-export function sanitizeFilenameTitle(filename: string): string {
-    return filename.replace(/\.[^/.]+$/, '');
-}
-
-/**
- * Determines whether metadata has been modified since initial ingestion.
- */
-export function isTrackModified(
-    meta?: { createdAt?: number | null; updatedAt?: number | null } | null
-): boolean {
-    if (!meta?.updatedAt || !meta?.createdAt) return false;
-    return meta.updatedAt - meta.createdAt > 1000;
-}
-
-/**
- * Canonical transformation from database rows (audioFiles + canonicalAudioMetadata)
- * into a strongly-typed Track presentation aggregate.
- *
- * This guarantees consistent defaulting and normalization across all API routes and services.
+ * Parses raw database rows through trackOutputSchema into a verified, modified Track.
  */
 export function buildTrackFromDb(
     file: AudioFileDbRecord,
     meta?: CanonicalAudioMetadataDbRecord | null,
     options: { forceModified?: boolean } = {}
 ): Track {
-    const rawLyrics = meta?.lyrics || meta?.lyricsUnsynced || null;
-    const lyricsType = classifyLyricsType(rawLyrics, meta?.lyricsSyncedJson);
-    const isModified = options.forceModified !== undefined ? options.forceModified : isTrackModified(meta);
-
-    // Title resolution: meta.title > filename without extension
-    const title = meta?.title && meta.title.trim().length > 0
-        ? meta.title.trim()
-        : sanitizeFilenameTitle(file.filename);
-
-    return {
-        // Physical File
-        id: file.id,
-        filename: file.filename,
-        filePath: file.path,
-        directory: file.directory,
-        extension: file.extension,
-        sizeBytes: file.sizeBytes,
-        isModified,
-
-        // Editorial Metadata
-        title,
-        artist: meta?.artist ?? '',
-        albumArtist: meta?.albumArtist ?? '',
-        album: meta?.album ?? '',
-        trackNumber: meta?.trackNumber ?? null,
-        totalTracks: meta?.totalTracks ?? null,
-        discNumber: meta?.discNumber ?? null,
-        totalDiscs: meta?.totalDiscs ?? null,
-        year: meta?.year ?? null,
-        releaseDate: meta?.releaseDate ?? meta?.dateReleased ?? null,
-        genre: meta?.genre ?? '',
-        bpm: meta?.bpm ?? null,
-        initialKey: meta?.initialKey ?? '',
-        comment: meta?.comment ?? '',
-        composer: meta?.composer ?? '',
-        conductor: meta?.conductor ?? '',
-        lyricist: meta?.lyricist ?? '',
-        publisher: meta?.publisher ?? '',
-        label: meta?.label ?? '',
-        copyright: meta?.copyright ?? '',
-        isrc: meta?.isrc ?? '',
-        barcode: meta?.barcode ?? '',
-        catalogNumber: meta?.catalogNumber ?? '',
-        mood: meta?.mood ?? '',
-        rating: meta?.rating ?? null,
-        description: meta?.description ?? '',
-
-        // Lyrics
-        lyrics: meta?.lyrics ?? '',
-        lyricsUnsynced: meta?.lyricsUnsynced ?? '',
-        lyricsSyncedJson: meta?.lyricsSyncedJson ?? null,
-        lyricsLanguage: meta?.lyricsLanguage ?? null,
-        lyricsType,
-
-        // Technical Audio Specs
-        durationSeconds: meta?.durationSeconds ?? undefined,
-        bitrateKbps: meta?.bitrateKbps ?? undefined,
-        sampleRateHz: meta?.sampleRateHz ?? undefined,
-        channels: meta?.channels ?? undefined,
-        channelLayout: meta?.channelLayout || undefined,
-        bitDepth: meta?.bitDepth ?? undefined,
-        codec: meta?.codec || undefined,
-        lossless: meta?.lossless ?? false,
-
-        // Artwork
-        hasCoverArt: meta?.hasCoverArt ?? false,
-        coverArtMime: meta?.coverArtMime ?? null,
-        coverArtWidth: meta?.coverArtWidth ?? null,
-        coverArtHeight: meta?.coverArtHeight ?? null,
-        coverArtType: meta?.coverArtType ?? null,
-        coverArtDescription: meta?.coverArtDescription ?? null,
-    };
+    return parseTrackFromDb(file, meta, options);
 }
 
 /**
@@ -180,7 +98,12 @@ export function toExifToolWriteTags(
     if (meta.albumArtist) tagsToWrite.AlbumArtist = meta.albumArtist;
     if (meta.trackNumber != null) tagsToWrite.TrackNumber = meta.trackNumber;
     if (meta.discNumber != null) tagsToWrite.DiscNumber = meta.discNumber;
-    if (meta.year != null) tagsToWrite.Year = meta.year;
+    if (meta.year != null) {
+        tagsToWrite.Year = meta.year;
+    } else if (meta.releaseDate) {
+        const year = deriveYearFromDate(meta.releaseDate);
+        if (year != null) tagsToWrite.Year = year;
+    }
     if (meta.genre) tagsToWrite.Genre = meta.genre;
     if (meta.bpm != null) tagsToWrite.BPM = meta.bpm;
     if (meta.initialKey) tagsToWrite.InitialKey = meta.initialKey;

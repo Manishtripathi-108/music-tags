@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Icon from '@/components/ui/Icon';
 import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { useAudioStore } from '@/store/audioStore';
-import { TagFormSchema, type TagFormValues } from '@/domain/media/schemas';
+import { TagFormSchema, type TagFormValues } from '@/schemas';
 import { type TrackPatchApiResponse } from '@/domain/media/track';
 import { isLrcContent } from '@/domain/media/lyrics';
 import { InspectorHeader } from './inspector/InspectorHeader';

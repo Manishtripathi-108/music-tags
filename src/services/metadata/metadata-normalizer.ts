@@ -3,11 +3,13 @@ import { type RawTag } from '@/domain/media/track';
 import { type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
 import { createTagLookup } from './metadata-lookup';
 import { buildRawTagList } from './raw-tags';
+import { canonicalAudioMetadataInputSchema } from '@/schemas/audio-metadata.schema';
 
 export { buildRawTagList };
 
 /**
  * Normalizes raw extractor metadata from ExifTool and FFprobe into the canonical audio schema.
+ * All values pass through canonicalAudioMetadataInputSchema to coerce, trim, and set safe defaults.
  */
 export function normalizeAudioMetadata(
     fileId: string,
@@ -19,21 +21,9 @@ export function normalizeAudioMetadata(
 } {
     const lookup = createTagLookup(rawExif, probeResult);
 
-    const title = lookup.getString(
-        'title',
-        'id3:title',
-        'vorbis:title',
-        'quicktime:title',
-        'riff:title'
-    );
+    const title = lookup.getString('title', 'id3:title', 'vorbis:title', 'quicktime:title', 'riff:title');
 
-    const artist = lookup.getString(
-        'artist',
-        'id3:artist',
-        'vorbis:artist',
-        'quicktime:artist',
-        'riff:artist'
-    );
+    const artist = lookup.getString('artist', 'id3:artist', 'vorbis:artist', 'quicktime:artist', 'riff:artist');
 
     const albumArtist = lookup.getString(
         'albumartist',
@@ -45,34 +35,17 @@ export function normalizeAudioMetadata(
         'band'
     );
 
-    const album = lookup.getString(
-        'album',
-        'id3:album',
-        'vorbis:album',
-        'quicktime:album'
-    );
+    const album = lookup.getString('album', 'id3:album', 'vorbis:album', 'quicktime:album');
 
     // Track numbering
     const trackNumber = lookup.getNumber('tracknumber', 'track', 'id3:track');
-    const totalTracks = lookup.getTotalNumber(
-        'tracknumber',
-        'track',
-        'totaltracks',
-        'tracktotal',
-        'id3:totaltracks'
-    );
+    const totalTracks = lookup.getTotalNumber('tracknumber', 'track', 'totaltracks', 'tracktotal', 'id3:totaltracks');
 
     // Disc numbering
     const discNumber = lookup.getNumber('discnumber', 'partofset', 'disc', 'disknumber', 'id3:partofset');
-    const totalDiscs = lookup.getTotalNumber(
-        'discnumber',
-        'partofset',
-        'disctotal',
-        'totaldiscs',
-        'id3:partofset'
-    );
+    const totalDiscs = lookup.getTotalNumber('discnumber', 'partofset', 'disctotal', 'totaldiscs', 'id3:partofset');
 
-    // Release date and year extraction
+    // Release date extraction
     const rawDate = lookup.get(
         'date',
         'year',
@@ -86,16 +59,14 @@ export function normalizeAudioMetadata(
         'tdrc'
     );
 
-    let year: number | null = null;
-    let dateReleased: string | null = null;
+    let releaseDate: string | null = null;
     if (rawDate !== null && rawDate !== undefined) {
         const dateStr = String(rawDate).trim();
-        dateReleased = dateStr;
-        const match = dateStr.match(/\b(19\d\d|20\d\d)\b/);
-        if (match) {
-            year = parseInt(match[1], 10);
-        }
+        releaseDate = dateStr || null;
     }
+
+    const rawOriginalDate = lookup.get('originalreleaseyear', 'originalyear', 'originaldate');
+    const originalReleaseDate = rawOriginalDate ? String(rawOriginalDate).trim() : null;
 
     // Genre extraction with cleaning for "None" or prefix artifacts
     let genre = lookup.getString('genre', 'id3:genre', 'vorbis:genre', 'quicktime:genre');
@@ -110,24 +81,9 @@ export function normalizeAudioMetadata(
     const composer = lookup.getString('composer', 'id3:composer', 'vorbis:composer', 'quicktime:composer', 'tcom');
     const conductor = lookup.getString('conductor', 'id3:conductor', 'vorbis:conductor', 'tpe3');
     const lyricist = lookup.getString('lyricist', 'id3:lyricist', 'vorbis:lyricist', 'writer');
-    const arranger = lookup.getString('arranger', 'id3:arranger', 'vorbis:arranger');
-    const remixer = lookup.getString('remixer', 'id3:remixer', 'vorbis:remixer', 'tpe4');
-    const engineer = lookup.getString('engineer', 'id3:engineer', 'vorbis:engineer');
-    const producer = lookup.getString('producer', 'id3:producer', 'vorbis:producer');
-    const mixer = lookup.getString('mixer', 'id3:mixer', 'vorbis:mixer');
-    const masteringEngineer = lookup.getString('masteringengineer', 'id3:masteringengineer', 'vorbis:masteringengineer');
 
     // Publishing / Label / Identifiers
-    const publisher = lookup.getString(
-        'publisher',
-        'organization',
-        'label',
-        'id3:publisher',
-        'vorbis:publisher',
-        'vorbis:organization',
-        'tpub'
-    );
-
+    const publisher = lookup.getString('publisher', 'organization', 'label', 'id3:publisher', 'vorbis:publisher', 'vorbis:organization', 'tpub');
     const label = lookup.getString('label', 'organization', 'id3:label', 'vorbis:label', 'vorbis:organization');
     const catalogNumber = lookup.getString('catalognumber', 'catalogno', 'id3:catalognumber', 'vorbis:catalognumber');
     const barcode = lookup.getString('barcode', 'upc', 'ean', 'id3:barcode', 'vorbis:barcode', 'vorbis:upc');
@@ -172,14 +128,15 @@ export function normalizeAudioMetadata(
         (stream?.duration ? parseFloat(stream.duration) : 0) ||
         0;
 
+    const containerFormat = probeResult?.format?.format_name || lookup.getString('containerformat', 'filetype');
+    const encoder = lookup.getString('encoder', 'lavf', 'id3:encoder', 'vorbis:encoder');
+
     const bitrateKbps =
         (probeResult?.format?.bit_rate ? Math.round(parseFloat(probeResult.format.bit_rate) / 1000) : null) ||
         (stream?.bit_rate ? Math.round(parseFloat(stream.bit_rate) / 1000) : null) ||
         lookup.getNumber('audiobitrate', 'avgbitrate');
 
-    const sampleRateHz =
-        (stream?.sample_rate ? parseInt(stream.sample_rate, 10) : null) ||
-        lookup.getNumber('audiosamplerate', 'samplerate');
+    const sampleRateHz = (stream?.sample_rate ? parseInt(stream.sample_rate, 10) : null) || lookup.getNumber('audiosamplerate', 'samplerate');
 
     const channels = stream?.channels || lookup.getNumber('audiochannels', 'channels');
     const channelLayout = stream?.channel_layout || (channels === 2 ? 'stereo' : channels === 1 ? 'mono' : null);
@@ -188,20 +145,11 @@ export function normalizeAudioMetadata(
         stream?.bits_per_sample ||
         lookup.getNumber('bitspersample', 'audiobitspersample');
 
-    const codec =
-        stream?.codec_name ||
-        String(lookup.get('audiocodec', 'audioformat', 'filetype') || '').toLowerCase() ||
-        null;
+    const codec = stream?.codec_name || String(lookup.get('audiocodec', 'audioformat', 'filetype') || '').toLowerCase() || null;
 
-    const lossless =
-        codec === 'flac' ||
-        codec === 'alac' ||
-        codec === 'pcm_s16le' ||
-        codec === 'pcm_s24le' ||
-        codec === 'wav' ||
-        codec === 'aiff';
+    const lossless = codec === 'flac' || codec === 'alac' || codec === 'pcm_s16le' || codec === 'pcm_s24le' || codec === 'wav' || codec === 'aiff';
 
-    // Cover Art Detection across all containers (FLAC, MP3, M4A, OGG, WAV)
+    // Cover Art Detection across containers
     const hasCoverArt = !!(
         lookup.hasAny(
             'picture',
@@ -215,20 +163,12 @@ export function normalizeAudioMetadata(
             'id3:picturemimetype'
         ) ||
         probeResult?.streams?.some(
-            (s) =>
-                s.disposition?.attached_pic === 1 ||
-                s.codec_name === 'mjpeg' ||
-                s.codec_name === 'png' ||
-                s.codec_type === 'video'
+            (s) => s.disposition?.attached_pic === 1 || s.codec_name === 'mjpeg' || s.codec_name === 'png' || s.codec_type === 'video'
         )
     );
 
     const videoStream = probeResult?.streams?.find(
-        (s) =>
-            s.disposition?.attached_pic === 1 ||
-            s.codec_name === 'mjpeg' ||
-            s.codec_name === 'png' ||
-            s.codec_type === 'video'
+        (s) => s.disposition?.attached_pic === 1 || s.codec_name === 'mjpeg' || s.codec_name === 'png' || s.codec_type === 'video'
     );
 
     let coverArtMime: string | null = null;
@@ -244,23 +184,19 @@ export function normalizeAudioMetadata(
 
         coverArtWidth =
             lookup.getNumber('picturewidth', 'flac:picturewidth', 'imagewidth') ||
-            (videoStream && (videoStream as Record<string, unknown>).width
-                ? Number((videoStream as Record<string, unknown>).width)
-                : null);
+            (videoStream && (videoStream as Record<string, unknown>).width ? Number((videoStream as Record<string, unknown>).width) : null);
 
         coverArtHeight =
             lookup.getNumber('pictureheight', 'flac:pictureheight', 'imageheight') ||
-            (videoStream && (videoStream as Record<string, unknown>).height
-                ? Number((videoStream as Record<string, unknown>).height)
-                : null);
+            (videoStream && (videoStream as Record<string, unknown>).height ? Number((videoStream as Record<string, unknown>).height) : null);
 
-        coverArtType =
-            lookup.getString('picturetype', 'flac:picturetype', 'id3:picturetype') ||
-            'Front Cover';
+        coverArtType = lookup.getString('picturetype', 'flac:picturetype', 'id3:picturetype') || 'Front Cover';
 
         coverArtDescription =
             lookup.getString('picturedescription', 'flac:picturedescription', 'id3:picturedescription') ||
-            (videoStream?.tags?.title || videoStream?.tags?.comment || null);
+            videoStream?.tags?.title ||
+            videoStream?.tags?.comment ||
+            null;
     }
 
     // Lyrics extraction
@@ -287,15 +223,10 @@ export function normalizeAudioMetadata(
     const isLrc = rawLyrics ? /\[\d{2}:\d{2}/.test(rawLyrics) : false;
     const lyrics = rawSyncedLyrics || rawLyrics;
     const lyricsUnsynced = rawSyncedLyrics ? rawLyrics : isLrc ? null : rawLyrics;
-    const lyricsSyncedJson = rawSyncedLyrics
-        ? JSON.stringify(rawSyncedLyrics)
-        : isLrc && rawLyrics
-          ? JSON.stringify(rawLyrics)
-          : null;
+    const lyricsSyncedJson = rawSyncedLyrics ? JSON.stringify(rawSyncedLyrics) : isLrc && rawLyrics ? JSON.stringify(rawLyrics) : null;
 
-    const lyricsLanguage = lookup.getString('lyricslanguage', 'id3:lyricslanguage');
-
-    const canonical: CanonicalAudioMetadata = {
+    // Mutate and validate through input schema
+    const canonical = canonicalAudioMetadataInputSchema.parse({
         fileId,
         title,
         artist,
@@ -305,44 +236,36 @@ export function normalizeAudioMetadata(
         totalTracks,
         discNumber,
         totalDiscs,
-        year,
-        dateReleased,
-        releaseDate: dateReleased,
+        releaseDate,
+        originalReleaseDate,
+        compilation: false,
         genre,
-        genres: genre ? [genre] : [],
         composer,
         conductor,
         lyricist,
-        arranger,
-        remixer,
-        engineer,
-        producer,
-        mixer,
-        masteringEngineer,
         publisher,
         label,
         catalogNumber,
         barcode,
         copyright,
         isrc,
-        bpm,
-        initialKey,
         mood,
-        rating,
-        description: lookup.getString('description'),
         comment,
         lyrics,
-        lyricsLanguage,
         lyricsUnsynced,
         lyricsSyncedJson,
+        bpm,
+        initialKey,
+        rating,
         durationSeconds,
+        containerFormat,
+        codec,
+        encoder,
         bitrateKbps,
-        bitrateType: null,
         sampleRateHz,
         channels,
         channelLayout,
         bitDepth,
-        codec,
         lossless,
         hasCoverArt,
         coverArtMime,
@@ -350,7 +273,7 @@ export function normalizeAudioMetadata(
         coverArtHeight,
         coverArtType,
         coverArtDescription,
-    };
+    });
 
     const rawTags = buildRawTagList(rawExif, probeResult);
 

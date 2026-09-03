@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/Field';
 import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
 import { NumberInputField } from '@/components/ui/NumberInput';
-import { type TagFormValues } from '@/domain/media/schemas';
+import { type TagFormValues } from '@/schemas';
 
 export interface TagFormTabProps {
     onSubmit: (values: TagFormValues) => void;

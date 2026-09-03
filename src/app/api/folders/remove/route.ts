@@ -4,7 +4,7 @@ import { db } from '@/infrastructure/database/client';
 import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/infrastructure/database/schema';
 import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { getExifTool } from '@/infrastructure/media-tools/exiftool';
-import { RemoveFolderRequestSchema } from '@/domain/media/schemas';
+import { RemoveFolderRequestSchema } from '@/schemas';
 import { toExifToolWriteTags } from '@/domain/media/mappers';
 import { type RemoveFolderApiResponse } from '@/domain/media/dto';
 

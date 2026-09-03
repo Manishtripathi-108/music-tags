@@ -38,6 +38,9 @@ export class DirectoryCrawler {
         const discovered: DiscoveredAudioFile[] = [];
         const queue: string[] = [rootPath];
 
+        // Breadth-first traversal
+        // This approach avoids deep recursion and allows for better control over cancellation
+        // and progress reporting.
         while (queue.length > 0) {
             if (signal?.aborted) {
                 break;

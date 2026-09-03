@@ -5,7 +5,7 @@ import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/infrastr
 import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { type Track, type RawTag } from '@/domain/media/track';
 import { type TrackPatchApiResponse } from '@/domain/media/dto';
-import { TrackPatchSchema } from '@/domain/media/schemas';
+import { TrackPatchSchema } from '@/schemas';
 import { buildTrackFromDb } from '@/domain/media/mappers';
 import { isLrcContent } from '@/domain/media/lyrics';
 import { getExifTool } from '@/infrastructure/media-tools/exiftool';
@@ -135,12 +135,19 @@ export async function PATCH(
         if (data.album !== undefined) updateSet.album = data.album;
         if (data.trackNumber !== undefined) updateSet.trackNumber = data.trackNumber;
         if (data.discNumber !== undefined) updateSet.discNumber = data.discNumber;
-        if (data.year !== undefined) updateSet.year = data.year;
-        if (data.releaseDate !== undefined) updateSet.releaseDate = data.releaseDate;
+        if (data.releaseDate !== undefined) {
+            updateSet.releaseDate = data.releaseDate;
+        } else if (data.year !== undefined) {
+            updateSet.releaseDate = data.year != null ? String(data.year) : null;
+        }
         if (data.genre !== undefined) updateSet.genre = data.genre;
         if (data.bpm !== undefined) updateSet.bpm = data.bpm;
         if (data.initialKey !== undefined) updateSet.initialKey = data.initialKey;
-        if (data.comment !== undefined) updateSet.comment = data.comment;
+        if (data.comment !== undefined) {
+            updateSet.comment = data.comment;
+        } else if (data.description !== undefined) {
+            updateSet.comment = data.description;
+        }
         if (data.composer !== undefined) updateSet.composer = data.composer;
         if (data.conductor !== undefined) updateSet.conductor = data.conductor;
         if (data.lyricist !== undefined) updateSet.lyricist = data.lyricist;
@@ -152,7 +159,6 @@ export async function PATCH(
         if (data.catalogNumber !== undefined) updateSet.catalogNumber = data.catalogNumber;
         if (data.mood !== undefined) updateSet.mood = data.mood;
         if (data.rating !== undefined) updateSet.rating = data.rating;
-        if (data.description !== undefined) updateSet.description = data.description;
         if (data.lyrics !== undefined) updateSet.lyrics = data.lyrics;
         if (lyricsUnsynced !== undefined) updateSet.lyricsUnsynced = lyricsUnsynced;
         if (lyricsSyncedJson !== undefined) updateSet.lyricsSyncedJson = lyricsSyncedJson;

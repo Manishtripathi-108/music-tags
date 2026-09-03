@@ -9,7 +9,7 @@ import {
     type DuplicateFindApiResponse,
     type DuplicateMatchMode,
 } from '@/domain/duplicates/types';
-import { ResolveDuplicatesRequestSchema } from '@/domain/duplicates/schemas';
+import { ResolveDuplicatesRequestSchema } from '@/schemas';
 import { type ResolveDuplicatesApiResponse } from '@/domain/media/dto';
 import { buildTrackFromDb } from '@/domain/media/mappers';
 

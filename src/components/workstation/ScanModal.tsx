@@ -10,7 +10,7 @@ import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Field
 import { Checkbox } from '@/components/ui/Checkbox';
 import axios from 'axios';
 import { useAudioStore } from '@/store/audioStore';
-import { type ScanFolderRequest, ScanFolderRequestSchema } from '@/domain/media/schemas';
+import { type ScanFolderRequest, ScanFolderRequestSchema } from '@/schemas';
 import { type ScanApiResponse } from '@/domain/media/dto';
 
 export function ScanModal() {

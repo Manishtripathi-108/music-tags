@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { globalLyricsNormalizer } from '@/services/lyrics/lyrics-service';
-import { NormalizeAllLyricsRequestSchema } from '@/domain/lyrics/schemas';
+import { NormalizeAllLyricsRequestSchema } from '@/schemas';
 import { type NormalizeAllLyricsApiResponse } from '@/domain/media/dto';
 import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { createProgressEventStream } from '@/infrastructure/http/sse';

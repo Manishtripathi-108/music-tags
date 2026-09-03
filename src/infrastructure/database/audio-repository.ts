@@ -2,71 +2,14 @@ import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
 import { db } from './client';
 import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from './schema';
-import { type CanonicalAudioMetadata } from '@/domain/media/audio-metadata';
 import { type DiscoveredAudioFile } from '@/infrastructure/filesystem/directory-crawler';
 import { type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
+import { canonicalAudioMetadataInputSchema, type CanonicalAudioMetadataInput } from '@/schemas/audio-metadata.schema';
+import { mediaFileSchema } from '@/schemas/media-file.schema';
 
 export interface FileIndexingResult {
     fileId: string;
     needsMetadata: boolean;
-}
-
-/**
- * Builds the canonical database column mapping for canonical_audio_metadata.
- * Single source of truth for both insert and conflict-update operations.
- */
-function buildCanonicalColumnValues(
-    canonical: CanonicalAudioMetadata,
-    timestamp: number
-): Omit<typeof canonicalAudioMetadata.$inferInsert, 'fileId' | 'createdAt'> {
-    return {
-        title: canonical.title,
-        artist: canonical.artist,
-        albumArtist: canonical.albumArtist,
-        album: canonical.album,
-        trackNumber: canonical.trackNumber,
-        totalTracks: canonical.totalTracks,
-        discNumber: canonical.discNumber,
-        totalDiscs: canonical.totalDiscs,
-        year: canonical.year,
-        releaseDate: canonical.releaseDate ?? canonical.dateReleased ?? null,
-        genre: canonical.genre,
-        composer: canonical.composer,
-        conductor: canonical.conductor ?? null,
-        lyricist: canonical.lyricist ?? null,
-        remixer: canonical.remixer ?? null,
-        publisher: canonical.publisher,
-        label: canonical.label,
-        copyright: canonical.copyright,
-        isrc: canonical.isrc,
-        catalogNumber: canonical.catalogNumber ?? null,
-        barcode: canonical.barcode ?? null,
-        bpm: canonical.bpm,
-        initialKey: canonical.initialKey,
-        mood: canonical.mood,
-        rating: canonical.rating,
-        description: canonical.description ?? null,
-        comment: canonical.comment,
-        lyrics: canonical.lyrics,
-        lyricsLanguage: canonical.lyricsLanguage ?? null,
-        lyricsUnsynced: canonical.lyricsUnsynced ?? null,
-        lyricsSyncedJson: canonical.lyricsSyncedJson ?? null,
-        durationSeconds: canonical.durationSeconds,
-        bitrateKbps: canonical.bitrateKbps,
-        sampleRateHz: canonical.sampleRateHz,
-        channels: canonical.channels,
-        channelLayout: canonical.channelLayout,
-        bitDepth: canonical.bitDepth,
-        codec: canonical.codec,
-        lossless: canonical.lossless,
-        hasCoverArt: canonical.hasCoverArt,
-        coverArtMime: canonical.coverArtMime,
-        coverArtWidth: canonical.coverArtWidth,
-        coverArtHeight: canonical.coverArtHeight,
-        coverArtType: canonical.coverArtType,
-        coverArtDescription: canonical.coverArtDescription,
-        updatedAt: timestamp,
-    };
 }
 
 /**
@@ -78,42 +21,25 @@ export class AudioRepository {
      * Upserts an audio file's filesystem metadata into the database.
      * Determines whether deep metadata extraction is needed.
      */
-    public async upsertAudioFile(
-        file: DiscoveredAudioFile,
-        forceReindex = false
-    ): Promise<FileIndexingResult> {
-        const existingRows = await db
-            .select()
-            .from(audioFiles)
-            .where(eq(audioFiles.path, file.path))
-            .limit(1);
+    public async upsertAudioFile(file: DiscoveredAudioFile, forceReindex = false): Promise<FileIndexingResult> {
+        const existingRows = await db.select().from(audioFiles).where(eq(audioFiles.path, file.path)).limit(1);
 
         const existing = existingRows[0];
         const fileId = existing?.id || crypto.randomUUID();
-        const needsMetadata =
-            forceReindex ||
-            !existing ||
-            existing.mtimeMs !== file.mtimeMs ||
-            existing.sizeBytes !== file.sizeBytes;
+        const needsMetadata = forceReindex || !existing || existing.mtimeMs !== file.mtimeMs || existing.sizeBytes !== file.sizeBytes;
 
         const now = Date.now();
+
+        const safeData = mediaFileSchema.parse({
+            id: fileId,
+            ...file,
+        });
 
         await db
             .insert(audioFiles)
             .values({
-                id: fileId,
-                path: file.path,
-                filename: file.filename,
-                directory: file.directory,
-                extension: file.extension,
-                sizeBytes: file.sizeBytes,
-                mtimeMs: file.mtimeMs,
-                isMissing: false,
-                isReadOnly: false,
-                isLocked: false,
-                isCorrupt: false,
+                ...safeData,
                 createdAt: existing ? existing.createdAt : now,
-                updatedAt: now,
             })
             .onConflictDoUpdate({
                 target: audioFiles.path,
@@ -130,24 +56,26 @@ export class AudioRepository {
 
     /**
      * Persists extracted canonical metadata and raw tool outputs.
-     * Reuses the canonical column map for both insert and update.
+     * Passes values through canonicalAudioMetadataInputSchema which validates, coerces, and mutates defaults.
      */
     public async upsertTrackMetadata(
         fileId: string,
-        canonical: CanonicalAudioMetadata,
+        canonical: Partial<CanonicalAudioMetadataInput>,
         rawExif: Record<string, unknown>,
         probeResult?: FFprobeAudioResult | null
     ): Promise<void> {
         const now = Date.now();
-        const columnValues = buildCanonicalColumnValues(canonical, now);
+
+        // Pass to schema to validate, coerce, and mutate defaults before DB insertion
+        const columnValues = canonicalAudioMetadataInputSchema.parse({
+            fileId,
+            ...canonical,
+            updatedAt: now,
+        });
 
         await db
             .insert(canonicalAudioMetadata)
-            .values({
-                fileId,
-                ...columnValues,
-                createdAt: now,
-            })
+            .values(columnValues)
             .onConflictDoUpdate({
                 target: canonicalAudioMetadata.fileId,
                 set: columnValues,

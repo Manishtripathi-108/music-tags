@@ -4,7 +4,7 @@ import { db } from '@/infrastructure/database/client';
 import { audioFiles, canonicalAudioMetadata } from '@/infrastructure/database/schema';
 import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { normalizeTrackLrcFile } from '@/services/lyrics/lyrics-service';
-import { NormalizeLrcRequestSchema } from '@/domain/lyrics/schemas';
+import { NormalizeLrcRequestSchema } from '@/schemas';
 import { sanitizeFilenameTitle } from '@/domain/media/mappers';
 import { type NormalizeLrcApiResponse } from '@/domain/media/dto';
 
