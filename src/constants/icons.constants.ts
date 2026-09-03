@@ -312,3 +312,4 @@ export enum IconSet {
 }
 
 export default IconSet;
+export type T_IconType = keyof typeof IconSet;

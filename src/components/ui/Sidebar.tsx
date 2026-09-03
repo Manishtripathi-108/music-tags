@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './cn';
 import Icon from '@/components/ui/Icon';
 import { Badge } from '@/components/ui/Badge';
-import { type T_IconType } from '@/types/client.types';
+import { type T_IconType } from '@/constants/icons.constants';
 
 const EFFECTS_KEY = 'sidebar-effects-enabled';
 
@@ -200,7 +200,8 @@ export const SidebarItem = memo(function SidebarItem({
         <div className="relative flex w-full min-w-0 items-center justify-between">
             <div className="flex min-w-0 items-center gap-2 truncate">
                 {icon && (
-                    <span className={cn('shrink-0 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')}>
+                    <span
+                        className={cn('shrink-0 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')}>
                         {typeof icon === 'string' ? <Icon icon={icon as T_IconType} className="size-3.5" /> : icon}
                     </span>
                 )}
@@ -248,7 +249,7 @@ export const SidebarItem = memo(function SidebarItem({
                         onMouseEnter={handleMouseEnter}
                         onMouseLeave={handleMouseLeave}
                         className={cn(
-                            'flex flex-1 min-w-0 items-center rounded-md px-2.5 py-1.5 text-xs select-none transition-colors duration-150',
+                            'flex min-w-0 flex-1 items-center rounded-md px-2.5 py-1.5 text-xs transition-colors duration-150 select-none',
                             isActive ? 'bg-primary/10 text-primary' : 'hover:text-foreground text-muted-foreground',
                             className
                         )}>
@@ -261,18 +262,14 @@ export const SidebarItem = memo(function SidebarItem({
                         onMouseEnter={handleMouseEnter}
                         onMouseLeave={handleMouseLeave}
                         className={cn(
-                            'flex flex-1 min-w-0 cursor-pointer items-center rounded-md px-2.5 py-1.5 text-xs select-none transition-colors duration-150',
+                            'flex min-w-0 flex-1 cursor-pointer items-center rounded-md px-2.5 py-1.5 text-xs transition-colors duration-150 select-none',
                             isActive ? 'bg-primary/10 text-primary' : 'hover:text-foreground text-muted-foreground',
                             className
                         )}>
                         {content}
                     </button>
                 )}
-                {trailing && (
-                    <div className="ml-1 flex shrink-0 items-center pr-1">
-                        {trailing}
-                    </div>
-                )}
+                {trailing && <div className="ml-1 flex shrink-0 items-center pr-1">{trailing}</div>}
             </motion.div>
         </div>
     );
@@ -286,7 +283,11 @@ export const Sidebar001Item = SidebarItem;
 
 export function SidebarSeparator({ children, className }: { children?: React.ReactNode; className?: string }) {
     return (
-        <div className={cn('text-muted-foreground flex items-center gap-1.5 px-2 pt-3 pb-1 text-[10px] font-semibold tracking-wider uppercase', className)}>
+        <div
+            className={cn(
+                'text-muted-foreground flex items-center gap-1.5 px-2 pt-3 pb-1 text-[10px] font-semibold tracking-wider uppercase',
+                className
+            )}>
             {children}
         </div>
     );
@@ -473,7 +474,7 @@ export function Sidebar({
             <HoverProvider containerRef={containerRef}>
                 <aside
                     className={cn(
-                        'bg-card/60 border-border relative flex h-full shrink-0 flex-col justify-between border-r text-xs select-none backdrop-blur-xs',
+                        'bg-card/60 border-border relative flex h-full shrink-0 flex-col justify-between border-r text-xs backdrop-blur-xs select-none',
                         className
                     )}
                     style={{ width }}>
@@ -510,7 +511,7 @@ export const Sidebar001Header = SidebarHeader;
  */
 
 export function SidebarFooter({ children, className }: { children?: React.ReactNode; className?: string }) {
-    return <div className={cn('border-border shrink-0 border-t bg-card/40 p-3', className)}>{children}</div>;
+    return <div className={cn('border-border bg-card/40 shrink-0 border-t p-3', className)}>{children}</div>;
 }
 export const Sidebar001Footer = SidebarFooter;
 

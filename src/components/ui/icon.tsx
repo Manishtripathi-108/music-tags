@@ -2,9 +2,8 @@ import { memo } from 'react';
 
 import { type IconProps, Icon as Iconify } from '@iconify/react';
 
-import IconSet from '@/constants/icons.constants';
+import IconSet, { T_IconType } from '@/constants/icons.constants';
 import { cn } from './cn';
-import { type T_IconType } from '@/types/client.types';
 
 type Props = {
     icon: T_IconType;

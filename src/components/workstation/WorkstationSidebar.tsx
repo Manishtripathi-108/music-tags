@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useAudioStore } from '@/store/audioStore';
-import { type T_IconType } from '@/types/client.types';
+import { type T_IconType } from '@/constants/icons.constants';
 import { Button } from '@/components/ui/Button';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarItem } from '@/components/ui/Sidebar';
 import {
