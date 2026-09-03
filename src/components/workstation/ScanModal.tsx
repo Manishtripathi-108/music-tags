@@ -1,6 +1,5 @@
 'use client';
 
-import React, { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import Icon from '@/components/ui/Icon';
@@ -16,13 +15,14 @@ import { type ScanApiResponse } from '@/domain/media/dto';
 
 export function ScanModal() {
     const { isScanModalOpen, setIsScanModalOpen, setActiveScanJob, fetchTracks } = useAudioStore();
-    const [serverError, setServerError] = useState<string | null>(null);
 
     const {
         register,
         handleSubmit,
         reset,
         control,
+        setError,
+        clearErrors,
         formState: { errors, isSubmitting },
     } = useForm<ScanFolderRequest>({
         resolver: zodResolver(ScanFolderRequestSchema),
@@ -34,7 +34,7 @@ export function ScanModal() {
     });
 
     const onSubmit = async (values: ScanFolderRequest) => {
-        setServerError(null);
+        clearErrors('root.serverError');
 
         try {
             setIsScanModalOpen(false);
@@ -69,7 +69,10 @@ export function ScanModal() {
             }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            setServerError(msg);
+            setError('root.serverError', {
+                type: 'server',
+                message: msg,
+            });
         }
     };
 
@@ -104,13 +107,7 @@ export function ScanModal() {
                                         className="mt-1 font-mono text-xs"
                                         {...register('folderPath')}
                                     />
-                                    <FieldError className="mt-1">{errors.folderPath?.message}</FieldError>
-                                    {serverError && (
-                                        <div className="text-destructive mt-1.5 flex items-center gap-1 text-[11px]">
-                                            <Icon icon="warning" className="h-3.5 w-3.5" />
-                                            <span>{serverError}</span>
-                                        </div>
-                                    )}
+                                    <FieldError className="mt-1">{errors.folderPath?.message || errors.root?.serverError.message}</FieldError>
                                 </Field>
                             </FieldsetContent>
                         </Fieldset>

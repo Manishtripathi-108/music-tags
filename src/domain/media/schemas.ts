@@ -64,7 +64,6 @@ export const TagFormSchema = z.object({
     isrc: tagFieldValidators.isrc,
     lyrics: tagFieldValidators.lyrics,
 });
-
 export type TagFormValues = z.infer<typeof TagFormSchema>;
 
 export const TrackPatchSchema = z.object({
@@ -106,7 +105,6 @@ export const InlineEditSchemas = {
     year: tagFieldValidators.year,
     bpm: tagFieldValidators.bpm,
 } as const;
-
 export type InlineEditField = keyof typeof InlineEditSchemas;
 
 export const ScanFolderRequestSchema = z.object({
@@ -114,12 +112,10 @@ export const ScanFolderRequestSchema = z.object({
     recursive: z.boolean(),
     forceReindex: z.boolean(),
 });
-
 export type ScanFolderRequest = z.infer<typeof ScanFolderRequestSchema>;
 
 export const RemoveFolderRequestSchema = z.object({
     directory: z.string().min(1, 'Directory path is required'),
     syncBeforeDelete: z.boolean().default(false),
 });
-
 export type RemoveFolderRequest = z.infer<typeof RemoveFolderRequestSchema>;
