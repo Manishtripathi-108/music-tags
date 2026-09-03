@@ -2,55 +2,73 @@ import crypto from 'crypto';
 import { type ScanProgressEvent } from '@/domain/scanner/types';
 
 export interface ScanJobState {
-    abort: boolean;
-    listeners: ((evt: ScanProgressEvent) => void)[];
+    controller: AbortController;
+    listeners: Set<(evt: ScanProgressEvent) => void>;
 }
 
 /**
- * Manages background scan jobs, cancellation tokens, and progress event listeners.
+ * Manages background scan jobs, AbortController lifecycle, and progress event listeners.
  */
 export class ScanJobManager {
     private activeJobs = new Map<string, ScanJobState>();
 
     public createJob(): string {
         const jobId = crypto.randomUUID();
-        this.activeJobs.set(jobId, { abort: false, listeners: [] });
+        this.activeJobs.set(jobId, {
+            controller: new AbortController(),
+            listeners: new Set(),
+        });
         return jobId;
     }
 
     public subscribe(jobId: string, listener: (evt: ScanProgressEvent) => void): void {
         const job = this.activeJobs.get(jobId);
         if (job) {
-            job.listeners.push(listener);
+            job.listeners.add(listener);
         }
     }
 
     public unsubscribe(jobId: string, listener: (evt: ScanProgressEvent) => void): void {
         const job = this.activeJobs.get(jobId);
         if (job) {
-            job.listeners = job.listeners.filter((fn) => fn !== listener);
+            job.listeners.delete(listener);
         }
     }
 
     public cancelJob(jobId: string): void {
         const job = this.activeJobs.get(jobId);
         if (job) {
-            job.abort = true;
+            job.controller.abort();
         }
     }
 
     public isAborted(jobId: string): boolean {
-        return Boolean(this.activeJobs.get(jobId)?.abort);
+        const job = this.activeJobs.get(jobId);
+        return Boolean(job?.controller.signal.aborted);
+    }
+
+    public getSignal(jobId: string): AbortSignal | undefined {
+        return this.activeJobs.get(jobId)?.controller.signal;
     }
 
     public emit(jobId: string, event: ScanProgressEvent): void {
         const job = this.activeJobs.get(jobId);
         if (job) {
-            job.listeners.forEach((fn) => fn(event));
+            job.listeners.forEach((fn) => {
+                try {
+                    fn(event);
+                } catch (err) {
+                    console.error(`[ScanJobManager] Error in event listener for job ${jobId}:`, err);
+                }
+            });
         }
     }
 
     public cleanup(jobId: string): void {
-        this.activeJobs.delete(jobId);
+        const job = this.activeJobs.get(jobId);
+        if (job) {
+            job.listeners.clear();
+            this.activeJobs.delete(jobId);
+        }
     }
 }
