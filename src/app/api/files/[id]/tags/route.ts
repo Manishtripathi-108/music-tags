@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
-import { db } from '@/db/client';
-import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/db/schema';
-import { ensureDatabaseInitialized } from '@/db/init';
-import {
-    TrackPatchSchema,
-    type Track,
-    type RawTagItem,
-    type TrackPatchApiResponse,
-    REGEX_LRC_TIMESTAMP,
-} from '@/types/audio';
-import { getExifTool } from '@/core/binaries/exiftool';
-import { probeAudioFile } from '@/core/binaries/ffprobe';
-import { buildRawTagList } from '@/core/metadata/normalizer';
+import { db } from '@/infrastructure/database/client';
+import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/infrastructure/database/schema';
+import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
+import { type Track, type RawTag } from '@/domain/media/track';
+import { type TrackPatchApiResponse } from '@/domain/media/dto';
+import { TrackPatchSchema } from '@/domain/media/schemas';
+import { buildTrackFromDb } from '@/domain/media/mappers';
+import { isLrcContent } from '@/domain/media/lyrics';
+import { getExifTool } from '@/infrastructure/media-tools/exiftool';
+import { probeAudioFile, type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
+import { buildRawTagList } from '@/services/metadata/raw-tags';
 
 type RouteContext = {
     params: Promise<{ id: string }>;
@@ -21,7 +19,7 @@ type RouteContext = {
 export async function GET(
     _request: NextRequest,
     context: RouteContext
-): Promise<NextResponse<{ metadata: Track | null; rawTags: RawTagItem[] } | { error: string }>> {
+): Promise<NextResponse<{ metadata: Track | null; rawTags: RawTag[] } | { error: string }>> {
     await ensureDatabaseInitialized();
     const { id } = await context.params;
 
@@ -38,68 +36,7 @@ export async function GET(
         }
 
         const { audio_files: file, canonical_audio_metadata: meta } = rows[0];
-        const rawLyrics = meta?.lyrics || meta?.lyricsUnsynced || null;
-        const hasSynced = Boolean(meta?.lyricsSyncedJson) || (rawLyrics ? REGEX_LRC_TIMESTAMP.test(rawLyrics) : false);
-
-        const isModified = Boolean(
-            meta?.updatedAt &&
-            meta?.createdAt &&
-            meta.updatedAt - meta.createdAt > 1000
-        );
-
-        const track: Track = {
-            id: file.id,
-            filename: file.filename,
-            filePath: file.path,
-            directory: file.directory,
-            isModified,
-            extension: file.extension,
-            title: meta?.title || file.filename,
-            artist: meta?.artist ?? '',
-            albumArtist: meta?.albumArtist ?? '',
-            album: meta?.album ?? '',
-            trackNumber: meta?.trackNumber ?? null,
-            totalTracks: meta?.totalTracks ?? null,
-            discNumber: meta?.discNumber ?? null,
-            totalDiscs: meta?.totalDiscs ?? null,
-            year: meta?.year ?? null,
-            releaseDate: meta?.releaseDate ?? null,
-            genre: meta?.genre ?? '',
-            bpm: meta?.bpm ?? null,
-            initialKey: meta?.initialKey ?? '',
-            comment: meta?.comment ?? '',
-            composer: meta?.composer ?? '',
-            conductor: meta?.conductor ?? '',
-            lyricist: meta?.lyricist ?? '',
-            publisher: meta?.publisher ?? '',
-            label: meta?.label ?? '',
-            copyright: meta?.copyright ?? '',
-            isrc: meta?.isrc ?? '',
-            barcode: meta?.barcode ?? '',
-            catalogNumber: meta?.catalogNumber ?? '',
-            mood: meta?.mood ?? '',
-            rating: meta?.rating ?? null,
-            description: meta?.description ?? '',
-            lyrics: meta?.lyrics ?? '',
-            lyricsUnsynced: meta?.lyricsUnsynced ?? '',
-            lyricsSyncedJson: meta?.lyricsSyncedJson ?? null,
-            lyricsLanguage: meta?.lyricsLanguage ?? null,
-            lyricsType: hasSynced ? 'synced' : rawLyrics ? 'unsynced' : 'none',
-            durationSeconds: meta?.durationSeconds ?? undefined,
-            bitrateKbps: meta?.bitrateKbps ?? undefined,
-            sampleRateHz: meta?.sampleRateHz ?? undefined,
-            channels: meta?.channels ?? undefined,
-            channelLayout: meta?.channelLayout || undefined,
-            bitDepth: meta?.bitDepth ?? undefined,
-            codec: meta?.codec || undefined,
-            lossless: meta?.lossless ?? false,
-            hasCoverArt: meta?.hasCoverArt ?? false,
-            coverArtMime: meta?.coverArtMime ?? null,
-            coverArtWidth: meta?.coverArtWidth ?? null,
-            coverArtHeight: meta?.coverArtHeight ?? null,
-            coverArtType: meta?.coverArtType ?? null,
-            coverArtDescription: meta?.coverArtDescription ?? null,
-        };
+        const track = buildTrackFromDb(file, meta);
 
         const rawRows = await db
             .select()
@@ -108,7 +45,7 @@ export async function GET(
             .limit(1);
 
         let exifObj: Record<string, unknown> | null = null;
-        let probeObj: any = null;
+        let probeObj: FFprobeAudioResult | null = null;
 
         if (rawRows.length && (rawRows[0].exiftoolJson || rawRows[0].ffprobeJson)) {
             if (rawRows[0].exiftoolJson) {
@@ -178,7 +115,7 @@ export async function PATCH(
         let lyricsSyncedJson = data.lyricsSyncedJson;
         let lyricsUnsynced = data.lyricsUnsynced;
         if (data.lyrics !== undefined) {
-            const isLrc = data.lyrics ? REGEX_LRC_TIMESTAMP.test(data.lyrics) : false;
+            const isLrc = isLrcContent(data.lyrics);
             if (isLrc) {
                 lyricsSyncedJson = JSON.stringify(data.lyrics);
                 lyricsUnsynced = null;
@@ -225,7 +162,7 @@ export async function PATCH(
             .set(updateSet)
             .where(eq(canonicalAudioMetadata.fileId, id));
 
-        // Fetch and return the updated track
+        // Fetch and return the updated track using canonical mapper
         const rows = await db
             .select()
             .from(audioFiles)
@@ -238,62 +175,7 @@ export async function PATCH(
         }
 
         const { audio_files: file, canonical_audio_metadata: meta } = rows[0];
-        const rawLyrics = meta?.lyrics || meta?.lyricsUnsynced || null;
-        const hasSynced = Boolean(meta?.lyricsSyncedJson) || (rawLyrics ? REGEX_LRC_TIMESTAMP.test(rawLyrics) : false);
-
-        const updatedTrack: Track = {
-            id: file.id,
-            filename: file.filename,
-            filePath: file.path,
-            directory: file.directory,
-            isModified: true,
-            extension: file.extension,
-            title: meta?.title || file.filename,
-            artist: meta?.artist ?? '',
-            albumArtist: meta?.albumArtist ?? '',
-            album: meta?.album ?? '',
-            trackNumber: meta?.trackNumber ?? null,
-            totalTracks: meta?.totalTracks ?? null,
-            discNumber: meta?.discNumber ?? null,
-            totalDiscs: meta?.totalDiscs ?? null,
-            year: meta?.year ?? null,
-            releaseDate: meta?.releaseDate ?? null,
-            genre: meta?.genre ?? '',
-            bpm: meta?.bpm ?? null,
-            initialKey: meta?.initialKey ?? '',
-            comment: meta?.comment ?? '',
-            composer: meta?.composer ?? '',
-            conductor: meta?.conductor ?? '',
-            lyricist: meta?.lyricist ?? '',
-            publisher: meta?.publisher ?? '',
-            label: meta?.label ?? '',
-            copyright: meta?.copyright ?? '',
-            isrc: meta?.isrc ?? '',
-            barcode: meta?.barcode ?? '',
-            catalogNumber: meta?.catalogNumber ?? '',
-            mood: meta?.mood ?? '',
-            rating: meta?.rating ?? null,
-            description: meta?.description ?? '',
-            lyrics: meta?.lyrics ?? '',
-            lyricsUnsynced: meta?.lyricsUnsynced ?? '',
-            lyricsSyncedJson: meta?.lyricsSyncedJson ?? null,
-            lyricsLanguage: meta?.lyricsLanguage ?? null,
-            lyricsType: hasSynced ? 'synced' : rawLyrics ? 'unsynced' : 'none',
-            durationSeconds: meta?.durationSeconds ?? undefined,
-            bitrateKbps: meta?.bitrateKbps ?? undefined,
-            sampleRateHz: meta?.sampleRateHz ?? undefined,
-            channels: meta?.channels ?? undefined,
-            channelLayout: meta?.channelLayout || undefined,
-            bitDepth: meta?.bitDepth ?? undefined,
-            codec: meta?.codec || undefined,
-            lossless: meta?.lossless ?? false,
-            hasCoverArt: meta?.hasCoverArt ?? false,
-            coverArtMime: meta?.coverArtMime ?? null,
-            coverArtWidth: meta?.coverArtWidth ?? null,
-            coverArtHeight: meta?.coverArtHeight ?? null,
-            coverArtType: meta?.coverArtType ?? null,
-            coverArtDescription: meta?.coverArtDescription ?? null,
-        };
+        const updatedTrack = buildTrackFromDb(file, meta, { forceModified: true });
 
         return NextResponse.json({ success: true, track: updatedTrack });
     } catch (error) {

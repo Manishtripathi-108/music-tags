@@ -4,8 +4,8 @@ import * as React from 'react';
 import { NumberInput as ArkNumberInput } from '@ark-ui/react/number-input';
 
 import Icon from '@/components/ui/Icon';
-import { cn } from '@/lib/utils';
-import { FOCUS_RING, DISABLED, FIELD_CONTROL_STYLES } from '@/lib/styles/tailwind.helpers';
+import { cn } from './cn';
+import { FOCUS_RING, DISABLED, FIELD_CONTROL_STYLES } from './tailwind.helpers';
 
 export function NumberInput({ ref, className, ...props }: React.ComponentProps<typeof ArkNumberInput.Root>) {
     return (

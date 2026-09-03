@@ -6,6 +6,16 @@ import { useAudioStore } from '@/store/audioStore';
 import { type T_IconType } from '@/types/client.types';
 import { Button } from '@/components/ui/Button';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarItem } from '@/components/ui/Sidebar';
+import {
+    isLossless,
+    isHiRes,
+    isMissingArt,
+    isLowResolutionArt,
+    isMissingBpm,
+    isMissingLyrics,
+    isSyncedLyrics,
+    isUnsyncedLyrics,
+} from '@/domain/media/predicates';
 import { FolderRemoveDialog, type FolderItemInfo } from './FolderRemoveDialog';
 
 export function WorkstationSidebar() {
@@ -30,30 +40,14 @@ export function WorkstationSidebar() {
     const [folderToRemove, setFolderToRemove] = useState<FolderItemInfo | null>(null);
     const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
 
-    const losslessCount = tracks.filter((t) => t.lossless).length;
-    const hiResCount = tracks.filter((t) => Boolean(t.bitDepth && t.bitDepth > 16)).length;
-    const missingArtCount = tracks.filter((t) => !t.hasCoverArt).length;
-    const lowResArtCount = tracks.filter(
-        (t) =>
-            Boolean(t.hasCoverArt) &&
-            Boolean(
-                t.coverArtWidth &&
-                t.coverArtHeight &&
-                (t.coverArtWidth < 800 || t.coverArtHeight < 800)
-            )
-    ).length;
-    const missingBpmCount = tracks.filter((t) => !t.bpm).length;
-
-    const missingLyricsCount = tracks.filter((t) => !t.lyrics && !t.lyricsUnsynced && !t.lyricsSyncedJson).length;
-    const syncedLyricsCount = tracks.filter(
-        (t) => t.lyricsType === 'synced' || Boolean(t.lyricsSyncedJson) || /\[\d{2}:\d{2}/.test(t.lyrics || '')
-    ).length;
-    const unsyncedLyricsCount = tracks.filter(
-        (t) =>
-            t.lyricsType === 'unsynced' ||
-            Boolean(t.lyricsUnsynced) ||
-            (Boolean(t.lyrics) && !/\[\d{2}:\d{2}/.test(t.lyrics || ''))
-    ).length;
+    const losslessCount = tracks.filter(isLossless).length;
+    const hiResCount = tracks.filter(isHiRes).length;
+    const missingArtCount = tracks.filter(isMissingArt).length;
+    const lowResArtCount = tracks.filter((t) => isLowResolutionArt(t)).length;
+    const missingBpmCount = tracks.filter(isMissingBpm).length;
+    const missingLyricsCount = tracks.filter(isMissingLyrics).length;
+    const syncedLyricsCount = tracks.filter(isSyncedLyrics).length;
+    const unsyncedLyricsCount = tracks.filter(isUnsyncedLyrics).length;
 
     const folders: FolderItemInfo[] = useMemo(() => {
         const map = new Map<string, { directory: string; count: number; modifiedCount: number }>();

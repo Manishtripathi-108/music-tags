@@ -1,25 +1,23 @@
 import { NextResponse } from 'next/server';
-import { verifyMediaBinaries } from '@/core/binaries/paths';
-import { type StatusApiResponse } from '@/types/audio';
+import { verifyMediaBinaries, type BinaryVerificationResult } from '@/infrastructure/media-tools/binary-status';
+import { type StatusApiResponse } from '@/domain/media/dto';
 
 export async function GET(): Promise<NextResponse<StatusApiResponse>> {
     try {
-        const status = verifyMediaBinaries();
+        const binaries = verifyMediaBinaries();
         return NextResponse.json({
-            binaries: {
-                exiftool: status.exiftool,
-                ffprobe: status.ffprobe,
-                ffmpeg: status.ffmpeg,
-            },
-            allReady: status.allReady,
+            binaries,
+            allReady: binaries.allReady,
         });
     } catch {
+        const fallback: BinaryVerificationResult = {
+            exiftool: { name: 'exiftool', found: false },
+            ffprobe: { name: 'ffprobe', found: false },
+            ffmpeg: { name: 'ffmpeg', found: false },
+            allReady: false,
+        };
         return NextResponse.json({
-            binaries: {
-                exiftool: { found: false },
-                ffprobe: { found: false },
-                ffmpeg: { found: false },
-            },
+            binaries: fallback,
             allReady: false,
         });
     }

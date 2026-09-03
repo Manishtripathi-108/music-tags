@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 
-import { isBrowser } from '@/lib/utils/core.utils';
+const isBrowser = typeof window !== 'undefined' && Boolean(window.document?.createElement);
 
 type ThemeType = 'light' | 'dark' | 'system';
 

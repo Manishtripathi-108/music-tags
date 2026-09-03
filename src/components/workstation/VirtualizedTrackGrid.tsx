@@ -6,6 +6,7 @@ import { useTable } from '@tanstack/react-table';
 import { useAudioStore } from '@/store/audioStore';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
+import { filterTracks } from '@/domain/media/predicates';
 import { columns, features, flexRender, type SortingState, type TrackTableMeta } from './trackTableFeatures';
 
 export function VirtualizedTrackGrid() {
@@ -29,52 +30,7 @@ export function VirtualizedTrackGrid() {
     const parentRef = useRef<HTMLDivElement>(null);
 
     const filteredTracks = useMemo(() => {
-        let result = tracks;
-
-        if (activeFilter === 'lossless') {
-            result = result.filter((t) => t.lossless);
-        } else if (activeFilter === 'hi-res') {
-            result = result.filter((t) => Boolean(t.bitDepth && t.bitDepth > 16));
-        } else if (activeFilter === 'missing-art') {
-            result = result.filter((t) => !t.hasCoverArt);
-        } else if (activeFilter === 'low-res-art') {
-            result = result.filter(
-                (t) => Boolean(t.hasCoverArt) && Boolean(t.coverArtWidth && t.coverArtHeight && (t.coverArtWidth < 800 || t.coverArtHeight < 800))
-            );
-        } else if (activeFilter === 'missing-bpm') {
-            result = result.filter((t) => !t.bpm);
-        } else if (activeFilter === 'missing-lyrics') {
-            result = result.filter((t) => !t.lyrics && !t.lyricsUnsynced && !t.lyricsSyncedJson);
-        } else if (activeFilter === 'lyrics-synced') {
-            result = result.filter((t) => t.lyricsType === 'synced' || Boolean(t.lyricsSyncedJson) || /\[\d{2}:\d{2}/.test(t.lyrics || ''));
-        } else if (activeFilter === 'lyrics-unsynced') {
-            result = result.filter(
-                (t) => t.lyricsType === 'unsynced' || Boolean(t.lyricsUnsynced) || (Boolean(t.lyrics) && !/\[\d{2}:\d{2}/.test(t.lyrics || ''))
-            );
-        } else if (activeFilter.startsWith('folder:')) {
-            const folderPath = activeFilter.slice('folder:'.length);
-            result = result.filter((t) => t.directory === folderPath || (Boolean(t.filePath) && t.filePath!.startsWith(folderPath)));
-        }
-
-        const query = searchQuery.trim().toLowerCase();
-        if (query) {
-            result = result.filter((t) => {
-                return (
-                    t.title?.toLowerCase().includes(query) ||
-                    t.artist?.toLowerCase().includes(query) ||
-                    t.albumArtist?.toLowerCase().includes(query) ||
-                    t.album?.toLowerCase().includes(query) ||
-                    t.genre?.toLowerCase().includes(query) ||
-                    t.filename.toLowerCase().includes(query) ||
-                    t.composer?.toLowerCase().includes(query) ||
-                    t.initialKey?.toLowerCase().includes(query) ||
-                    t.lyrics?.toLowerCase().includes(query) ||
-                    String(t.year || '').includes(query)
-                );
-            });
-        }
-
-        return result;
+        return filterTracks(tracks, { activeFilter, searchQuery });
     }, [tracks, activeFilter, searchQuery]);
 
     // TanStack Table sorting state (synced with Zustand store)

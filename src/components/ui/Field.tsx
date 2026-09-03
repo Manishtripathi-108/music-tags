@@ -4,8 +4,8 @@ import * as React from 'react';
 import { Field as ArkField } from '@ark-ui/react/field';
 
 import Icon from '@/components/ui/Icon';
-import { cn } from '@/lib/utils';
-import { FIELD_CONTROL_STYLES } from '@/lib/styles/tailwind.helpers';
+import { cn } from './cn';
+import { FIELD_CONTROL_STYLES } from './tailwind.helpers';
 
 export function Field({ className, ...props }: React.ComponentProps<typeof ArkField.Root>) {
     return <ArkField.Root {...props} className={cn('group flex w-full flex-col gap-1 text-xs', 'data-disabled:opacity-60', className)} />;

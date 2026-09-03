@@ -1,14 +1,8 @@
 import IconSet from '@/constants/icons.constants';
-import { BinaryStatus } from '@/core/binaries/paths';
+import { type BinaryStatus, type BinaryVerificationResult } from '@/infrastructure/media-tools/binary-status';
 
 export type T_IconType = keyof typeof IconSet;
-
-export type BinaryVerificationResult = {
-    exiftool: BinaryStatus;
-    ffprobe: BinaryStatus;
-    ffmpeg: BinaryStatus;
-    allReady: boolean;
-};
+export type { BinaryStatus, BinaryVerificationResult };
 
 export type MediaStatusResponse = {
     binaries: BinaryVerificationResult;

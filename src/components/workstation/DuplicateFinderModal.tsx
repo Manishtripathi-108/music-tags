@@ -8,8 +8,8 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import { FieldInput } from '@/components/ui/Field';
 import { useAudioStore } from '@/store/audioStore';
-import { formatDuration, formatBitrate } from '@/lib/utils';
-import { type DuplicateMatchMode, type DuplicateCluster } from '@/types/audio';
+import { formatDuration, formatBitrate } from '@/domain/media/formatters';
+import { type DuplicateMatchMode, type DuplicateCluster } from '@/domain/duplicates/types';
 
 export function DuplicateFinderModal() {
     const {
@@ -31,9 +31,12 @@ export function DuplicateFinderModal() {
 
     useEffect(() => {
         if (isDuplicateModalOpen) {
-            fetchDuplicates(activeMode).catch(console.error);
-            setSelectedTrackIds(new Set());
-            setFeedbackMessage(null);
+            fetchDuplicates(activeMode)
+                .then(() => {
+                    setSelectedTrackIds(new Set());
+                    setFeedbackMessage(null);
+                })
+                .catch(console.error);
         }
     }, [isDuplicateModalOpen, activeMode, fetchDuplicates]);
 

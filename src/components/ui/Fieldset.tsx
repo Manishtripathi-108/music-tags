@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Fieldset as ArkFieldset } from '@ark-ui/react/fieldset';
-import { cn } from '@/lib/utils';
+import { cn } from './cn';
 
 export function Fieldset({ ref, className, ...props }: React.ComponentProps<typeof ArkFieldset.Root>) {
     return (

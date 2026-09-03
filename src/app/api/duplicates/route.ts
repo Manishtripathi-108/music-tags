@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { inArray, eq } from 'drizzle-orm';
-import { db } from '@/db/client';
-import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/db/schema';
-import { ensureDatabaseInitialized } from '@/db/init';
-import { findDuplicates } from '@/core/duplicates/duplicateFinder';
+import fs from 'fs';
+import { db } from '@/infrastructure/database/client';
+import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/infrastructure/database/schema';
+import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
+import { findDuplicates } from '@/domain/duplicates/duplicate-matcher';
 import {
     type DuplicateFindApiResponse,
     type DuplicateMatchMode,
-    type Track,
-    ResolveDuplicatesRequestSchema,
-} from '@/types/audio';
-import fs from 'fs';
+} from '@/domain/duplicates/types';
+import { ResolveDuplicatesRequestSchema } from '@/domain/duplicates/schemas';
+import { type ResolveDuplicatesApiResponse } from '@/domain/media/dto';
+import { buildTrackFromDb } from '@/domain/media/mappers';
 
 export async function GET(request: NextRequest) {
     try {
@@ -28,54 +29,9 @@ export async function GET(request: NextRequest) {
             .from(audioFiles)
             .leftJoin(canonicalAudioMetadata, eq(audioFiles.id, canonicalAudioMetadata.fileId));
 
-        const tracks: Track[] = rows.map(({ audio_files: file, canonical_audio_metadata: meta }) => {
-            const rawLyrics = meta?.lyrics || meta?.lyricsUnsynced;
-            const hasSynced = Boolean(meta?.lyricsSyncedJson) || (rawLyrics ? /\[\d{2}:\d{2}/.test(rawLyrics) : false);
-
-            return {
-                id: file.id,
-                filename: file.filename,
-                filePath: file.path,
-                directory: file.directory,
-                sizeBytes: file.sizeBytes,
-                title: meta?.title ?? '',
-                artist: meta?.artist ?? '',
-                albumArtist: meta?.albumArtist ?? '',
-                album: meta?.album ?? '',
-                trackNumber: meta?.trackNumber ?? null,
-                totalTracks: meta?.totalTracks ?? null,
-                discNumber: meta?.discNumber ?? null,
-                totalDiscs: meta?.totalDiscs ?? null,
-                year: meta?.year ?? null,
-                dateReleased: meta?.releaseDate ?? null,
-                genre: meta?.genre ?? '',
-                composer: meta?.composer ?? '',
-                publisher: meta?.publisher ?? '',
-                isrc: meta?.isrc ?? '',
-                bpm: meta?.bpm ?? null,
-                initialKey: meta?.initialKey ?? null,
-                lyrics: meta?.lyrics ?? '',
-                lyricsUnsynced: meta?.lyricsUnsynced ?? null,
-                lyricsSyncedJson: meta?.lyricsSyncedJson ?? null,
-                lyricsLanguage: meta?.lyricsLanguage ?? null,
-                lyricsType: hasSynced ? 'synced' : rawLyrics ? 'unsynced' : 'none',
-                durationSeconds: meta?.durationSeconds ?? undefined,
-                bitrateKbps: meta?.bitrateKbps ?? undefined,
-                sampleRateHz: meta?.sampleRateHz ?? undefined,
-                channels: meta?.channels ?? undefined,
-                channelLayout: meta?.channelLayout || undefined,
-                bitDepth: meta?.bitDepth ?? undefined,
-                codec: meta?.codec || undefined,
-                extension: file.extension,
-                lossless: meta?.lossless ?? false,
-                hasCoverArt: meta?.hasCoverArt ?? false,
-                coverArtMime: meta?.coverArtMime ?? null,
-                coverArtWidth: meta?.coverArtWidth ?? null,
-                coverArtHeight: meta?.coverArtHeight ?? null,
-                coverArtType: meta?.coverArtType ?? null,
-                coverArtDescription: meta?.coverArtDescription ?? null,
-            };
-        });
+        const tracks = rows.map(({ audio_files: file, canonical_audio_metadata: meta }) =>
+            buildTrackFromDb(file, meta)
+        );
 
         const clusters = findDuplicates(tracks, {
             mode,
@@ -103,7 +59,9 @@ export async function GET(request: NextRequest) {
     }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(
+    request: NextRequest
+): Promise<NextResponse<ResolveDuplicatesApiResponse | { error: string; details?: unknown }>> {
     try {
         await ensureDatabaseInitialized();
 

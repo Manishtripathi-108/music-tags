@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from 'react';
 import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
-import { cn } from '@/lib/utils/cn';
+import { cn } from './cn';
 
 export const Tabs = ({ className, ...props }: ComponentProps<typeof ArkTabs.Root>) => {
     return <ArkTabs.Root lazyMount unmountOnExit className={cn('w-full', className)} {...props} />;

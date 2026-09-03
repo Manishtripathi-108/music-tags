@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '@/lib/utils/cn';
-import { DISABLED, FOCUS_RING } from '@/lib/styles/tailwind.helpers';
+import { cn } from './cn';
+import { DISABLED, FOCUS_RING } from './tailwind.helpers';
 
 const buttonVariants = cva(
     [

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { createContext, memo, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/lib/utils';
+import { cn } from './cn';
 import Icon from '@/components/ui/Icon';
 import { Badge } from '@/components/ui/Badge';
 import { type T_IconType } from '@/types/client.types';

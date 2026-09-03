@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq, inArray, or, like } from 'drizzle-orm';
-import { db } from '@/db/client';
-import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/db/schema';
-import { ensureDatabaseInitialized } from '@/db/init';
-import { getExifTool } from '@/core/binaries/exiftool';
-import {
-    RemoveFolderRequestSchema,
-    type RemoveFolderApiResponse,
-} from '@/types/audio';
+import { db } from '@/infrastructure/database/client';
+import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/infrastructure/database/schema';
+import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
+import { getExifTool } from '@/infrastructure/media-tools/exiftool';
+import { RemoveFolderRequestSchema } from '@/domain/media/schemas';
+import { toExifToolWriteTags } from '@/domain/media/mappers';
+import { type RemoveFolderApiResponse } from '@/domain/media/dto';
 
 /**
  * Removes a scanned folder and its audio tracks from the database.
@@ -68,23 +67,7 @@ export async function POST(
                 const meta = metaMap.get(file.id);
                 if (!meta) continue;
 
-                const tagsToWrite: Record<string, string | number | null> = {};
-                if (meta.title) tagsToWrite.Title = meta.title;
-                if (meta.artist) tagsToWrite.Artist = meta.artist;
-                if (meta.album) tagsToWrite.Album = meta.album;
-                if (meta.albumArtist) tagsToWrite.AlbumArtist = meta.albumArtist;
-                if (meta.trackNumber) tagsToWrite.TrackNumber = meta.trackNumber;
-                if (meta.year) tagsToWrite.Year = meta.year;
-                if (meta.genre) tagsToWrite.Genre = meta.genre;
-                if (meta.bpm) tagsToWrite.BPM = meta.bpm;
-                if (meta.composer) tagsToWrite.Composer = meta.composer;
-                if (meta.publisher) tagsToWrite.Publisher = meta.publisher;
-                if (meta.copyright) tagsToWrite.Copyright = meta.copyright;
-                if (meta.comment) tagsToWrite.Comment = meta.comment;
-                if (meta.isrc) tagsToWrite.ISRC = meta.isrc;
-                if (meta.lyrics || meta.lyricsUnsynced) {
-                    tagsToWrite.Lyrics = meta.lyrics || meta.lyricsUnsynced;
-                }
+                const tagsToWrite = toExifToolWriteTags(meta);
 
                 if (Object.keys(tagsToWrite).length > 0) {
                     try {

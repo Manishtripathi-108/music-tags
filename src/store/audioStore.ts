@@ -1,21 +1,21 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { type Track, type ActiveTrackDetail } from '@/domain/media/track';
 import {
-    type ActiveTrackDetail,
     type DuplicateCluster,
     type DuplicateFindApiResponse,
     type DuplicateMatchMode,
-    type NormalizeAllLyricsApiResponse,
-    type NormalizeLrcApiResponse,
-    type RemoveFolderApiResponse,
-    type ResolveDuplicatesApiResponse,
-    type ScanJob,
-    type ScanProgressEvent,
-    type StatusApiResponse,
-    type Track,
-    type TrackDetailApiResponse,
+} from '@/domain/duplicates/types';
+import { type ScanJob, type ScanProgressEvent } from '@/domain/scanner/types';
+import {
     type TracksApiResponse,
-} from '@/types/audio';
+    type TrackDetailApiResponse,
+    type StatusApiResponse,
+    type RemoveFolderApiResponse,
+    type NormalizeLrcApiResponse,
+    type NormalizeAllLyricsApiResponse,
+    type ResolveDuplicatesApiResponse,
+} from '@/domain/media/dto';
 
 interface AudioStoreState {
     tracks: Track[];
@@ -223,9 +223,10 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             set({
                 systemStatus: {
                     binaries: {
-                        exiftool: { found: false },
-                        ffprobe: { found: false },
-                        ffmpeg: { found: false },
+                        exiftool: { name: 'exiftool', found: false },
+                        ffprobe: { name: 'ffprobe', found: false },
+                        ffmpeg: { name: 'ffmpeg', found: false },
+                        allReady: false,
                     },
                     allReady: false,
                 },

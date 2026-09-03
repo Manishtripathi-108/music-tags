@@ -2,8 +2,8 @@
 
 import { Editable as ArkEditable } from '@ark-ui/react/editable';
 import Icon from '@/components/ui/Icon';
-import { cn } from '@/lib/utils';
-import { DISABLED, FIELD_CONTROL_STYLES } from '@/lib/styles/tailwind.helpers';
+import { cn } from './cn';
+import { DISABLED, FIELD_CONTROL_STYLES } from './tailwind.helpers';
 
 export function Editable({ ref, className, ...props }: React.ComponentProps<typeof ArkEditable.Root>) {
     return (

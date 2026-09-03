@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Checkbox as ArkCheckbox } from '@ark-ui/react/checkbox';
 
-import { cn } from '@/lib/utils';
+import { cn } from './cn';
 
 function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
     return (

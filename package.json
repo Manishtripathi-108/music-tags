@@ -7,7 +7,8 @@
         "build": "next build",
         "start": "next start",
         "format": "prettier --write .",
-        "lint": "eslint"
+        "lint": "eslint",
+        "test": "vitest run"
     },
     "dependencies": {
         "@ark-ui/react": "^5.38.2",
@@ -43,6 +44,7 @@
         "prettier": "^3.9.6",
         "prettier-plugin-tailwindcss": "^0.8.1",
         "tailwindcss": "^4",
-        "typescript": "^5"
+        "typescript": "^5",
+        "vitest": "^4.1.11"
     }
 }

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { globalLyricsNormalizer } from '@/core/lyrics/lrcNormalizer';
-import {
-    NormalizeAllLyricsRequestSchema,
-    type NormalizeAllLyricsApiResponse,
-    type ScanProgressEvent,
-} from '@/types/audio';
-import { ensureDatabaseInitialized } from '@/db/init';
+import { globalLyricsNormalizer } from '@/services/lyrics/lyrics-service';
+import { NormalizeAllLyricsRequestSchema } from '@/domain/lyrics/schemas';
+import { type NormalizeAllLyricsApiResponse } from '@/domain/media/dto';
+import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
+import { createProgressEventStream } from '@/infrastructure/http/sse';
 
 export async function POST(
     request: NextRequest
@@ -53,34 +51,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Missing jobId parameter' }, { status: 400 });
     }
 
-    const encoder = new TextEncoder();
-
-    const stream = new ReadableStream({
-        start(controller) {
-            const listener = (event: ScanProgressEvent) => {
-                try {
-                    const payload = `data: ${JSON.stringify(event)}\n\n`;
-                    controller.enqueue(encoder.encode(payload));
-
-                    if (event.status === 'COMPLETED' || event.status === 'FAILED' || event.status === 'CANCELLED') {
-                        controller.close();
-                    }
-                } catch {
-                    try {
-                        controller.close();
-                    } catch {}
-                }
-            };
-
-            globalLyricsNormalizer.subscribe(jobId, listener);
-        },
-    });
-
-    return new Response(stream, {
-        headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache, no-transform',
-            Connection: 'keep-alive',
-        },
+    return createProgressEventStream({
+        subscribe: (listener) => globalLyricsNormalizer.subscribe(jobId, listener),
+        unsubscribe: (listener) => globalLyricsNormalizer.unsubscribe(jobId, listener),
     });
 }

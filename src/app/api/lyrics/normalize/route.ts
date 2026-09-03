@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db/client';
-import { audioFiles, canonicalAudioMetadata } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { normalizeTrackLrcFile } from '@/core/lyrics/lrcNormalizer';
-import { NormalizeLrcRequestSchema, type NormalizeLrcApiResponse } from '@/types/audio';
-import { ensureDatabaseInitialized } from '@/db/init';
+import { db } from '@/infrastructure/database/client';
+import { audioFiles, canonicalAudioMetadata } from '@/infrastructure/database/schema';
+import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
+import { normalizeTrackLrcFile } from '@/services/lyrics/lyrics-service';
+import { NormalizeLrcRequestSchema } from '@/domain/lyrics/schemas';
+import { sanitizeFilenameTitle } from '@/domain/media/mappers';
+import { type NormalizeLrcApiResponse } from '@/domain/media/dto';
 
 export async function POST(
     request: NextRequest
@@ -42,7 +44,7 @@ export async function POST(
             id: file.id,
             filename: file.filename,
             filePath: file.path,
-            title: meta?.title || file.filename.replace(/\.[^/.]+$/, ''),
+            title: meta?.title || sanitizeFilenameTitle(file.filename),
             album: meta?.album || '',
             artist: meta?.artist || '',
             albumArtist: meta?.albumArtist || '',
