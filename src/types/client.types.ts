@@ -2,7 +2,8 @@ import IconSet from '@/constants/icons.constants';
 import { BinaryStatus } from '@/core/binaries/paths';
 
 export type T_IconType = keyof typeof IconSet;
-type BinaryVerificationResult = {
+
+export type BinaryVerificationResult = {
     exiftool: BinaryStatus;
     ffprobe: BinaryStatus;
     ffmpeg: BinaryStatus;
@@ -11,7 +12,8 @@ type BinaryVerificationResult = {
 
 export type MediaStatusResponse = {
     binaries: BinaryVerificationResult;
-    stats: {
+    stats?: {
         totalTracks: number;
     };
+    allReady: boolean;
 };

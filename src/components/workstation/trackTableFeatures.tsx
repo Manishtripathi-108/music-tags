@@ -86,6 +86,8 @@ export const columns = col.columns([
             const meta = table.options.meta as TrackTableMeta;
             const isActive = meta.activeTrackId === row.original.id;
             const track = row.original;
+            const isLrc = track.lyricsType === 'synced' || /\[\d{2}:\d{2}/.test(track.lyrics || '');
+            const hasLyrics = Boolean(track.lyrics || track.lyricsUnsynced || track.lyricsSyncedJson);
 
             return (
                 <div className="flex min-w-37.5 flex-1 items-center gap-1.5 truncate px-2">
@@ -95,6 +97,22 @@ export const columns = col.columns([
                             isActive ? 'text-primary-foreground' : track.hasCoverArt ? 'text-success' : 'text-destructive'
                         }`}
                     />
+
+                    {hasLyrics && (
+                        <span
+                            title={isLrc ? 'Synced Lyrics (LRC)' : 'Unsynced Lyrics'}
+                            className={`rounded px-1 py-0.5 text-[9px] leading-none font-mono shrink-0 ${
+                                isLrc
+                                    ? isActive
+                                        ? 'bg-primary-foreground/20 text-primary-foreground border border-primary-foreground/30'
+                                        : 'bg-primary/15 text-primary border border-primary/20'
+                                    : isActive
+                                      ? 'bg-primary-foreground/10 text-primary-foreground/80'
+                                      : 'bg-muted text-muted-foreground border border-border'
+                            }`}>
+                            {isLrc ? 'LRC' : 'TXT'}
+                        </span>
+                    )}
 
                     <InlineTableCellEditable
                         required
@@ -217,6 +235,30 @@ export const columns = col.columns([
                     className={`px-1 py-0 text-[9px] ${isActive ? 'border-foreground' : ''}`}>
                     {track.codec ? track.codec.toUpperCase() : track.extension.replace('.', '').toUpperCase()}
                 </Badge>
+            );
+        },
+    }),
+
+    col.accessor('bitDepth', {
+        id: 'bitDepth',
+        header: 'BIT',
+        sortFn: 'basic',
+        cell: ({ getValue, row, table }) => {
+            const meta = table.options.meta as TrackTableMeta;
+            const isActive = meta.activeTrackId === row.original.id;
+            const depth = getValue();
+
+            return (
+                <span
+                    className={`text-[10px] font-mono ${
+                        isActive
+                            ? 'text-primary-foreground/90'
+                            : depth && depth > 16
+                              ? 'text-primary font-semibold'
+                              : 'text-muted-foreground'
+                    }`}>
+                    {depth ? `${depth}-bit` : '-'}
+                </span>
             );
         },
     }),

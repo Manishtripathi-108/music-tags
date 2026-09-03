@@ -101,3 +101,7 @@ public/swe-worker*
 
 # Local development files
 **/dev
+
+**.db
+
+**/.cache

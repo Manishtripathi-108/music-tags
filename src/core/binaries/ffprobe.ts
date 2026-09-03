@@ -25,6 +25,7 @@ export interface FFprobeAudioResult {
         bits_per_raw_sample?: string;
         bit_rate?: string;
         duration?: string;
+        disposition?: Record<string, number>;
         tags?: Record<string, string>;
     }>;
 }
@@ -32,7 +33,7 @@ export interface FFprobeAudioResult {
 export async function probeAudioFile(filePath: string, timeoutMs = 10000): Promise<FFprobeAudioResult | null> {
     return new Promise((resolve) => {
         const canonical = toCanonicalPath(filePath);
-        const args = ['-v', 'error', '-show_format', '-show_streams', '-select_streams', 'a:0', '-print_format', 'json', canonical];
+        const args = ['-v', 'error', '-show_format', '-show_streams', '-print_format', 'json', canonical];
 
         const child = spawn('ffprobe', args, {
             shell: false,

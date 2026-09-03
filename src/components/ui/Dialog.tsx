@@ -8,8 +8,6 @@ import { Portal } from '@ark-ui/react/portal';
 import Icon from '@/components/ui/Icon';
 import { cn } from '@/lib/utils/cn';
 
-/* ────────────────────────────── Style constants ─────────────────────────────── */
-
 const backdropStyles = [
     'fixed inset-0 z-50',
     'bg-black/60 backdrop-blur-sm',

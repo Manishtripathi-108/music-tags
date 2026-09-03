@@ -4,8 +4,6 @@ import { type VariantProps, cva } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils/cn';
 
-/* ---------------------------------- Variants --------------------------------- */
-
 const badgeVariants = cva(['inline-flex items-center justify-center font-medium transition-colors select-none', 'antialiased whitespace-nowrap'], {
     variants: {
         variant: {
@@ -43,12 +41,11 @@ const badgeVariants = cva(['inline-flex items-center justify-center font-medium 
     },
 });
 
-/* ------------------------------------ Types ----------------------------------- */
-
 export type BadgeProps = ComponentPropsWithRef<'span'> & VariantProps<typeof badgeVariants>;
 
-/* ---------------------------------- Component --------------------------------- */
-
+/**
+ * Pill and label badge component.
+ */
 export const Badge = ({ ref, className, size, variant, shape, stroke, children, ...props }: BadgeProps) => {
     return (
         <span

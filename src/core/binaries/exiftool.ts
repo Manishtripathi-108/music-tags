@@ -122,7 +122,7 @@ export class ExifToolProcess {
      */
     public async readMetadata(filePath: string): Promise<Record<string, unknown>> {
         const canonical = toCanonicalPath(filePath);
-        const rawOutput = await this.execute(['-json', '-G', '-n', canonical]);
+        const rawOutput = await this.execute(['-json', '-G', canonical]);
         if (!rawOutput) return {};
         try {
             const parsed = JSON.parse(rawOutput);
@@ -141,7 +141,7 @@ export class ExifToolProcess {
     public async readBatchMetadata(filePaths: string[]): Promise<Record<string, unknown>[]> {
         if (filePaths.length === 0) return [];
         const canonicalPaths = filePaths.map(toCanonicalPath);
-        const rawOutput = await this.execute(['-json', '-G', '-n', ...canonicalPaths]);
+        const rawOutput = await this.execute(['-json', '-G', ...canonicalPaths]);
         if (!rawOutput) return [];
         try {
             const parsed = JSON.parse(rawOutput);

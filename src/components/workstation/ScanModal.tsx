@@ -9,8 +9,9 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, Dia
 import { Field, FieldError, FieldInput, FieldLabel, FieldRequiredIndicator } from '@/components/ui/Field';
 import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
 import { Checkbox } from '@/components/ui/Checkbox';
+import axios from 'axios';
 import { useAudioStore } from '@/store/audioStore';
-import { type ScanFolderRequest, ScanFolderRequestSchema } from '@/types/audio';
+import { type ScanFolderRequest, ScanFolderRequestSchema, type ScanApiResponse } from '@/types/audio';
 
 export function ScanModal() {
     const { isScanModalOpen, setIsScanModalOpen, setActiveScanJob, fetchTracks } = useAudioStore();
@@ -35,63 +36,36 @@ export function ScanModal() {
         setServerError(null);
 
         try {
-            // Simulated scan progress for immediate UI interactivity
             setIsScanModalOpen(false);
             reset();
 
             setActiveScanJob({
                 status: 'SCANNING',
-                scannedFiles: 42,
+                scannedFiles: 0,
                 extractedFiles: 0,
-                totalEstimated: 128,
-                filesPerSecond: 18,
+                totalEstimated: 0,
+                filesPerSecond: 0,
+                currentDirectory: values.folderPath,
             });
 
-            setTimeout(() => {
-                setActiveScanJob({
-                    status: 'EXTRACTING',
-                    scannedFiles: 128,
-                    extractedFiles: 84,
-                    totalEstimated: 128,
-                    filesPerSecond: 24,
-                });
-            }, 1200);
-
-            setTimeout(() => {
-                setActiveScanJob({
-                    status: 'COMPLETED',
-                    scannedFiles: 128,
-                    extractedFiles: 128,
-                    totalEstimated: 128,
-                    filesPerSecond: 26,
-                });
-                fetchTracks();
-            }, 2400);
-
-            // Attempt real scan API if server is connected
-            try {
-                const res = await fetch('/api/scan', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(values),
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.jobId) {
-                        const eventSource = new EventSource(`/api/scan?jobId=${data.jobId}`);
-                        eventSource.onmessage = (event) => {
-                            try {
-                                const progress = JSON.parse(event.data);
-                                setActiveScanJob(progress);
-                                if (progress.status === 'COMPLETED' || progress.status === 'FAILED') {
-                                    eventSource.close();
-                                    fetchTracks();
-                                }
-                            } catch {}
-                        };
-                    }
-                }
-            } catch {}
+            const { data } = await axios.post<ScanApiResponse>('/api/scan', values);
+            if (data.jobId) {
+                const eventSource = new EventSource(`/api/scan?jobId=${data.jobId}`);
+                eventSource.onmessage = (event) => {
+                    try {
+                        const progress = JSON.parse(event.data);
+                        setActiveScanJob(progress);
+                        if (progress.status === 'COMPLETED' || progress.status === 'FAILED' || progress.status === 'CANCELLED') {
+                            eventSource.close();
+                            fetchTracks();
+                        }
+                    } catch {}
+                };
+                eventSource.onerror = () => {
+                    eventSource.close();
+                    fetchTracks();
+                };
+            }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             setServerError(msg);

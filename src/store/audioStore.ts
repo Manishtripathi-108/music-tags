@@ -1,164 +1,21 @@
 import { create } from 'zustand';
-import { type ActiveTrackDetail, type ScanJob, type Track } from '@/types/audio';
-
-const INITIAL_TRACKS: Track[] = [
-    {
-        id: 'track-1',
-        filename: '01 - Solar Flare.flac',
-        filePath: 'E:/Music/Electronic/Solar Flare.flac',
-        title: 'Solar Flare',
-        artist: 'Cyberwave',
-        albumArtist: 'Cyberwave',
-        album: 'Neon Horizon',
-        trackNumber: 1,
-        discNumber: 1,
-        year: 2024,
-        genre: 'Synthwave',
-        bpm: 128.0,
-        initialKey: '8A',
-        comment: 'Mastered for 24-bit studio release',
-        durationSeconds: 245,
-        bitrateKbps: 1042,
-        sampleRateHz: 48000,
-        channels: 2,
-        channelLayout: 'stereo',
-        bitDepth: 24,
-        codec: 'flac',
-        extension: '.flac',
-        lossless: true,
-        hasCoverArt: true,
-    },
-    {
-        id: 'track-2',
-        filename: '02 - Midnight Transit.flac',
-        filePath: 'E:/Music/Electronic/Midnight Transit.flac',
-        title: 'Midnight Transit',
-        artist: 'Cyberwave',
-        albumArtist: 'Cyberwave',
-        album: 'Neon Horizon',
-        trackNumber: 2,
-        discNumber: 1,
-        year: 2024,
-        genre: 'Synthwave',
-        bpm: 122.5,
-        initialKey: '11B',
-        comment: 'Features analog Juno-106 synthesis',
-        durationSeconds: 310,
-        bitrateKbps: 980,
-        sampleRateHz: 44100,
-        channels: 2,
-        channelLayout: 'stereo',
-        bitDepth: 16,
-        codec: 'flac',
-        extension: '.flac',
-        lossless: true,
-        hasCoverArt: true,
-    },
-    {
-        id: 'track-3',
-        filename: '03 - Quantum Horizon.mp3',
-        filePath: 'E:/Music/Electronic/Quantum Horizon.mp3',
-        title: 'Quantum Horizon',
-        artist: 'Aura Vector',
-        albumArtist: 'Aura Vector',
-        album: 'Dimension 9',
-        trackNumber: 3,
-        discNumber: 1,
-        year: 2023,
-        genre: 'Ambient Techno',
-        bpm: 134.0,
-        initialKey: '4A',
-        comment: 'Live club recording',
-        durationSeconds: 378,
-        bitrateKbps: 320,
-        sampleRateHz: 44100,
-        channels: 2,
-        channelLayout: 'stereo',
-        bitDepth: 16,
-        codec: 'mp3',
-        extension: '.mp3',
-        lossless: false,
-        hasCoverArt: true,
-    },
-    {
-        id: 'track-4',
-        filename: '04 - Obsidian Groove.flac',
-        filePath: 'E:/Music/Jazz/Obsidian Groove.flac',
-        title: 'Obsidian Groove',
-        artist: 'The Velvet Trio',
-        albumArtist: 'The Velvet Trio',
-        album: 'Blue Notes & Amber',
-        trackNumber: 4,
-        discNumber: 1,
-        year: 2022,
-        genre: 'Modern Jazz',
-        bpm: 96.0,
-        initialKey: '6B',
-        comment: 'Direct DSD to FLAC conversion',
-        durationSeconds: 290,
-        bitrateKbps: 1250,
-        sampleRateHz: 96000,
-        channels: 2,
-        channelLayout: 'stereo',
-        bitDepth: 24,
-        codec: 'flac',
-        extension: '.flac',
-        lossless: true,
-        hasCoverArt: false,
-    },
-    {
-        id: 'track-5',
-        filename: '05 - Starlight Echoes.mp3',
-        filePath: 'E:/Music/Ambient/Starlight Echoes.mp3',
-        title: 'Starlight Echoes',
-        artist: 'Nova Drift',
-        albumArtist: 'Nova Drift',
-        album: 'Deep Space Reverie',
-        trackNumber: 5,
-        discNumber: 1,
-        year: 2025,
-        genre: 'Ambient',
-        bpm: 85.0,
-        initialKey: '2A',
-        comment: 'Binaural panning mix',
-        durationSeconds: 412,
-        bitrateKbps: 320,
-        sampleRateHz: 48000,
-        channels: 2,
-        channelLayout: 'stereo',
-        bitDepth: 16,
-        codec: 'mp3',
-        extension: '.mp3',
-        lossless: false,
-        hasCoverArt: true,
-    },
-    {
-        id: 'track-6',
-        filename: '06 - Velvet Skyline.wav',
-        filePath: 'E:/Music/Electronic/Velvet Skyline.wav',
-        title: 'Velvet Skyline',
-        artist: 'Lofi Horizons',
-        albumArtist: 'Lofi Horizons',
-        album: 'Late Night Chill',
-        trackNumber: 6,
-        discNumber: 1,
-        year: 2024,
-        genre: 'Lo-Fi Chill',
-        bpm: 78.0,
-        initialKey: '5B',
-        comment: 'Broadcast WAV with BWF chunk',
-        durationSeconds: 198,
-        bitrateKbps: 1411,
-        sampleRateHz: 44100,
-        channels: 2,
-        channelLayout: 'stereo',
-        bitDepth: 16,
-        codec: 'wav',
-        extension: '.wav',
-        lossless: true,
-        hasCoverArt: false,
-    },
-];
+import axios from 'axios';
+import {
+    type ActiveTrackDetail,
+    type DuplicateCluster,
+    type DuplicateFindApiResponse,
+    type DuplicateMatchMode,
+    type NormalizeAllLyricsApiResponse,
+    type NormalizeLrcApiResponse,
+    type RemoveFolderApiResponse,
+    type ResolveDuplicatesApiResponse,
+    type ScanJob,
+    type ScanProgressEvent,
+    type StatusApiResponse,
+    type Track,
+    type TrackDetailApiResponse,
+    type TracksApiResponse,
+} from '@/types/audio';
 
 interface AudioStoreState {
     tracks: Track[];
@@ -173,42 +30,43 @@ interface AudioStoreState {
     activeFilter: string;
     isScanModalOpen: boolean;
     activeScanJob: ScanJob | null;
+    systemStatus: StatusApiResponse | null;
+    isLoadingStatus: boolean;
+    isNormalizingLyrics: boolean;
 
-    // Actions
+    duplicateClusters: DuplicateCluster[];
+    isDuplicateModalOpen: boolean;
+    isLoadingDuplicates: boolean;
+
     setTracks: (tracks: Track[]) => void;
     selectTrack: (id: string, isMulti?: boolean, isRange?: boolean) => void;
+    fetchTrackDetail: (id: string) => Promise<void>;
     setSorting: (column: string, order: 'asc' | 'desc') => void;
     setSearchQuery: (query: string) => void;
     setActiveFilter: (filter: string) => void;
     setIsScanModalOpen: (open: boolean) => void;
     setActiveScanJob: (job: ScanJob | null) => void;
     fetchTracks: () => Promise<void>;
+    fetchSystemStatus: () => Promise<void>;
+    removeFolder: (directory: string, syncBeforeDelete: boolean) => Promise<RemoveFolderApiResponse>;
     updateTrackInline: (id: string, fields: Partial<Track>) => void;
+    normalizeTrackLrc: (trackId: string, lrcContent?: string) => Promise<NormalizeLrcApiResponse>;
+    normalizeAllLyrics: (folderPath?: string) => Promise<void>;
+
+    setIsDuplicateModalOpen: (open: boolean) => void;
+    fetchDuplicates: (mode?: DuplicateMatchMode) => Promise<void>;
+    resolveDuplicates: (removeTrackIds: string[], deleteFiles?: boolean) => Promise<ResolveDuplicatesApiResponse>;
 }
 
 export const useAudioStore = create<AudioStoreState>((set, get) => ({
-    tracks: INITIAL_TRACKS,
-    totalTracks: INITIAL_TRACKS.length,
+    tracks: [],
+    totalTracks: 0,
     isLoadingTracks: false,
-    selectedTrackIds: new Set([INITIAL_TRACKS[0].id]),
-    activeTrackId: INITIAL_TRACKS[0].id,
+    selectedTrackIds: new Set<string>(),
+    activeTrackId: null,
     activeTrackDetail: {
-        metadata: INITIAL_TRACKS[0],
-        rawTags: [
-            { tag: 'Title', group: 'ID3v2.4', value: 'Solar Flare' },
-            { tag: 'Artist', group: 'ID3v2.4', value: 'Cyberwave' },
-            { tag: 'Album', group: 'ID3v2.4', value: 'Neon Horizon' },
-            { tag: 'TrackNumber', group: 'ID3v2.4', value: '1' },
-            { tag: 'Year', group: 'ID3v2.4', value: '2024' },
-            { tag: 'Genre', group: 'ID3v2.4', value: 'Synthwave' },
-            { tag: 'BPM', group: 'ID3v2.4', value: '128.0' },
-            { tag: 'InitialKey', group: 'ID3v2.4', value: '8A' },
-            { tag: 'AudioBitrate', group: 'Composite', value: '1042 kbps' },
-            { tag: 'SampleRate', group: 'Composite', value: '48000 Hz' },
-            { tag: 'BitsPerSample', group: 'Composite', value: '24' },
-            { tag: 'Channels', group: 'Composite', value: '2' },
-            { tag: 'Duration', group: 'Composite', value: '04:05' },
-        ],
+        metadata: null,
+        rawTags: [],
         isLoading: false,
     },
     sortBy: 'trackNumber',
@@ -217,16 +75,33 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     activeFilter: 'all',
     isScanModalOpen: false,
     activeScanJob: null,
+    systemStatus: null,
+    isLoadingStatus: false,
+    isNormalizingLyrics: false,
+
+    duplicateClusters: [],
+    isDuplicateModalOpen: false,
+    isLoadingDuplicates: false,
 
     setTracks: (tracks) => set({ tracks, totalTracks: tracks.length }),
 
-    selectTrack: (id: string, isMulti = false, _isRange = false) => {
-        const { tracks, selectedTrackIds } = get();
+    selectTrack: (id: string, isMulti = false, isRange = false) => {
+        const { tracks, selectedTrackIds, activeTrackId } = get();
         const clickedTrack = tracks.find((t) => t.id === id);
         if (!clickedTrack) return;
 
         let newSelected = new Set(selectedTrackIds);
-        if (isMulti) {
+
+        if (isRange && activeTrackId) {
+            const fromIndex = tracks.findIndex((t) => t.id === activeTrackId);
+            const toIndex = tracks.findIndex((t) => t.id === id);
+            if (fromIndex !== -1 && toIndex !== -1) {
+                const start = Math.min(fromIndex, toIndex);
+                const end = Math.max(fromIndex, toIndex);
+                const rangeIds = tracks.slice(start, end + 1).map((t) => t.id);
+                newSelected = isMulti ? new Set([...selectedTrackIds, ...rangeIds]) : new Set(rangeIds);
+            }
+        } else if (isMulti) {
             if (newSelected.has(id)) {
                 newSelected.delete(id);
             } else {
@@ -236,7 +111,6 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             newSelected = new Set([id]);
         }
 
-        // Generate raw tags for inspector view
         const rawTags: { tag: string; group: string; value: string | number }[] = [
             { tag: 'Title', group: 'Metadata', value: clickedTrack.title || '-' },
             { tag: 'Artist', group: 'Metadata', value: clickedTrack.artist || '-' },
@@ -246,6 +120,10 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             { tag: 'Genre', group: 'Metadata', value: clickedTrack.genre || '-' },
             { tag: 'BPM', group: 'Audio', value: clickedTrack.bpm ?? '-' },
             { tag: 'InitialKey', group: 'Audio', value: clickedTrack.initialKey || '-' },
+            { tag: 'Composer', group: 'Publishing', value: clickedTrack.composer || '-' },
+            { tag: 'Publisher', group: 'Publishing', value: clickedTrack.publisher || '-' },
+            { tag: 'ISRC', group: 'Identifiers', value: clickedTrack.isrc || '-' },
+            { tag: 'LyricsType', group: 'Lyrics', value: clickedTrack.lyricsType || 'none' },
             { tag: 'DurationSeconds', group: 'Stream', value: clickedTrack.durationSeconds ?? '-' },
             { tag: 'BitrateKbps', group: 'Stream', value: clickedTrack.bitrateKbps ?? '-' },
             { tag: 'SampleRateHz', group: 'Stream', value: clickedTrack.sampleRateHz ?? '-' },
@@ -259,14 +137,39 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             activeTrackDetail: {
                 metadata: clickedTrack,
                 rawTags,
-                isLoading: false,
+                isLoading: true,
             },
         });
+
+        get().fetchTrackDetail(id);
+    },
+
+    fetchTrackDetail: async (id: string) => {
+        try {
+            const { data } = await axios.get<TrackDetailApiResponse>(`/api/files/${id}/tags`);
+            if (get().activeTrackId === id) {
+                set((state) => ({
+                    activeTrackDetail: {
+                        metadata: data.metadata || state.activeTrackDetail.metadata,
+                        rawTags: data.rawTags && data.rawTags.length > 0 ? data.rawTags : state.activeTrackDetail.rawTags,
+                        isLoading: false,
+                    },
+                }));
+            }
+        } catch (err) {
+            console.error('Failed to fetch track detail:', err);
+            if (get().activeTrackId === id) {
+                set((state) => ({
+                    activeTrackDetail: {
+                        ...state.activeTrackDetail,
+                        isLoading: false,
+                    },
+                }));
+            }
+        }
     },
 
     setSorting: (column: string, order: 'asc' | 'desc') => {
-        // TanStack Table's sortedRowModel handles the actual sorting.
-        // The store just persists the sort configuration.
         set({ sortBy: column, sortOrder: order });
     },
 
@@ -281,17 +184,54 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     fetchTracks: async () => {
         set({ isLoadingTracks: true });
         try {
-            const res = await fetch('/api/tracks');
-            if (res.ok) {
-                const data = await res.json();
-                if (Array.isArray(data.tracks)) {
-                    set({ tracks: data.tracks, totalTracks: data.tracks.length });
+            const { data } = await axios.get<TracksApiResponse>('/api/tracks');
+            const fetchedTracks = data?.tracks || [];
+            const { activeTrackId, selectTrack } = get();
+
+            set({ tracks: fetchedTracks, totalTracks: fetchedTracks.length });
+
+            if (fetchedTracks.length > 0) {
+                if (!activeTrackId || !fetchedTracks.some((t) => t.id === activeTrackId)) {
+                    selectTrack(fetchedTracks[0].id);
+                } else {
+                    const currentActive = fetchedTracks.find((t) => t.id === activeTrackId);
+                    if (currentActive) {
+                        selectTrack(currentActive.id);
+                    }
                 }
+            } else {
+                set({
+                    selectedTrackIds: new Set<string>(),
+                    activeTrackId: null,
+                    activeTrackDetail: { metadata: null, rawTags: [], isLoading: false },
+                });
             }
-        } catch {
-            // Keep existing in-memory tracks if endpoint not present
+        } catch (err) {
+            console.error('Failed to fetch tracks:', err);
         } finally {
             set({ isLoadingTracks: false });
+        }
+    },
+
+    fetchSystemStatus: async () => {
+        set({ isLoadingStatus: true });
+        try {
+            const { data } = await axios.get<StatusApiResponse>('/api/status');
+            set({ systemStatus: data });
+        } catch (err) {
+            console.error('Failed to fetch system status:', err);
+            set({
+                systemStatus: {
+                    binaries: {
+                        exiftool: { found: false },
+                        ffprobe: { found: false },
+                        ffmpeg: { found: false },
+                    },
+                    allReady: false,
+                },
+            });
+        } finally {
+            set({ isLoadingStatus: false });
         }
     },
 
@@ -304,7 +244,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             return track;
         });
 
-        const activeTrack = activeTrackId === id ? { ...(activeTrackDetail.metadata || {}), ...fields } as Track : activeTrackDetail.metadata;
+        const activeTrack = activeTrackId === id ? ({ ...(activeTrackDetail.metadata || {}), ...fields } as Track) : activeTrackDetail.metadata;
 
         set({
             tracks: updatedTracks,
@@ -314,4 +254,135 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             },
         });
     },
+
+    removeFolder: async (directory: string, syncBeforeDelete: boolean) => {
+        const { data } = await axios.post<RemoveFolderApiResponse>('/api/folders/remove', {
+            directory,
+            syncBeforeDelete,
+        });
+
+        const { activeFilter, setActiveFilter, fetchTracks } = get();
+        if (activeFilter === `folder:${directory}`) {
+            setActiveFilter('all');
+        }
+
+        await fetchTracks();
+        return data;
+    },
+
+    normalizeTrackLrc: async (trackId: string, lrcContent?: string) => {
+        const { data } = await axios.post<NormalizeLrcApiResponse>('/api/lyrics/normalize', {
+            trackId,
+            lrcContent,
+        });
+
+        const { updateTrackInline, fetchTracks } = get();
+        if (data.success && data.normalizedLrc) {
+            updateTrackInline(trackId, {
+                lyrics: data.normalizedLrc,
+                lyricsType: 'synced',
+                lyricsSyncedJson: JSON.stringify(data.normalizedLrc),
+            });
+            await fetchTracks();
+        }
+
+        return data;
+    },
+
+    normalizeAllLyrics: async (folderPath?: string) => {
+        const { isNormalizingLyrics, fetchTracks } = get();
+        if (isNormalizingLyrics) return;
+
+        set({ isNormalizingLyrics: true });
+
+        try {
+            const { data } = await axios.post<NormalizeAllLyricsApiResponse>(
+                '/api/lyrics/normalize-all',
+                { folderPath }
+            );
+
+            if (!data.success || !data.jobId) {
+                set({ isNormalizingLyrics: false });
+                return;
+            }
+
+            const jobId = data.jobId;
+            const eventSource = new EventSource(`/api/lyrics/normalize-all?jobId=${jobId}`);
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const progress: ScanProgressEvent = JSON.parse(event.data);
+                    set({
+                        activeScanJob: {
+                            jobId: progress.jobId,
+                            status: progress.status,
+                            scannedFiles: progress.scannedFiles,
+                            extractedFiles: progress.extractedFiles,
+                            totalEstimated: progress.totalEstimated,
+                            currentFile: progress.currentFile,
+                            currentDirectory: progress.currentDirectory,
+                            filesPerSecond: progress.filesPerSecond,
+                            errorMessage: progress.errorMessage,
+                        },
+                    });
+
+                    if (
+                        progress.status === 'COMPLETED' ||
+                        progress.status === 'FAILED' ||
+                        progress.status === 'CANCELLED'
+                    ) {
+                        eventSource.close();
+                        set({ isNormalizingLyrics: false });
+                        fetchTracks().catch(console.error);
+                    }
+                } catch (err) {
+                    console.error('Error parsing lyrics progress event:', err);
+                }
+            };
+
+            eventSource.onerror = () => {
+                eventSource.close();
+                set({ isNormalizingLyrics: false });
+                fetchTracks().catch(console.error);
+            };
+        } catch (error) {
+            console.error('Failed to start batch LRC normalization:', error);
+            set({ isNormalizingLyrics: false });
+        }
+    },
+
+    setIsDuplicateModalOpen: (open: boolean) => set({ isDuplicateModalOpen: open }),
+
+    fetchDuplicates: async (mode = 'all') => {
+        set({ isLoadingDuplicates: true });
+        try {
+            const { data } = await axios.get<DuplicateFindApiResponse>(`/api/duplicates?mode=${mode}`);
+            set({ duplicateClusters: data.clusters || [] });
+        } catch (err) {
+            console.error('Failed to fetch duplicates:', err);
+            set({ duplicateClusters: [] });
+        } finally {
+            set({ isLoadingDuplicates: false });
+        }
+    },
+
+    resolveDuplicates: async (removeTrackIds: string[], deleteFiles = false) => {
+        try {
+            const { data } = await axios.post<ResolveDuplicatesApiResponse>('/api/duplicates', {
+                removeTrackIds,
+                deleteFiles,
+            });
+
+            // Refresh tracks and duplicates
+            await get().fetchTracks();
+            await get().fetchDuplicates();
+
+            return data;
+        } catch (err) {
+            console.error('Failed to resolve duplicates:', err);
+            throw err;
+        }
+    },
 }));
+
+export default useAudioStore;

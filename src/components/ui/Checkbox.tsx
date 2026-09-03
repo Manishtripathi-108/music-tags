@@ -5,8 +5,6 @@ import { Checkbox as ArkCheckbox } from '@ark-ui/react/checkbox';
 
 import { cn } from '@/lib/utils';
 
-/* ---------------------------------- Icons ---------------------------------- */
-
 function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
     return (
         <svg
@@ -38,8 +36,6 @@ function MinusIcon(props: React.SVGProps<SVGSVGElement>) {
         </svg>
     );
 }
-
-/* ------------------------------- Primitives ------------------------------- */
 
 export function CheckboxRoot({ ref, className, ...props }: React.ComponentProps<typeof ArkCheckbox.Root>) {
     return (
@@ -119,8 +115,9 @@ export function CheckboxGroup({ ref, className, ...props }: React.ComponentProps
 export const CheckboxGroupProvider = ArkCheckbox.GroupProvider;
 export const CheckboxContext = ArkCheckbox.Context;
 
-/* -------------------------------- Composite -------------------------------- */
-
+/**
+ * High-level checkbox component with integrated label and description support.
+ */
 export interface CheckboxProps extends Omit<React.ComponentProps<typeof ArkCheckbox.Root>, 'children'> {
     label?: React.ReactNode;
     description?: React.ReactNode;

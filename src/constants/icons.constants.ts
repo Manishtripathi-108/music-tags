@@ -1,12 +1,10 @@
 export enum IconSet {
-    /* -------------------------------- CUSTOM -------------------------------- */
     appLogo = 'custom:APP_LOGO',
     anime = 'custom:anime',
     manga = 'custom:manga',
     musicConvert = 'custom:musicConvert',
 
     '3d' = 'file-icons:3d-model',
-    /* ------------------------------------ A ----------------------------------- */
     apple = 'jam:apple',
     add = 'solar:add-circle-outline',
     addSquare = 'solar:add-square-outline',
@@ -18,13 +16,11 @@ export enum IconSet {
     audioFile = 'solar:file-music-outline',
     archive = 'solar:zip-file-bold',
 
-    /* ------------------------------------ B ----------------------------------- */
     bookmark = 'solar:bookmark-outline',
     bookmarkFilled = 'solar:bookmark-bold',
     box = 'solar:box-outline',
     broom = 'game-icons:broom',
 
-    /* ------------------------------------ C ----------------------------------- */
     calendar = 'solar:calendar-bold',
     calendarAdd = 'solar:calendar-add-bold',
     calendarMinimalistic = 'solar:calendar-minimalistic-outline',
@@ -46,7 +42,6 @@ export enum IconSet {
     copy = 'solar:copy-outline',
     copySuccess = 'solar:copy-check-outline',
 
-    /* ------------------------------------ D ----------------------------------- */
     database = 'solar:database-outline',
     databaseAdd = 'solar:database-add-outline',
 
@@ -63,7 +58,6 @@ export enum IconSet {
 
     draw = 'fa-solid:handshake',
 
-    /* ------------------------------------ E ----------------------------------- */
     edit = 'solar:pen-new-square-outline',
     editImage = 'solar:gallery-edit-outlined',
     editProfile = 'fluent:person-edit-24-filled',
@@ -79,7 +73,6 @@ export enum IconSet {
     eye = 'line-md:watch-loop',
     eyeClose = 'line-md:watch-off-loop',
 
-    /* ------------------------------------ F ----------------------------------- */
     file = 'solar:file-outline',
     fileCheck = 'solar:file-check-outline',
     fileCorrupted = 'solar:file-corrupted-outline',
@@ -104,7 +97,6 @@ export enum IconSet {
     font = 'hugeicons:tiff-02',
     fullscreen = 'solar:full-screen-bold',
 
-    /* ------------------------------------ G ----------------------------------- */
     gallery = 'solar:gallery-bold',
     galleryRemove = 'solar:gallery-remove-bold',
 
@@ -114,18 +106,13 @@ export enum IconSet {
     google = 'logos:google-icon',
     github = 'line-md:github-loop',
 
-    /* ------------------------------------ H ----------------------------------- */
     heart = 'solar:heart-angle-bold',
     heartFilled = 'solar:heart-bold',
     heartShine = 'solar:heart-shine-bold',
 
-    /* ------------------------------------ I ----------------------------------- */
     info = 'solar:info-circle-bold',
     infoOutlined = 'solar:info-circle-outline',
 
-    /* ------------------------------------ J ----------------------------------- */
-
-    /* ------------------------------------ L ----------------------------------- */
     left = 'solar:alt-arrow-left-outline',
     leftArrow = 'solar:arrow-left-bold',
     leftCircle = 'solar:arrow-left-circle-outline',
@@ -148,7 +135,6 @@ export enum IconSet {
 
     lyrics = 'solar:microphone-3-bold',
 
-    /* ------------------------------------ M ----------------------------------- */
     markup = 'garden:markup-stroke-12',
 
     menu = 'hugeicons:menu-02',
@@ -177,7 +163,6 @@ export enum IconSet {
 
     musicQueue = 'mdi:queue-music',
 
-    /* ------------------------------------ N ----------------------------------- */
     next = 'solar:skip-next-bold',
     nextCircle = 'solar:rewind-forward-circle-outline',
 
@@ -186,11 +171,9 @@ export enum IconSet {
     notification = 'solar:bell-outline',
     notificationUnread = 'solar:bell-bing-bold',
 
-    /* ------------------------------------ o ----------------------------------- */
     open = 'majesticons:open',
     options = 'solar:tuning-2-outline',
 
-    /* ------------------------------------ P ----------------------------------- */
     pause = 'solar:pause-bold',
     pauseCircle = 'solar:pause-circle-outline',
 
@@ -221,10 +204,8 @@ export enum IconSet {
     processing = 'line-md:cog-loop',
     power = 'solar:power-bold',
 
-    /* ------------------------------------ Q ----------------------------------- */
     quitFullscreen = 'solar:quit-full-screen-bold',
 
-    /* ------------------------------------ R ----------------------------------- */
     raw = 'fluent-mdl2:raw-source',
 
     refresh = 'solar:refresh-bold',
@@ -239,7 +220,6 @@ export enum IconSet {
     rightArrow = 'solar:arrow-right-bold',
     rightCircle = 'solar:arrow-right-circle-outline',
 
-    /* ------------------------------------ S ----------------------------------- */
     save = 'solar:diskette-bold',
 
     search = 'line-md:search',
@@ -277,7 +257,6 @@ export enum IconSet {
 
     sun = 'solar:sun-bold',
 
-    /* ------------------------------------ T ----------------------------------- */
     tag = 'solar:tag-outline',
     tagBold = 'solar:tag-bold',
     tagCheck = 'solar:tag-check-outline',
@@ -290,7 +269,6 @@ export enum IconSet {
     tune = 'solar:tuning-outline',
     tuneBold = 'solar:tuning-2-bold',
 
-    /* ------------------------------------ U ----------------------------------- */
     undo = 'solar:undo-left-round-outline',
     redo = 'solar:undo-right-round-outline',
 
@@ -302,7 +280,6 @@ export enum IconSet {
     upload = 'solar:cloud-upload-bold',
     uploading = 'line-md:uploading-loop',
 
-    /* ------------------------------------ V ----------------------------------- */
     video = 'solar:videocamera-bold',
     videoFrame = 'solar:video-frame-outline',
 
@@ -314,11 +291,9 @@ export enum IconSet {
 
     vector = 'bi:filetype-psd',
 
-    /* --------------------------------- W ----------------------------------- */
     waveform = 'solar:soundwave-bold',
     warning = 'solar:danger-triangle-bold',
 
-    /* --------------------------------- EXTRA -------------------------------- */
     clock = 'solar:clock-circle-bold',
     history = 'solar:history-outline',
 

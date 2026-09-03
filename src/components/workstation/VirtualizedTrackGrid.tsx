@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTable } from '@tanstack/react-table';
 import { useAudioStore } from '@/store/audioStore';
@@ -18,11 +18,64 @@ export function VirtualizedTrackGrid() {
         sortBy,
         sortOrder,
         setSorting,
+        searchQuery,
+        activeFilter,
+        setActiveFilter,
+        setSearchQuery,
         setIsScanModalOpen,
         updateTrackInline,
     } = useAudioStore();
 
     const parentRef = useRef<HTMLDivElement>(null);
+
+    const filteredTracks = useMemo(() => {
+        let result = tracks;
+
+        if (activeFilter === 'lossless') {
+            result = result.filter((t) => t.lossless);
+        } else if (activeFilter === 'hi-res') {
+            result = result.filter((t) => Boolean(t.bitDepth && t.bitDepth > 16));
+        } else if (activeFilter === 'missing-art') {
+            result = result.filter((t) => !t.hasCoverArt);
+        } else if (activeFilter === 'low-res-art') {
+            result = result.filter(
+                (t) => Boolean(t.hasCoverArt) && Boolean(t.coverArtWidth && t.coverArtHeight && (t.coverArtWidth < 800 || t.coverArtHeight < 800))
+            );
+        } else if (activeFilter === 'missing-bpm') {
+            result = result.filter((t) => !t.bpm);
+        } else if (activeFilter === 'missing-lyrics') {
+            result = result.filter((t) => !t.lyrics && !t.lyricsUnsynced && !t.lyricsSyncedJson);
+        } else if (activeFilter === 'lyrics-synced') {
+            result = result.filter((t) => t.lyricsType === 'synced' || Boolean(t.lyricsSyncedJson) || /\[\d{2}:\d{2}/.test(t.lyrics || ''));
+        } else if (activeFilter === 'lyrics-unsynced') {
+            result = result.filter(
+                (t) => t.lyricsType === 'unsynced' || Boolean(t.lyricsUnsynced) || (Boolean(t.lyrics) && !/\[\d{2}:\d{2}/.test(t.lyrics || ''))
+            );
+        } else if (activeFilter.startsWith('folder:')) {
+            const folderPath = activeFilter.slice('folder:'.length);
+            result = result.filter((t) => t.directory === folderPath || (Boolean(t.filePath) && t.filePath!.startsWith(folderPath)));
+        }
+
+        const query = searchQuery.trim().toLowerCase();
+        if (query) {
+            result = result.filter((t) => {
+                return (
+                    t.title?.toLowerCase().includes(query) ||
+                    t.artist?.toLowerCase().includes(query) ||
+                    t.albumArtist?.toLowerCase().includes(query) ||
+                    t.album?.toLowerCase().includes(query) ||
+                    t.genre?.toLowerCase().includes(query) ||
+                    t.filename.toLowerCase().includes(query) ||
+                    t.composer?.toLowerCase().includes(query) ||
+                    t.initialKey?.toLowerCase().includes(query) ||
+                    t.lyrics?.toLowerCase().includes(query) ||
+                    String(t.year || '').includes(query)
+                );
+            });
+        }
+
+        return result;
+    }, [tracks, activeFilter, searchQuery]);
 
     // TanStack Table sorting state (synced with Zustand store)
     const sorting: SortingState = sortBy ? [{ id: sortBy, desc: sortOrder === 'desc' }] : [];
@@ -36,10 +89,9 @@ export function VirtualizedTrackGrid() {
         }
     };
 
-    // TanStack Table instance
     const table = useTable({
         features,
-        data: tracks,
+        data: filteredTracks,
         columns,
         state: { sorting },
         onSortingChange,
@@ -53,7 +105,6 @@ export function VirtualizedTrackGrid() {
 
     const rows = table.getRowModel().rows;
 
-    // Virtualization
     const rowVirtualizer = useVirtualizer({
         count: rows.length,
         getScrollElement: () => parentRef.current,
@@ -92,7 +143,6 @@ export function VirtualizedTrackGrid() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [rows, activeTrackId, selectTrack, rowVirtualizer]);
 
-    // Early return if no tracks are loaded and not currently loading
     if (!isLoadingTracks && tracks.length === 0) {
         return (
             <div className="bg-card/40 flex flex-1 flex-col items-center justify-center p-8 text-center select-none">
@@ -111,19 +161,48 @@ export function VirtualizedTrackGrid() {
         );
     }
 
-    // Header rendering helper
+    // Empty state when search or filter matches 0 items
+    if (!isLoadingTracks && tracks.length > 0 && filteredTracks.length === 0) {
+        return (
+            <div className="bg-card/40 flex flex-1 flex-col items-center justify-center p-8 text-center select-none">
+                <div className="bg-card mb-3 flex h-12 w-12 items-center justify-center rounded-full border">
+                    <Icon icon="search" className="text-muted-foreground size-6" />
+                </div>
+                <h3 className="text-foreground mb-1 text-sm font-semibold">No Matching Tracks</h3>
+                <p className="text-muted-foreground mb-4 max-w-sm text-xs leading-relaxed">
+                    No tracks matched your active filter &ldquo;
+                    {activeFilter.startsWith('folder:')
+                        ? `Folder: ${activeFilter.slice('folder:'.length).split(/[\\/]/).pop() || activeFilter.slice('folder:'.length)}`
+                        : activeFilter}
+                    &rdquo;
+                    {searchQuery ? ` or search &ldquo;${searchQuery}&rdquo;` : ''}.
+                </p>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                        setActiveFilter('all');
+                        setSearchQuery('');
+                    }}>
+                    <Icon icon="refresh" className="size-3.5" />
+                    <span>Reset Filters & Search</span>
+                </Button>
+            </div>
+        );
+    }
+
     const headerGroups = table.getHeaderGroups();
 
-    // Column visibility CSS classes
     const colVisibility: Record<string, string> = {
         trackNumber: 'w-7 text-center',
         title: 'min-w-37.5 flex-1 px-2',
         artist: 'hidden w-36 px-2 md:flex',
         album: 'hidden w-36 px-2 lg:flex',
         year: 'hidden w-16 px-1 text-center sm:flex',
-        bpm: 'hidden w-16 px-1 text-center xl:flex',
+        bpm: 'hidden w-14 px-1 text-center xl:flex',
         initialKey: 'hidden w-12 px-1 text-center xl:block',
         format: 'hidden w-16 px-1 text-center sm:block',
+        bitDepth: 'hidden w-14 px-1 text-center md:flex',
         durationSeconds: 'w-14 px-1 pr-2 text-right',
     };
 

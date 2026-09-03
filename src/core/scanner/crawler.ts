@@ -9,11 +9,18 @@ import { SUPPORTED_AUDIO_EXTENSIONS, ScanProgressEvent } from '@/types/audio';
 
 import { getExifTool } from '../binaries/exiftool';
 import { probeAudioFile } from '../binaries/ffprobe';
+import { extractCoverArt } from '../binaries/ffmpeg';
 import { normalizeAudioMetadata } from '../metadata/normalizer';
 
+/**
+ * Crawls filesystem directories, discovers audio files, and coordinates extraction of metadata.
+ */
 export class AudioLibraryScanner {
     private activeJobs = new Map<string, { abort: boolean; listeners: ((evt: ScanProgressEvent) => void)[] }>();
 
+    /**
+     * Initializes a unique scan job identifier with cancellation and listener state.
+     */
     public createJob(): string {
         const jobId = crypto.randomUUID();
         this.activeJobs.set(jobId, { abort: false, listeners: [] });
@@ -41,6 +48,9 @@ export class AudioLibraryScanner {
         }
     }
 
+    /**
+     * Traverses a root directory to discover supported audio tracks and writes canonical metadata to the database.
+     */
     public async scanDirectory(jobId: string, rootPath: string, recursive = true, forceReindex = false): Promise<void> {
         const job = this.activeJobs.get(jobId);
         if (!job) return;
@@ -242,6 +252,10 @@ export class AudioLibraryScanner {
 
                     const { canonical } = normalizeAudioMetadata(item.id, rawExif, probeResult);
 
+                    if (canonical.hasCoverArt) {
+                        extractCoverArt(item.path, item.id).catch(() => null);
+                    }
+
                     await db
                         .insert(canonicalAudioMetadata)
                         .values({
@@ -265,11 +279,18 @@ export class AudioLibraryScanner {
                             label: canonical.label,
                             copyright: canonical.copyright,
                             isrc: canonical.isrc,
+                            catalogNumber: canonical.catalogNumber,
+                            barcode: canonical.barcode,
                             bpm: canonical.bpm,
                             initialKey: canonical.initialKey,
                             mood: canonical.mood,
                             rating: canonical.rating,
+                            description: canonical.description,
                             comment: canonical.comment,
+                            lyrics: canonical.lyrics,
+                            lyricsLanguage: canonical.lyricsLanguage,
+                            lyricsUnsynced: canonical.lyricsUnsynced,
+                            lyricsSyncedJson: canonical.lyricsSyncedJson,
                             durationSeconds: canonical.durationSeconds,
                             bitrateKbps: canonical.bitrateKbps,
                             sampleRateHz: canonical.sampleRateHz,
@@ -280,6 +301,10 @@ export class AudioLibraryScanner {
                             lossless: canonical.lossless,
                             hasCoverArt: canonical.hasCoverArt,
                             coverArtMime: canonical.coverArtMime,
+                            coverArtWidth: canonical.coverArtWidth,
+                            coverArtHeight: canonical.coverArtHeight,
+                            coverArtType: canonical.coverArtType,
+                            coverArtDescription: canonical.coverArtDescription,
                             createdAt: Date.now(),
                             updatedAt: Date.now(),
                         })
@@ -298,10 +323,22 @@ export class AudioLibraryScanner {
                                 releaseDate: canonical.releaseDate ?? canonical.dateReleased,
                                 genre: canonical.genre,
                                 composer: canonical.composer,
+                                publisher: canonical.publisher,
+                                label: canonical.label,
+                                copyright: canonical.copyright,
+                                isrc: canonical.isrc,
+                                catalogNumber: canonical.catalogNumber,
+                                barcode: canonical.barcode,
                                 bpm: canonical.bpm,
                                 initialKey: canonical.initialKey,
+                                mood: canonical.mood,
                                 rating: canonical.rating,
+                                description: canonical.description,
                                 comment: canonical.comment,
+                                lyrics: canonical.lyrics,
+                                lyricsLanguage: canonical.lyricsLanguage,
+                                lyricsUnsynced: canonical.lyricsUnsynced,
+                                lyricsSyncedJson: canonical.lyricsSyncedJson,
                                 durationSeconds: canonical.durationSeconds,
                                 bitrateKbps: canonical.bitrateKbps,
                                 sampleRateHz: canonical.sampleRateHz,
@@ -312,6 +349,10 @@ export class AudioLibraryScanner {
                                 lossless: canonical.lossless,
                                 hasCoverArt: canonical.hasCoverArt,
                                 coverArtMime: canonical.coverArtMime,
+                                coverArtWidth: canonical.coverArtWidth,
+                                coverArtHeight: canonical.coverArtHeight,
+                                coverArtType: canonical.coverArtType,
+                                coverArtDescription: canonical.coverArtDescription,
                                 updatedAt: Date.now(),
                             },
                         });
