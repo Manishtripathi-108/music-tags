@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+
 import { useTable } from '@tanstack/react-table';
-import { useAudioStore } from '@/store/audioStore';
-import { Icon } from '@/components/ui/Icon';
+import { useVirtualizer } from '@tanstack/react-virtual';
+
 import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { filterTracks } from '@/domain/media/predicates';
-import { columns, features, flexRender, type SortingState, type TrackTableMeta } from './trackTableFeatures';
+import { useAudioStore } from '@/store/audioStore';
+
+import { type SortingState, type TrackTableMeta, columns, features, flexRender } from './trackTableFeatures';
 
 export function VirtualizedTrackGrid() {
     const {

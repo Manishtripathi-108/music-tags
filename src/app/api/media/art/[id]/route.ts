@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
+
+import { eq } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
+
 import { db } from '@/infrastructure/database/client';
-import { audioFiles } from '@/infrastructure/database/schema';
-import { eq } from 'drizzle-orm';
-import { extractCoverArt, THUMBNAIL_DIR } from '@/infrastructure/media-tools/ffmpeg';
 import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
+import { audioFiles } from '@/infrastructure/database/schema';
+import { THUMBNAIL_DIR, extractCoverArt } from '@/infrastructure/media-tools/ffmpeg';
 
 interface RouteContext {
     params: Promise<{ id: string }>;

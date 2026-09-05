@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { type Track } from '@/domain/media/track';
+
 import { classifyLyricsType } from '@/domain/media/lyrics';
+import { type Track } from '@/domain/media/track';
 
 /**
  * Strips file extension from a filename to derive a sensible default title.
@@ -21,9 +22,7 @@ export function deriveYearFromDate(dateStr?: string | null): number | null {
 /**
  * Determines whether metadata has been modified since initial ingestion.
  */
-export function isTrackModified(
-    meta?: { createdAt?: number | null; updatedAt?: number | null } | null
-): boolean {
+export function isTrackModified(meta?: { createdAt?: number | null; updatedAt?: number | null } | null): boolean {
     if (!meta?.updatedAt || !meta?.createdAt) return false;
     return meta.updatedAt - meta.createdAt > 1000;
 }
@@ -116,10 +115,7 @@ export const trackOutputSchema = trackDbRowInputSchema.transform((data): Track =
     const isModified = options?.forceModified !== undefined ? options.forceModified : isTrackModified(meta);
 
     // Derived fields: title fallback to filename, year derived from releaseDate
-    const title =
-        meta?.title && meta.title.trim().length > 0
-            ? meta.title.trim()
-            : sanitizeFilenameTitle(file.filename);
+    const title = meta?.title && meta.title.trim().length > 0 ? meta.title.trim() : sanitizeFilenameTitle(file.filename);
 
     const year = deriveYearFromDate(meta?.releaseDate) ?? deriveYearFromDate(meta?.originalReleaseDate);
 

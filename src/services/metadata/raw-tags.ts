@@ -4,10 +4,7 @@ import { type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
 /**
  * Builds a comprehensive list of raw tag items from ExifTool and FFprobe metadata.
  */
-export function buildRawTagList(
-    rawExif?: Record<string, unknown> | null,
-    probeResult?: FFprobeAudioResult | null
-): RawTag[] {
+export function buildRawTagList(rawExif?: Record<string, unknown> | null, probeResult?: FFprobeAudioResult | null): RawTag[] {
     const rawTags: RawTag[] = [];
 
     // 1. Ingest all ExifTool tags
@@ -32,15 +29,7 @@ export function buildRawTagList(
     if (probeResult && typeof probeResult === 'object') {
         if (probeResult.format) {
             const f = probeResult.format as Record<string, unknown>;
-            const formatKeys = [
-                'format_name',
-                'format_long_name',
-                'duration',
-                'size',
-                'bit_rate',
-                'probe_score',
-                'nb_streams',
-            ] as const;
+            const formatKeys = ['format_name', 'format_long_name', 'duration', 'size', 'bit_rate', 'probe_score', 'nb_streams'] as const;
 
             for (const fk of formatKeys) {
                 if (f[fk] !== undefined && f[fk] !== null) {

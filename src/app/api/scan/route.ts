@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { globalScanner } from '@/services/scanner/scanner-service';
-import { ScanFolderRequestSchema } from '@/schemas';
+
 import { type ScanApiResponse } from '@/domain/media/dto';
 import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { createProgressEventStream } from '@/infrastructure/http/sse';
+import { ScanFolderRequestSchema } from '@/schemas';
+import { globalScanner } from '@/services/scanner/scanner-service';
 
 export async function POST(request: NextRequest): Promise<NextResponse<ScanApiResponse | { error: string }>> {
     await ensureDatabaseInitialized();
@@ -13,10 +14,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScanApiRe
         const validation = ScanFolderRequestSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json(
-                { error: validation.error.issues[0]?.message || 'Invalid folder scan request' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: validation.error.issues[0]?.message || 'Invalid folder scan request' }, { status: 400 });
         }
 
         const { folderPath, recursive, forceReindex } = validation.data;

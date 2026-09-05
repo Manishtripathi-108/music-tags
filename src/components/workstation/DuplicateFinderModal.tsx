@@ -1,26 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import Icon from '@/components/ui/Icon';
-import { Button } from '@/components/ui/Button';
+import React, { useEffect, useMemo, useState } from 'react';
+
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import { FieldInput } from '@/components/ui/Field';
+import Icon from '@/components/ui/Icon';
+import { type DuplicateCluster, type DuplicateMatchMode } from '@/domain/duplicates/types';
+import { formatBitrate, formatDuration } from '@/domain/media/formatters';
 import { useAudioStore } from '@/store/audioStore';
-import { formatDuration, formatBitrate } from '@/domain/media/formatters';
-import { type DuplicateMatchMode, type DuplicateCluster } from '@/domain/duplicates/types';
 
 export function DuplicateFinderModal() {
-    const {
-        isDuplicateModalOpen,
-        setIsDuplicateModalOpen,
-        duplicateClusters,
-        isLoadingDuplicates,
-        fetchDuplicates,
-        resolveDuplicates,
-        selectTrack,
-    } = useAudioStore();
+    const { isDuplicateModalOpen, setIsDuplicateModalOpen, duplicateClusters, isLoadingDuplicates, fetchDuplicates, resolveDuplicates, selectTrack } =
+        useAudioStore();
 
     const [activeMode, setActiveMode] = useState<DuplicateMatchMode>('all');
     const [searchFilter, setSearchFilter] = useState('');
@@ -132,16 +126,16 @@ export function DuplicateFinderModal() {
 
     return (
         <Dialog open={isDuplicateModalOpen} onOpenChange={(e) => setIsDuplicateModalOpen(typeof e === 'boolean' ? e : e.open)}>
-            <DialogContent className="max-h-[90vh] max-w-4xl p-0 flex flex-col overflow-hidden">
-                <DialogHeader className="border-b px-5 py-3.5 bg-background">
+            <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden p-0">
+                <DialogHeader className="bg-background border-b px-5 py-3.5">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                            <div className="rounded bg-primary/10 p-1.5 text-primary">
+                            <div className="bg-primary/10 text-primary rounded p-1.5">
                                 <Icon icon="copy" className="size-5" />
                             </div>
                             <div>
                                 <DialogTitle className="text-base font-semibold">Duplicate Track Finder</DialogTitle>
-                                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                                <DialogDescription className="text-muted-foreground mt-0.5 text-xs">
                                     Detect identical and similar recordings using ISRC, audio hashes, fuzzy tags, and phonetic analysis.
                                 </DialogDescription>
                             </div>
@@ -159,7 +153,7 @@ export function DuplicateFinderModal() {
 
                     {/* Mode Selector Tabs & Search */}
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-1 overflow-x-auto rounded-lg border bg-muted/30 p-1">
+                        <div className="bg-muted/30 flex items-center gap-1 overflow-x-auto rounded-lg border p-1">
                             {modeTabs.map((tab) => (
                                 <button
                                     key={tab.id}
@@ -186,47 +180,43 @@ export function DuplicateFinderModal() {
                     </div>
                 </DialogHeader>
 
-                <DialogBody className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/10 font-mono text-xs">
+                <DialogBody className="bg-muted/10 flex-1 space-y-3 overflow-y-auto p-4 font-mono text-xs">
                     {feedbackMessage && (
-                        <div className="rounded border border-primary/30 bg-primary/10 p-2.5 text-xs text-primary flex items-center justify-between">
+                        <div className="border-primary/30 bg-primary/10 text-primary flex items-center justify-between rounded border p-2.5 text-xs">
                             <span>{feedbackMessage}</span>
-                            <button
-                                onClick={() => setFeedbackMessage(null)}
-                                className="text-primary hover:underline text-[11px] cursor-pointer">
+                            <button onClick={() => setFeedbackMessage(null)} className="text-primary cursor-pointer text-[11px] hover:underline">
                                 Dismiss
                             </button>
                         </div>
                     )}
 
                     {isLoadingDuplicates ? (
-                        <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
-                            <Icon icon="loading" className="size-6 animate-spin text-primary" />
+                        <div className="text-muted-foreground flex h-64 flex-col items-center justify-center gap-2">
+                            <Icon icon="loading" className="text-primary size-6 animate-spin" />
                             <span className="text-xs">Analyzing audio library for duplicates...</span>
                         </div>
                     ) : filteredClusters.length === 0 ? (
-                        <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-                            <Icon icon="checkCircle" className="size-8 text-success" />
-                            <span className="text-sm font-medium text-foreground">No duplicates detected</span>
-                            <span className="text-xs max-w-sm">
+                        <div className="text-muted-foreground flex h-64 flex-col items-center justify-center gap-2 text-center">
+                            <Icon icon="checkCircle" className="text-success size-8" />
+                            <span className="text-foreground text-sm font-medium">No duplicates detected</span>
+                            <span className="max-w-sm text-xs">
                                 No duplicate files match the selected &quot;{activeMode}&quot; criteria across your library.
                             </span>
                         </div>
                     ) : (
                         filteredClusters.map((cluster) => (
-                            <div
-                                key={cluster.id}
-                                className="rounded-lg border bg-background shadow-xs overflow-hidden transition-all">
+                            <div key={cluster.id} className="bg-background overflow-hidden rounded-lg border shadow-xs transition-all">
                                 {/* Cluster Header */}
-                                <div className="bg-muted/40 border-b px-3.5 py-2 flex items-center justify-between">
-                                    <div className="flex items-center gap-2 min-w-0">
+                                <div className="bg-muted/40 flex items-center justify-between border-b px-3.5 py-2">
+                                    <div className="flex min-w-0 items-center gap-2">
                                         <Badge variant="outline" size="xs" className="font-mono font-bold">
                                             {cluster.tracks.length} COPIES
                                         </Badge>
-                                        <span className="font-semibold text-foreground truncate">{cluster.displayTitle}</span>
+                                        <span className="text-foreground truncate font-semibold">{cluster.displayTitle}</span>
                                         <span className="text-muted-foreground truncate">— {cluster.displayArtist}</span>
                                     </div>
 
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex shrink-0 items-center gap-2">
                                         <Badge
                                             variant={
                                                 cluster.matchReason === 'isrc' || cluster.matchReason === 'file_hash'
@@ -246,21 +236,21 @@ export function DuplicateFinderModal() {
                                             onClick={() => handleQuickKeepBest(cluster)}
                                             disabled={isResolving}
                                             className="h-6 gap-1 text-[10px]">
-                                            <Icon icon="magic" className="size-3 text-primary" />
+                                            <Icon icon="magic" className="text-primary size-3" />
                                             <span>Keep Best</span>
                                         </Button>
                                     </div>
                                 </div>
 
                                 {/* Track list in cluster */}
-                                <div className="divide-y divide-border/50">
+                                <div className="divide-border/50 divide-y">
                                     {cluster.tracks.map(({ track, isRecommendedKeeper, reasons }) => {
                                         const isSelected = selectedTrackIds.has(track.id);
 
                                         return (
                                             <div
                                                 key={track.id}
-                                                className={`p-3 flex items-center gap-3 transition-colors ${
+                                                className={`flex items-center gap-3 p-3 transition-colors ${
                                                     isRecommendedKeeper
                                                         ? 'bg-success/5 hover:bg-success/10'
                                                         : isSelected
@@ -276,9 +266,7 @@ export function DuplicateFinderModal() {
 
                                                 <div className="min-w-0 flex-1 space-y-1">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-foreground truncate text-[11px]">
-                                                            {track.filename}
-                                                        </span>
+                                                        <span className="text-foreground truncate text-[11px] font-semibold">{track.filename}</span>
                                                         {isRecommendedKeeper && (
                                                             <Badge variant="success" size="xs" className="font-mono text-[9px]">
                                                                 RECOMMENDED KEEPER
@@ -286,15 +274,12 @@ export function DuplicateFinderModal() {
                                                         )}
                                                     </div>
 
-                                                    <div className="text-[10px] text-muted-foreground truncate font-sans">
+                                                    <div className="text-muted-foreground truncate font-sans text-[10px]">
                                                         {track.filePath || track.directory}
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                                                        <Badge
-                                                            variant={track.lossless ? 'success' : 'outline'}
-                                                            size="xs"
-                                                            className="font-mono">
+                                                        <Badge variant={track.lossless ? 'success' : 'outline'} size="xs" className="font-mono">
                                                             {track.codec?.toUpperCase() || track.extension.toUpperCase()}
                                                         </Badge>
 
@@ -321,7 +306,8 @@ export function DuplicateFinderModal() {
 
                                                         {track.hasCoverArt && (
                                                             <span className="text-muted-foreground font-mono">
-                                                                Cover: {track.coverArtWidth ? `${track.coverArtWidth}×${track.coverArtHeight}` : 'Yes'}
+                                                                Cover:{' '}
+                                                                {track.coverArtWidth ? `${track.coverArtWidth}×${track.coverArtHeight}` : 'Yes'}
                                                             </span>
                                                         )}
 
@@ -332,9 +318,7 @@ export function DuplicateFinderModal() {
                                                         )}
 
                                                         {reasons.length > 0 && (
-                                                            <span className="text-primary/80 font-sans text-[10px]">
-                                                                • {reasons.join(', ')}
-                                                            </span>
+                                                            <span className="text-primary/80 font-sans text-[10px]">• {reasons.join(', ')}</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -346,7 +330,7 @@ export function DuplicateFinderModal() {
                                                         selectTrack(track.id);
                                                         setIsDuplicateModalOpen(false);
                                                     }}
-                                                    className="h-6 text-[10px] gap-1 text-muted-foreground hover:text-foreground">
+                                                    className="text-muted-foreground hover:text-foreground h-6 gap-1 text-[10px]">
                                                     <Icon icon="arrowOpenRight" className="size-3" />
                                                     <span>View</span>
                                                 </Button>
@@ -360,7 +344,7 @@ export function DuplicateFinderModal() {
                 </DialogBody>
 
                 {/* Footer with bulk resolution actions */}
-                <div className="border-t bg-background px-4 py-3 flex flex-wrap items-center justify-between gap-3 select-none">
+                <div className="bg-background flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 select-none">
                     <div className="flex items-center gap-4">
                         <Button
                             variant="outline"
@@ -371,7 +355,7 @@ export function DuplicateFinderModal() {
                             Select All Redundant ({totalRedundantTracks})
                         </Button>
 
-                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                        <label className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-xs">
                             <Checkbox
                                 checked={deleteLocalFiles}
                                 onCheckedChange={(checked) => setDeleteLocalFiles(Boolean(checked))}
@@ -382,11 +366,7 @@ export function DuplicateFinderModal() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setIsDuplicateModalOpen(false)}
-                            className="h-7 text-xs">
+                        <Button variant="outline" size="sm" onClick={() => setIsDuplicateModalOpen(false)} className="h-7 text-xs">
                             Close
                         </Button>
 
@@ -395,7 +375,7 @@ export function DuplicateFinderModal() {
                             size="sm"
                             onClick={handleBulkResolve}
                             disabled={selectedTrackIds.size === 0 || isResolving}
-                            className="h-7 text-xs gap-1.5">
+                            className="h-7 gap-1.5 text-xs">
                             <Icon icon={isResolving ? 'loading' : 'trash'} className="size-3.5" />
                             <span>Remove Selected ({selectedTrackIds.size})</span>
                         </Button>

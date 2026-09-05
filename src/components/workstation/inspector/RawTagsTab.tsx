@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import Icon from '@/components/ui/Icon';
+
 import { Badge } from '@/components/ui/Badge';
 import { FieldInput } from '@/components/ui/Field';
+import Icon from '@/components/ui/Icon';
 import { type RawTagItem } from '@/domain/media/track';
 
 export interface RawTagsTabProps {
@@ -31,9 +32,7 @@ export function RawTagsTab({ rawTags, isLoading }: RawTagsTabProps) {
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRawSearch(e.target.value)}
                     className="pl-6 text-xs"
                 />
-                {isLoading && (
-                    <Icon icon="loading" className="text-primary absolute top-2.5 right-2.5 size-3 animate-spin" />
-                )}
+                {isLoading && <Icon icon="loading" className="text-primary absolute top-2.5 right-2.5 size-3 animate-spin" />}
             </div>
 
             <div className="text-muted-foreground flex items-center justify-between px-1 text-[10px]">
@@ -41,8 +40,8 @@ export function RawTagsTab({ rawTags, isLoading }: RawTagsTabProps) {
                     {filteredRawTags.length} tags {rawSearch ? `(of ${rawTags.length})` : ''}
                 </span>
                 <div className="flex items-center gap-1 text-[9px]">
-                    <span className="rounded bg-primary/10 px-1 py-0.5 text-primary font-medium">Exif</span>
-                    <span className="rounded bg-secondary/30 px-1 py-0.5 text-foreground font-medium">FFmpeg</span>
+                    <span className="bg-primary/10 text-primary rounded px-1 py-0.5 font-medium">Exif</span>
+                    <span className="bg-secondary/30 text-foreground rounded px-1 py-0.5 font-medium">FFmpeg</span>
                 </div>
             </div>
 
@@ -55,21 +54,14 @@ export function RawTagsTab({ rawTags, isLoading }: RawTagsTabProps) {
                 {filteredRawTags.map((t, idx) => {
                     const isFfmpeg = t.group.toLowerCase().includes('ffmpeg');
                     return (
-                        <div
-                            key={idx}
-                            className="hover:bg-muted/60 flex flex-col rounded border-b border-border/40 p-1.5 transition-colors">
+                        <div key={idx} className="hover:bg-muted/60 border-border/40 flex flex-col rounded border-b p-1.5 transition-colors">
                             <div className="flex items-center justify-between gap-1">
-                                <span className="text-primary font-bold truncate">{t.tag}</span>
-                                <Badge
-                                    variant={isFfmpeg ? 'secondary' : 'outline'}
-                                    size="xs"
-                                    className="text-[9px] font-mono shrink-0">
+                                <span className="text-primary truncate font-bold">{t.tag}</span>
+                                <Badge variant={isFfmpeg ? 'secondary' : 'outline'} size="xs" className="shrink-0 font-mono text-[9px]">
                                     {t.group}
                                 </Badge>
                             </div>
-                            <div className="text-foreground mt-0.5 break-all select-text font-mono text-[10px]">
-                                {String(t.value)}
-                            </div>
+                            <div className="text-foreground mt-0.5 font-mono text-[10px] break-all select-text">{String(t.value)}</div>
                         </div>
                     );
                 })}

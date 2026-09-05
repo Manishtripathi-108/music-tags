@@ -2,7 +2,6 @@ export * from './common.schema';
 export * from './media-file.schema';
 export * from './raw-audio-metadata.schema';
 export * from './audio-metadata.schema';
-export * from './audio-db.schema';
 export * from './track-output.schema';
 export * from './track-patch.schema';
 export * from './tag-form.schema';

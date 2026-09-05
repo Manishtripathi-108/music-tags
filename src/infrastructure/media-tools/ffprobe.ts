@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+
 import { toCanonicalPath } from '../filesystem/paths';
 
 export interface FFprobeAudioResult {

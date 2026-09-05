@@ -1,11 +1,13 @@
 import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
-import { db } from './client';
-import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from './schema';
+
 import { type DiscoveredAudioFile } from '@/infrastructure/filesystem/directory-crawler';
 import { type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
-import { canonicalAudioMetadataInputSchema, type CanonicalAudioMetadataInput } from '@/schemas/audio-metadata.schema';
-import { mediaFileSchema } from '@/schemas/media-file.schema';
+import { type CanonicalAudioMetadataInput } from '@/schemas/audio-metadata.schema';
+import { extractedMediaFileSchema } from '@/schemas/media-file.schema';
+
+import { db } from './client';
+import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from './schema';
 
 export interface FileIndexingResult {
     fileId: string;
@@ -30,7 +32,7 @@ export class AudioRepository {
 
         const now = Date.now();
 
-        const safeData = mediaFileSchema.parse({
+        const safeData = extractedMediaFileSchema.parse({
             id: fileId,
             ...file,
         });
@@ -38,6 +40,7 @@ export class AudioRepository {
         await db
             .insert(audioFiles)
             .values({
+                id: fileId,
                 ...safeData,
                 createdAt: existing ? existing.createdAt : now,
             })
@@ -60,25 +63,21 @@ export class AudioRepository {
      */
     public async upsertTrackMetadata(
         fileId: string,
-        canonical: Partial<CanonicalAudioMetadataInput>,
+        canonical: CanonicalAudioMetadataInput,
         rawExif: Record<string, unknown>,
         probeResult?: FFprobeAudioResult | null
     ): Promise<void> {
         const now = Date.now();
 
-        // Pass to schema to validate, coerce, and mutate defaults before DB insertion
-        const columnValues = canonicalAudioMetadataInputSchema.parse({
-            fileId,
-            ...canonical,
-            updatedAt: now,
-        });
-
         await db
             .insert(canonicalAudioMetadata)
-            .values(columnValues)
+            .values({
+                ...canonical,
+                createdAt: now,
+            })
             .onConflictDoUpdate({
                 target: canonicalAudioMetadata.fileId,
-                set: columnValues,
+                set: canonical,
             });
 
         await db

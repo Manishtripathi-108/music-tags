@@ -1,19 +1,10 @@
 import { type ScanProgressEvent } from '@/domain/scanner/types';
-import {
-    DirectoryCrawler,
-    defaultDirectoryCrawler,
-    type DiscoveredAudioFile,
-} from '@/infrastructure/filesystem/directory-crawler';
-import {
-    AudioRepository,
-    defaultAudioRepository,
-} from '@/infrastructure/database/audio-repository';
-import {
-    AudioMetadataReader,
-    defaultAudioMetadataReader,
-} from '@/infrastructure/media-tools/metadata-reader';
+import { AudioRepository, defaultAudioRepository } from '@/infrastructure/database/audio-repository';
+import { DirectoryCrawler, type DiscoveredAudioFile, defaultDirectoryCrawler } from '@/infrastructure/filesystem/directory-crawler';
 import { extractCoverArt } from '@/infrastructure/media-tools/ffmpeg';
+import { AudioMetadataReader, defaultAudioMetadataReader } from '@/infrastructure/media-tools/metadata-reader';
 import { normalizeAudioMetadata } from '@/services/metadata/metadata-normalizer';
+
 import { ScanJobManager } from './job-manager';
 
 export interface PendingFileExtraction extends DiscoveredAudioFile {
@@ -65,12 +56,7 @@ export class AudioLibraryScanner {
     /**
      * Executes the end-to-end scanning pipeline for a directory.
      */
-    public async scanDirectory(
-        jobId: string,
-        rootPath: string,
-        recursive = true,
-        forceReindex = false
-    ): Promise<void> {
+    public async scanDirectory(jobId: string, rootPath: string, recursive = true, forceReindex = false): Promise<void> {
         const signal = this.jobManager.getSignal(jobId);
         const startTime = Date.now();
 
@@ -116,10 +102,7 @@ export class AudioLibraryScanner {
             onFileDiscovered: async (file) => {
                 scannedCount++;
                 try {
-                    const { fileId, needsMetadata } = await this.repository.upsertAudioFile(
-                        file,
-                        forceReindex
-                    );
+                    const { fileId, needsMetadata } = await this.repository.upsertAudioFile(file, forceReindex);
 
                     indexedCount++;
 
@@ -199,29 +182,23 @@ export class AudioLibraryScanner {
             const paths = chunk.map((c) => c.path);
 
             try {
+                // 3a. Extract Metadata in Batch
                 const extractionResults = await this.metadataReader.extractBatch(paths);
 
+                // 4. Persist Extracted Metadata
                 for (let j = 0; j < chunk.length; j++) {
                     const item = chunk[j];
                     const extraction = extractionResults[j];
                     if (!extraction) continue;
 
-                    const { canonical } = normalizeAudioMetadata(
-                        item.id,
-                        extraction.rawExif,
-                        extraction.probeResult
-                    );
+                    const { canonical } = normalizeAudioMetadata(item.id, extraction.rawExif, extraction.probeResult);
 
                     if (canonical.hasCoverArt) {
+                        // Extract cover art asynchronously, but don't block the main extraction flow
                         extractCoverArt(item.path, item.id).catch(() => null);
                     }
 
-                    await this.repository.upsertTrackMetadata(
-                        item.id,
-                        canonical,
-                        extraction.rawExif,
-                        extraction.probeResult
-                    );
+                    await this.repository.upsertTrackMetadata(item.id, canonical, extraction.rawExif, extraction.probeResult);
 
                     extractedCount++;
                 }

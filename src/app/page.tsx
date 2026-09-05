@@ -1,12 +1,12 @@
 'use client';
 
-import { WorkstationTopBar } from '@/components/workstation/WorkstationTopBar';
-import { WorkstationSidebar } from '@/components/workstation/WorkstationSidebar';
-import { VirtualizedTrackGrid } from '@/components/workstation/VirtualizedTrackGrid';
-import { AudioInspector } from '@/components/workstation/AudioInspector';
 import { ActivityDrawer } from '@/components/workstation/ActivityDrawer';
-import { ScanModal } from '@/components/workstation/ScanModal';
+import { AudioInspector } from '@/components/workstation/AudioInspector';
 import { DuplicateFinderModal } from '@/components/workstation/DuplicateFinderModal';
+import { ScanModal } from '@/components/workstation/ScanModal';
+import { VirtualizedTrackGrid } from '@/components/workstation/VirtualizedTrackGrid';
+import { WorkstationSidebar } from '@/components/workstation/WorkstationSidebar';
+import { WorkstationTopBar } from '@/components/workstation/WorkstationTopBar';
 
 export default function Home() {
     return (

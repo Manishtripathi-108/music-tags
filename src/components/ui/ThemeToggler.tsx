@@ -4,6 +4,7 @@ import React from 'react';
 
 import Icon from '@/components/ui/Icon';
 import useTheme from '@/hooks/useTheme';
+
 import { Button } from './Button';
 
 type ThemeTogglerProps = React.ButtonHTMLAttributes<HTMLButtonElement>;

@@ -1,22 +1,24 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Icon from '@/components/ui/Icon';
-import { useAudioStore } from '@/store/audioStore';
-import { type T_IconType } from '@/constants/icons.constants';
+
 import { Button } from '@/components/ui/Button';
+import Icon from '@/components/ui/Icon';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarItem } from '@/components/ui/Sidebar';
+import { type T_IconType } from '@/constants/icons.constants';
 import {
-    isLossless,
     isHiRes,
-    isMissingArt,
+    isLossless,
     isLowResolutionArt,
+    isMissingArt,
     isMissingBpm,
     isMissingLyrics,
     isSyncedLyrics,
     isUnsyncedLyrics,
 } from '@/domain/media/predicates';
-import { FolderRemoveDialog, type FolderItemInfo } from './FolderRemoveDialog';
+import { useAudioStore } from '@/store/audioStore';
+
+import { type FolderItemInfo, FolderRemoveDialog } from './FolderRemoveDialog';
 
 export function WorkstationSidebar() {
     const {
@@ -54,8 +56,7 @@ export function WorkstationSidebar() {
 
         for (const t of tracks) {
             const dir =
-                t.directory ||
-                (t.filePath ? t.filePath.substring(0, Math.max(t.filePath.lastIndexOf('\\'), t.filePath.lastIndexOf('/'))) : '');
+                t.directory || (t.filePath ? t.filePath.substring(0, Math.max(t.filePath.lastIndexOf('\\'), t.filePath.lastIndexOf('/'))) : '');
 
             if (!dir) continue;
 
@@ -160,7 +161,7 @@ export function WorkstationSidebar() {
                                                         setFolderToRemove(folder);
                                                         setIsRemoveDialogOpen(true);
                                                     }}
-                                                    className="hover:text-destructive text-muted-foreground/60 p-0.5 transition-colors cursor-pointer"
+                                                    className="hover:text-destructive text-muted-foreground/60 cursor-pointer p-0.5 transition-colors"
                                                     title="Remove folder from database">
                                                     <Icon icon="trash" className="size-3" />
                                                 </button>
@@ -186,20 +187,18 @@ export function WorkstationSidebar() {
                             />
                         ))}
 
-                        <div className="pt-2 px-1">
+                        <div className="px-1 pt-2">
                             <Button
                                 type="button"
                                 variant="outline"
                                 size="xs"
                                 disabled={isNormalizingLyrics || tracks.length === 0}
                                 onClick={() => {
-                                    const targetFolder = activeFilter.startsWith('folder:')
-                                        ? activeFilter.slice('folder:'.length)
-                                        : undefined;
+                                    const targetFolder = activeFilter.startsWith('folder:') ? activeFilter.slice('folder:'.length) : undefined;
                                     normalizeAllLyrics(targetFolder);
                                 }}
                                 className="w-full justify-start gap-1.5 text-[11px]">
-                                <Icon icon={isNormalizingLyrics ? 'loading' : 'magic'} className="size-3 text-primary" />
+                                <Icon icon={isNormalizingLyrics ? 'loading' : 'magic'} className="text-primary size-3" />
                                 <span>{isNormalizingLyrics ? 'Normalizing...' : 'Normalize All Lyrics'}</span>
                             </Button>
                         </div>
@@ -212,11 +211,7 @@ export function WorkstationSidebar() {
                                     <Icon icon="audio" className="text-primary size-3.5" />
                                     <span>Media Engines</span>
                                 </div>
-                                <span
-                                    className={`inline-block size-1.5 rounded-full ${
-                                        allReady ? 'bg-success' : 'bg-warning animate-pulse'
-                                    }`}
-                                />
+                                <span className={`inline-block size-1.5 rounded-full ${allReady ? 'bg-success' : 'bg-warning animate-pulse'}`} />
                             </div>
 
                             <div className="space-y-1 pt-1 font-mono text-[10px]">

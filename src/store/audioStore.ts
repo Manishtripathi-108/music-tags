@@ -1,21 +1,18 @@
-import { create } from 'zustand';
 import axios from 'axios';
-import { type Track, type ActiveTrackDetail } from '@/domain/media/track';
+import { create } from 'zustand';
+
+import { type DuplicateCluster, type DuplicateFindApiResponse, type DuplicateMatchMode } from '@/domain/duplicates/types';
 import {
-    type DuplicateCluster,
-    type DuplicateFindApiResponse,
-    type DuplicateMatchMode,
-} from '@/domain/duplicates/types';
-import { type ScanJob, type ScanProgressEvent } from '@/domain/scanner/types';
-import {
-    type TracksApiResponse,
-    type TrackDetailApiResponse,
-    type StatusApiResponse,
-    type RemoveFolderApiResponse,
-    type NormalizeLrcApiResponse,
     type NormalizeAllLyricsApiResponse,
+    type NormalizeLrcApiResponse,
+    type RemoveFolderApiResponse,
     type ResolveDuplicatesApiResponse,
+    type StatusApiResponse,
+    type TrackDetailApiResponse,
+    type TracksApiResponse,
 } from '@/domain/media/dto';
+import { type ActiveTrackDetail, type Track } from '@/domain/media/track';
+import { type ScanJob, type ScanProgressEvent } from '@/domain/scanner/types';
 
 interface AudioStoreState {
     tracks: Track[];
@@ -297,10 +294,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         set({ isNormalizingLyrics: true });
 
         try {
-            const { data } = await axios.post<NormalizeAllLyricsApiResponse>(
-                '/api/lyrics/normalize-all',
-                { folderPath }
-            );
+            const { data } = await axios.post<NormalizeAllLyricsApiResponse>('/api/lyrics/normalize-all', { folderPath });
 
             if (!data.success || !data.jobId) {
                 set({ isNormalizingLyrics: false });
@@ -327,11 +321,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
                         },
                     });
 
-                    if (
-                        progress.status === 'COMPLETED' ||
-                        progress.status === 'FAILED' ||
-                        progress.status === 'CANCELLED'
-                    ) {
+                    if (progress.status === 'COMPLETED' || progress.status === 'FAILED' || progress.status === 'CANCELLED') {
                         eventSource.close();
                         set({ isNormalizingLyrics: false });
                         fetchTracks().catch(console.error);

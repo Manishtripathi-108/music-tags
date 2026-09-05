@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
+
 import { flushSync } from 'react-dom';
 
 const isBrowser = typeof window !== 'undefined' && Boolean(window.document?.createElement);

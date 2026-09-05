@@ -1,18 +1,13 @@
 'use client';
 
 import React from 'react';
-import { useFormContext, Controller } from 'react-hook-form';
-import Icon from '@/components/ui/Icon';
+
+import { Controller, useFormContext } from 'react-hook-form';
+
 import { Button } from '@/components/ui/Button';
-import {
-    Field,
-    FieldError,
-    FieldInput,
-    FieldLabel,
-    FieldRequiredIndicator,
-    FieldTextarea,
-} from '@/components/ui/Field';
+import { Field, FieldError, FieldInput, FieldLabel, FieldRequiredIndicator, FieldTextarea } from '@/components/ui/Field';
 import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
+import Icon from '@/components/ui/Icon';
 import { NumberInputField } from '@/components/ui/NumberInput';
 import { type TagFormValues } from '@/schemas';
 

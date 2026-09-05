@@ -1,7 +1,9 @@
 'use client';
 
 import type { ComponentProps } from 'react';
+
 import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
+
 import { cn } from './cn';
 
 export const Tabs = ({ className, ...props }: ComponentProps<typeof ArkTabs.Root>) => {

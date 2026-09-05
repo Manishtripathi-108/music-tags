@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { ScanJobManager } from '@/services/scanner/job-manager';
-import { DirectoryCrawler } from '@/infrastructure/filesystem/directory-crawler';
 import path from 'path';
+import { describe, expect, it, vi } from 'vitest';
+
+import { DirectoryCrawler } from '@/infrastructure/filesystem/directory-crawler';
+import { ScanJobManager } from '@/services/scanner/job-manager';
 
 describe('ScanJobManager', () => {
     it('creates unique jobs with AbortController and signals', () => {

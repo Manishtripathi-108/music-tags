@@ -1,39 +1,23 @@
 import { type Track } from '@/domain/media/track';
-import {
-    type DuplicateCluster,
-    type DuplicateFindOptions,
-    type DuplicateMatchReason,
-    type DuplicateTrackComparison,
-} from './types';
+
+import { DisjointSet } from './clustering';
 import { cleanMetadataString } from './normalization';
 import { phoneticSignature } from './phonetics';
-import { stringSimilarity } from './similarity';
 import { scoreTrackQuality } from './scoring';
-import { DisjointSet } from './clustering';
+import { stringSimilarity } from './similarity';
+import { type DuplicateCluster, type DuplicateFindOptions, type DuplicateMatchReason, type DuplicateTrackComparison } from './types';
 
 /**
  * Pure domain duplicate detection engine.
  * Discovers candidate pairs via ISRC, file size/duration hash, exact metadata,
  * phonetic sound-alike, and fuzzy bigram string similarity, then clusters them via DisjointSet.
  */
-export function findDuplicates(
-    tracks: Track[],
-    options: DuplicateFindOptions = { mode: 'all' }
-): DuplicateCluster[] {
-    const {
-        mode = 'all',
-        similarityThreshold = 0.85,
-        durationToleranceSec = 5,
-        folderPath,
-    } = options;
+export function findDuplicates(tracks: Track[], options: DuplicateFindOptions = { mode: 'all' }): DuplicateCluster[] {
+    const { mode = 'all', similarityThreshold = 0.85, durationToleranceSec = 5, folderPath } = options;
 
     let pool = tracks;
     if (folderPath) {
-        pool = pool.filter(
-            (t) =>
-                t.directory === folderPath ||
-                (Boolean(t.filePath) && t.filePath!.startsWith(folderPath))
-        );
+        pool = pool.filter((t) => t.directory === folderPath || (Boolean(t.filePath) && t.filePath!.startsWith(folderPath)));
     }
 
     if (pool.length < 2) return [];
@@ -45,13 +29,7 @@ export function findDuplicates(
     }
 
     const pairMatched = new Set<string>();
-    const markPair = (
-        idA: string,
-        idB: string,
-        reason: DuplicateMatchReason,
-        confidence: number,
-        label: string
-    ) => {
+    const markPair = (idA: string, idB: string, reason: DuplicateMatchReason, confidence: number, label: string) => {
         if (idA === idB) return;
         const key = idA < idB ? `${idA}::${idB}` : `${idB}::${idA}`;
         if (pairMatched.has(key)) return;
@@ -164,20 +142,11 @@ export function findDuplicates(
                 if (mode === 'all' || mode === 'similar_tags') {
                     const titleSim = stringSimilarity(a.cleanTitle, b.cleanTitle);
                     if (titleSim >= similarityThreshold) {
-                        const artistSim =
-                            !a.cleanArtist || !b.cleanArtist
-                                ? 0.9
-                                : stringSimilarity(a.cleanArtist, b.cleanArtist);
+                        const artistSim = !a.cleanArtist || !b.cleanArtist ? 0.9 : stringSimilarity(a.cleanArtist, b.cleanArtist);
 
                         if (artistSim >= 0.75) {
                             const avgConfidence = Math.round((titleSim * 0.7 + artistSim * 0.3) * 100);
-                            markPair(
-                                a.id,
-                                b.id,
-                                'similar_tags',
-                                avgConfidence,
-                                `Fuzzy Metadata Match (${avgConfidence}%)`
-                            );
+                            markPair(a.id, b.id, 'similar_tags', avgConfidence, `Fuzzy Metadata Match (${avgConfidence}%)`);
                         }
                     }
                 }

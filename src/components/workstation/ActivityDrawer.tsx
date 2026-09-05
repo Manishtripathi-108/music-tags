@@ -1,8 +1,9 @@
 'use client';
 
+import { Progress } from '@ark-ui/react/Progress';
+
 import Icon from '@/components/ui/Icon';
 import { useAudioStore } from '@/store/audioStore';
-import { Progress } from '@ark-ui/react/Progress';
 
 export function ActivityDrawer() {
     const { activeScanJob, setActiveScanJob } = useAudioStore();

@@ -1,19 +1,6 @@
-import {
-    REGEX_CAMELOT_KEY,
-    REGEX_COMBINED_KEY,
-    REGEX_DIGITS,
-    REGEX_MUSICAL_KEY,
-    REGEX_YEAR,
-    type CanonicalAudioMetadataInput,
-} from '@/schemas';
+import { type CanonicalAudioMetadataInput, REGEX_CAMELOT_KEY, REGEX_COMBINED_KEY, REGEX_DIGITS, REGEX_MUSICAL_KEY, REGEX_YEAR } from '@/schemas';
 
-export {
-    REGEX_CAMELOT_KEY,
-    REGEX_COMBINED_KEY,
-    REGEX_DIGITS,
-    REGEX_MUSICAL_KEY,
-    REGEX_YEAR,
-};
+export { REGEX_CAMELOT_KEY, REGEX_COMBINED_KEY, REGEX_DIGITS, REGEX_MUSICAL_KEY, REGEX_YEAR };
 
 /**
  * Editorial and descriptive metadata for an audio track.

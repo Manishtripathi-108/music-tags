@@ -1,19 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import Icon from '@/components/ui/Icon';
-import { Button } from '@/components/ui/Button';
+
 import { Badge } from '@/components/ui/Badge';
-import {
-    Dialog,
-    DialogBody,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/Dialog';
+import { Button } from '@/components/ui/Button';
+import { Dialog, DialogBody, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import Icon from '@/components/ui/Icon';
 
 export interface FolderItemInfo {
     directory: string;
@@ -32,12 +24,7 @@ interface FolderRemoveDialogProps {
  * Confirmation dialog for removing a scanned folder and its tracks from the database.
  * Prompts user to sync or discard if metadata was modified after scan.
  */
-export function FolderRemoveDialog({
-    open,
-    onOpenChange,
-    folder,
-    onConfirm,
-}: FolderRemoveDialogProps) {
+export function FolderRemoveDialog({ open, onOpenChange, folder, onConfirm }: FolderRemoveDialogProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -73,9 +60,7 @@ export function FolderRemoveDialog({
                             <Icon icon={hasModifications ? 'warning' : 'trash'} className="size-4" />
                         </div>
                         <div>
-                            <DialogTitle>
-                                {hasModifications ? 'Unsynced Changes Detected' : 'Remove Folder from Database'}
-                            </DialogTitle>
+                            <DialogTitle>{hasModifications ? 'Unsynced Changes Detected' : 'Remove Folder from Database'}</DialogTitle>
                             <DialogDescription className="text-xs">
                                 {hasModifications
                                     ? 'Choose how to handle your modified metadata'
@@ -90,7 +75,7 @@ export function FolderRemoveDialog({
                 <DialogBody className="space-y-3 pt-2 text-xs">
                     <div className="border-border bg-muted/30 rounded-md border p-2.5">
                         <div className="text-muted-foreground flex items-center justify-between text-[11px]">
-                            <span className="font-semibold uppercase tracking-wider">Target Directory</span>
+                            <span className="font-semibold tracking-wider uppercase">Target Directory</span>
                             <Badge variant="outline" size="xs">
                                 {folder.count} {folder.count === 1 ? 'track' : 'tracks'}
                             </Badge>
@@ -102,19 +87,22 @@ export function FolderRemoveDialog({
 
                     {hasModifications ? (
                         <div className="border-warning/30 bg-warning/10 text-warning-foreground space-y-2 rounded-md border p-3">
-                            <div className="flex items-center gap-1.5 font-semibold text-warning">
+                            <div className="text-warning flex items-center gap-1.5 font-semibold">
                                 <Icon icon="warning" className="size-4 shrink-0" />
                                 <span>{folder.modifiedCount} modified track(s) in this folder</span>
                             </div>
                             <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                You modified tags or lyrics in the workstation after scanning. These changes currently only exist in the database and have not been written to the audio files.
+                                You modified tags or lyrics in the workstation after scanning. These changes currently only exist in the database and
+                                have not been written to the audio files.
                             </p>
                             <div className="text-muted-foreground border-warning/20 border-t pt-2 text-[11px] leading-relaxed">
                                 <p className="mb-1">
-                                    <strong>Sync to Local Files:</strong> Writes your modified tags into the physical audio files on disk via ExifTool before purging the database records.
+                                    <strong>Sync to Local Files:</strong> Writes your modified tags into the physical audio files on disk via ExifTool
+                                    before purging the database records.
                                 </p>
                                 <p>
-                                    <strong>Remove Permanently:</strong> Discards your tag changes and permanently clears the database records. Your physical audio files remain untouched.
+                                    <strong>Remove Permanently:</strong> Discards your tag changes and permanently clears the database records. Your
+                                    physical audio files remain untouched.
                                 </p>
                             </div>
                         </div>
@@ -122,25 +110,17 @@ export function FolderRemoveDialog({
                         <div className="border-border bg-card/60 text-muted-foreground space-y-1.5 rounded-md border p-3 leading-relaxed">
                             <p className="text-foreground font-medium">Safe Local Database Action</p>
                             <p className="text-[11px]">
-                                This will remove all <strong>{folder.count}</strong> track entries from the MetaTagStudio database. Your local audio files on disk will <strong>NOT</strong> be deleted.
+                                This will remove all <strong>{folder.count}</strong> track entries from the MetaTagStudio database. Your local audio
+                                files on disk will <strong>NOT</strong> be deleted.
                             </p>
                         </div>
                     )}
 
-                    {error && (
-                        <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-2 text-xs">
-                            {error}
-                        </div>
-                    )}
+                    {error && <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-2 text-xs">{error}</div>}
                 </DialogBody>
 
                 <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isSubmitting}
-                        onClick={() => onOpenChange(false)}>
+                    <Button type="button" variant="outline" size="sm" disabled={isSubmitting} onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
 

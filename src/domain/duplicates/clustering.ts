@@ -24,13 +24,7 @@ export class DisjointSet {
         return this.parent.get(id)!;
     }
 
-    union(
-        a: string,
-        b: string,
-        reason: DuplicateMatchReason,
-        confidence: number,
-        label: string
-    ): void {
+    union(a: string, b: string, reason: DuplicateMatchReason, confidence: number, label: string): void {
         const rootA = this.find(a);
         const rootB = this.find(b);
         if (rootA !== rootB) {

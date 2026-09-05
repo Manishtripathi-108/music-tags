@@ -1,5 +1,5 @@
-import { getExifTool, type ExifToolProcess } from './exiftool';
-import { probeAudioFile, type FFprobeAudioResult } from './ffprobe';
+import { type ExifToolProcess, getExifTool } from './exiftool';
+import { type FFprobeAudioResult, probeAudioFile } from './ffprobe';
 
 export interface RawAudioExtractionResult {
     path: string;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { verifyMediaBinaries, type BinaryVerificationResult } from '@/infrastructure/media-tools/binary-status';
+
 import { type StatusApiResponse } from '@/domain/media/dto';
+import { type BinaryVerificationResult, verifyMediaBinaries } from '@/infrastructure/media-tools/binary-status';
 
 export async function GET(): Promise<NextResponse<StatusApiResponse>> {
     try {

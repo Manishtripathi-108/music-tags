@@ -1,16 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import {
-    buildTrackFromDb,
-    sanitizeFilenameTitle,
-    isTrackModified,
-    toExifToolWriteTags,
-} from '@/domain/media/mappers';
+import { describe, expect, it } from 'vitest';
+
+import { buildTrackFromDb, isTrackModified, sanitizeFilenameTitle, toExifToolWriteTags } from '@/domain/media/mappers';
 import {
     filterTracks,
-    isLossless,
     isHiRes,
-    isMissingArt,
+    isLossless,
     isLowResolutionArt,
+    isMissingArt,
     isMissingBpm,
     isMissingLyrics,
     isSyncedLyrics,

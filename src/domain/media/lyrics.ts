@@ -13,10 +13,7 @@ export function isLrcContent(content?: string | null): boolean {
 /**
  * Classifies the lyrics type based on content, synced JSON, or explicit type.
  */
-export function classifyLyricsType(
-    rawLyrics?: string | null,
-    syncedJson?: string | null
-): LyricsType {
+export function classifyLyricsType(rawLyrics?: string | null, syncedJson?: string | null): LyricsType {
     if (syncedJson || isLrcContent(rawLyrics)) {
         return 'synced';
     }

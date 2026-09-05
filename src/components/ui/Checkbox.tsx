@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+
 import { Checkbox as ArkCheckbox } from '@ark-ui/react/checkbox';
 
 import { cn } from './cn';

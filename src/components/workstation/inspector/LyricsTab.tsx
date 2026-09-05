@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import Icon from '@/components/ui/Icon';
+
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import Icon from '@/components/ui/Icon';
 import { normalizeLrc } from '@/domain/lyrics/lrc-parser';
 import { isLrcContent } from '@/domain/media/lyrics';
 import { type Track } from '@/domain/media/track';
@@ -17,14 +18,7 @@ export interface LyricsTabProps {
     onNormalizeTrackLrc: (trackId: string, lrc: string) => Promise<{ success: boolean; normalizedLrc?: string; message?: string }>;
 }
 
-export function LyricsTab({
-    activeTrackId,
-    metadata,
-    lyricsText,
-    setLyricsText,
-    onSaveLyrics,
-    onNormalizeTrackLrc,
-}: LyricsTabProps) {
+export function LyricsTab({ activeTrackId, metadata, lyricsText, setLyricsText, onSaveLyrics, onNormalizeTrackLrc }: LyricsTabProps) {
     const [isSavingLyrics, setIsSavingLyrics] = useState(false);
     const [lyricsSavedSuccess, setLyricsSavedSuccess] = useState(false);
     const [isNormalizingLrc, setIsNormalizingLrc] = useState(false);
@@ -94,14 +88,14 @@ export function LyricsTab({
             <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-1.5">
                     <Icon icon="lyrics" className="text-primary size-3.5" />
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">Lyrics Editor</span>
+                    <span className="text-foreground text-[11px] font-bold tracking-wider uppercase">Lyrics Editor</span>
                 </div>
                 <Badge variant={isLrc ? 'success' : hasLyrics ? 'secondary' : 'outline'} size="xs">
                     {isLrc ? 'Synced (LRC)' : hasLyrics ? 'Unsynced' : 'None'}
                 </Badge>
             </div>
 
-            <div className="flex flex-1 flex-col overflow-hidden rounded border bg-card/40 p-2">
+            <div className="bg-card/40 flex flex-1 flex-col overflow-hidden rounded border p-2">
                 <textarea
                     value={lyricsText}
                     onChange={(e) => {
@@ -138,7 +132,7 @@ export function LyricsTab({
                         disabled={isNormalizingLrc || (!lyricsText.trim() && !metadata?.lyrics)}
                         onClick={handleNormalizeLrc}
                         className="text-[10px]">
-                        <Icon icon={isNormalizingLrc ? 'loading' : 'magic'} className="size-3 text-primary" />
+                        <Icon icon={isNormalizingLrc ? 'loading' : 'magic'} className="text-primary size-3" />
                         <span>{isNormalizingLrc ? 'Normalizing...' : 'Normalize LRC'}</span>
                     </Button>
                 </div>
@@ -150,10 +144,7 @@ export function LyricsTab({
                     disabled={isSavingLyrics || lyricsText === (metadata?.lyrics || '')}
                     onClick={handleSaveLyrics}
                     className="h-7 text-xs">
-                    <Icon
-                        icon={isSavingLyrics ? 'loading' : lyricsSavedSuccess ? 'success' : 'save'}
-                        className="size-3.5"
-                    />
+                    <Icon icon={isSavingLyrics ? 'loading' : lyricsSavedSuccess ? 'success' : 'save'} className="size-3.5" />
                     <span>{isSavingLyrics ? 'Saving...' : lyricsSavedSuccess ? 'Saved' : 'Save Lyrics'}</span>
                 </Button>
             </div>

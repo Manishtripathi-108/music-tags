@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+
 import { toCanonicalPath } from '../filesystem/paths';
 
 export const THUMBNAIL_DIR = path.resolve(process.cwd(), '.cache', 'art');

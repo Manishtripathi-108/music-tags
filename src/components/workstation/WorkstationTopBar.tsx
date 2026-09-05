@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import Icon from '@/components/ui/Icon';
+
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import Icon from '@/components/ui/Icon';
 import ThemeToggler from '@/components/ui/ThemeToggler';
 import { useAudioStore } from '@/store/audioStore';
+
 import { FieldInput } from '../ui/Field';
 
 export function WorkstationTopBar() {
@@ -66,7 +68,7 @@ export function WorkstationTopBar() {
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery('')}
-                            className="text-muted-foreground absolute top-2 right-2 cursor-pointer text-[10px] hover:text-foreground">
+                            className="text-muted-foreground hover:text-foreground absolute top-2 right-2 cursor-pointer text-[10px]">
                             CLEAR
                         </button>
                     )}
@@ -79,7 +81,11 @@ export function WorkstationTopBar() {
                         variant={exif?.found ? 'success' : 'destructive'}
                         size="sm"
                         className="flex cursor-help items-center gap-1 transition-opacity hover:opacity-80"
-                        title={exif?.found ? `ExifTool ${exif.version || ''}\nPath: ${exif.path || 'in PATH'}` : `ExifTool missing: ${exif?.error || 'not found in PATH'}`}>
+                        title={
+                            exif?.found
+                                ? `ExifTool ${exif.version || ''}\nPath: ${exif.path || 'in PATH'}`
+                                : `ExifTool missing: ${exif?.error || 'not found in PATH'}`
+                        }>
                         <Icon icon={exif?.found ? 'success' : 'warning'} className="size-3" />
                         <span>ExifTool{exif?.version ? ` v${exif.version}` : ''}</span>
                     </Badge>
@@ -88,7 +94,11 @@ export function WorkstationTopBar() {
                         variant={ffmpeg?.found ? 'success' : 'destructive'}
                         size="sm"
                         className="flex cursor-help items-center gap-1 transition-opacity hover:opacity-80"
-                        title={ffmpeg?.found ? `FFmpeg ${ffmpeg.version || ''}\nPath: ${ffmpeg.path || 'in PATH'}` : `FFmpeg missing: ${ffmpeg?.error || 'not found in PATH'}`}>
+                        title={
+                            ffmpeg?.found
+                                ? `FFmpeg ${ffmpeg.version || ''}\nPath: ${ffmpeg.path || 'in PATH'}`
+                                : `FFmpeg missing: ${ffmpeg?.error || 'not found in PATH'}`
+                        }>
                         <Icon icon={ffmpeg?.found ? 'success' : 'warning'} className="size-3" />
                         <span>FFmpeg{ffmpeg?.version ? ` v${ffmpeg.version}` : ''}</span>
                     </Badge>
@@ -97,7 +107,11 @@ export function WorkstationTopBar() {
                         variant={ffprobe?.found ? 'success' : 'destructive'}
                         size="sm"
                         className="flex cursor-help items-center gap-1 transition-opacity hover:opacity-80"
-                        title={ffprobe?.found ? `FFprobe ${ffprobe.version || ''}\nPath: ${ffprobe.path || 'in PATH'}` : `FFprobe missing: ${ffprobe?.error || 'not found in PATH'}`}>
+                        title={
+                            ffprobe?.found
+                                ? `FFprobe ${ffprobe.version || ''}\nPath: ${ffprobe.path || 'in PATH'}`
+                                : `FFprobe missing: ${ffprobe?.error || 'not found in PATH'}`
+                        }>
                         <Icon icon={ffprobe?.found ? 'success' : 'warning'} className="size-3" />
                         <span>FFprobe</span>
                     </Badge>
@@ -117,16 +131,12 @@ export function WorkstationTopBar() {
                     }}
                     disabled={isNormalizingLyrics || tracks.length === 0}
                     className="h-7 gap-1.5 text-xs">
-                    <Icon icon={isNormalizingLyrics ? 'loading' : 'magic'} className="size-3.5 text-primary" />
+                    <Icon icon={isNormalizingLyrics ? 'loading' : 'magic'} className="text-primary size-3.5" />
                     <span>{isNormalizingLyrics ? 'Normalizing Lyrics...' : 'Normalize All Lyrics'}</span>
                 </Button>
 
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsDuplicateModalOpen(true)}
-                    className="h-7 gap-1.5 text-xs">
-                    <Icon icon="copy" className="size-3.5 text-primary" />
+                <Button variant="outline" size="sm" onClick={() => setIsDuplicateModalOpen(true)} className="h-7 gap-1.5 text-xs">
+                    <Icon icon="copy" className="text-primary size-3.5" />
                     <span>Find Duplicates</span>
                 </Button>
 

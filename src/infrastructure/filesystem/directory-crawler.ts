@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+
 import { SUPPORTED_AUDIO_EXTENSIONS } from '@/domain/media/media-file';
 
 export interface DiscoveredAudioFile {
@@ -19,14 +20,7 @@ export interface DirectoryCrawlerOptions {
     onDirectoryEntered?: (directory: string) => void;
 }
 
-const IGNORED_DIRECTORY_NAMES = new Set([
-    'node_modules',
-    '$recycle.bin',
-    'system volume information',
-    '.git',
-    '.svn',
-    '.hg',
-]);
+const IGNORED_DIRECTORY_NAMES = new Set(['node_modules', '$recycle.bin', 'system volume information', '.git', '.svn', '.hg']);
 
 /**
  * Traverses filesystem directories to discover supported audio files.

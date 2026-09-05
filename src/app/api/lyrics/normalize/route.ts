@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
-import { db } from '@/infrastructure/database/client';
-import { audioFiles, canonicalAudioMetadata } from '@/infrastructure/database/schema';
-import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
-import { normalizeTrackLrcFile } from '@/services/lyrics/lyrics-service';
-import { NormalizeLrcRequestSchema } from '@/schemas';
-import { sanitizeFilenameTitle } from '@/domain/media/mappers';
-import { type NormalizeLrcApiResponse } from '@/domain/media/dto';
 
-export async function POST(
-    request: NextRequest
-): Promise<NextResponse<NormalizeLrcApiResponse | { error: string }>> {
+import { eq } from 'drizzle-orm';
+
+import { type NormalizeLrcApiResponse } from '@/domain/media/dto';
+import { sanitizeFilenameTitle } from '@/domain/media/mappers';
+import { db } from '@/infrastructure/database/client';
+import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
+import { audioFiles, canonicalAudioMetadata } from '@/infrastructure/database/schema';
+import { NormalizeLrcRequestSchema } from '@/schemas';
+import { normalizeTrackLrcFile } from '@/services/lyrics/lyrics-service';
+
+export async function POST(request: NextRequest): Promise<NextResponse<NormalizeLrcApiResponse | { error: string }>> {
     await ensureDatabaseInitialized();
 
     try {
@@ -18,10 +18,7 @@ export async function POST(
         const validation = NormalizeLrcRequestSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json(
-                { error: validation.error.issues[0]?.message || 'Invalid request payload' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: validation.error.issues[0]?.message || 'Invalid request payload' }, { status: 400 });
         }
 
         const { trackId, lrcContent } = validation.data;
@@ -55,10 +52,7 @@ export async function POST(
         const result = await normalizeTrackLrcFile(trackData, lrcContent);
 
         if (!result.success) {
-            return NextResponse.json(
-                { error: result.error || 'Failed to normalize LRC file' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: result.error || 'Failed to normalize LRC file' }, { status: 400 });
         }
 
         return NextResponse.json({
@@ -70,9 +64,6 @@ export async function POST(
         });
     } catch (error) {
         console.error('Error normalizing track LRC:', error);
-        return NextResponse.json(
-            { error: 'Internal server error while normalizing LRC' },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: 'Internal server error while normalizing LRC' }, { status: 500 });
     }
 }

@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
+
 import Image from 'next/image';
-import Icon from '@/components/ui/Icon';
+
 import { Badge } from '@/components/ui/Badge';
+import Icon from '@/components/ui/Icon';
 import { type Track } from '@/domain/media/track';
 
 export interface InspectorHeaderProps {
@@ -15,18 +17,11 @@ export interface InspectorHeaderProps {
     isLrc?: boolean;
 }
 
-export function InspectorHeader({
-    activeTrackId,
-    metadata,
-    displayTitle,
-    displayArtist,
-    hasLyrics,
-    isLrc,
-}: InspectorHeaderProps) {
+export function InspectorHeader({ activeTrackId, metadata, displayTitle, displayArtist, hasLyrics, isLrc }: InspectorHeaderProps) {
     return (
         <div className="bg-background flex items-center gap-3 border-b p-3">
-            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border shadow-inner bg-muted/20">
-                <Icon icon="audio" className="text-muted-foreground/40 size-6 absolute" />
+            <div className="bg-muted/20 relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border shadow-inner">
+                <Icon icon="audio" className="text-muted-foreground/40 absolute size-6" />
                 {activeTrackId && (
                     <Image
                         key={activeTrackId}
@@ -34,7 +29,7 @@ export function InspectorHeader({
                         alt="Cover Art"
                         fill
                         sizes="56px"
-                        className="h-full w-full object-cover relative z-1"
+                        className="relative z-1 h-full w-full object-cover"
                         onError={(e) => {
                             e.currentTarget.style.display = 'none';
                         }}
@@ -43,21 +38,14 @@ export function InspectorHeader({
             </div>
 
             <div className="min-w-0 flex-1">
-                <div className="text-muted-foreground truncate text-xs font-semibold">
-                    {displayTitle || metadata?.title || 'Untitled'}
-                </div>
-                <div className="text-muted-foreground truncate text-[11px]">
-                    {displayArtist || metadata?.artist || 'Unknown Artist'}
-                </div>
+                <div className="text-muted-foreground truncate text-xs font-semibold">{displayTitle || metadata?.title || 'Untitled'}</div>
+                <div className="text-muted-foreground truncate text-[11px]">{displayArtist || metadata?.artist || 'Unknown Artist'}</div>
                 <div className="mt-1 flex flex-wrap items-center gap-1">
                     <Badge variant="outline" size="xs" className="text-muted-foreground font-mono">
                         {metadata?.codec ? metadata.codec.toUpperCase() : 'AUDIO'}
                     </Badge>
                     {metadata?.bitDepth && (
-                        <Badge
-                            variant={metadata.bitDepth > 16 ? 'primary' : 'outline'}
-                            size="xs"
-                            className="font-mono">
+                        <Badge variant={metadata.bitDepth > 16 ? 'primary' : 'outline'} size="xs" className="font-mono">
                             {metadata.bitDepth}-BIT
                         </Badge>
                     )}
@@ -68,15 +56,11 @@ export function InspectorHeader({
                     )}
                     {metadata?.hasCoverArt && metadata.coverArtWidth && metadata.coverArtHeight && (
                         <Badge
-                            variant={
-                                metadata.coverArtWidth < 600 || metadata.coverArtHeight < 600
-                                    ? 'destructive'
-                                    : 'secondary'
-                            }
+                            variant={metadata.coverArtWidth < 600 || metadata.coverArtHeight < 600 ? 'destructive' : 'secondary'}
                             size="xs"
                             className="font-mono"
                             title={`Cover Art: ${metadata.coverArtWidth}×${metadata.coverArtHeight} (${metadata.coverArtMime || 'image/jpeg'})`}>
-                            <Icon icon="gallery" className="size-2.5 mr-0.5" />
+                            <Icon icon="gallery" className="mr-0.5 size-2.5" />
                             {metadata.coverArtWidth}×{metadata.coverArtHeight}
                         </Badge>
                     )}

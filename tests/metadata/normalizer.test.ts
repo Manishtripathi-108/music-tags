@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { normalizeAudioMetadata } from '@/services/metadata/metadata-normalizer';
+import { describe, expect, it } from 'vitest';
+
 import { type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
+import { normalizeAudioMetadata } from '@/services/metadata/metadata-normalizer';
 
 describe('normalizeAudioMetadata', () => {
     it('extracts canonical metadata from raw ExifTool and FFprobe structures', () => {
@@ -35,11 +36,7 @@ describe('normalizeAudioMetadata', () => {
             ],
         };
 
-        const { canonical, rawTags } = normalizeAudioMetadata(
-            'file-123',
-            rawExif,
-            probeResult as unknown as FFprobeAudioResult
-        );
+        const { canonical, rawTags } = normalizeAudioMetadata('file-123', rawExif, probeResult as unknown as FFprobeAudioResult);
 
         expect(canonical.fileId).toBe('file-123');
         expect(canonical.title).toBe('Test Song');
@@ -73,11 +70,7 @@ describe('normalizeAudioMetadata', () => {
             ],
         };
 
-        const { canonical } = normalizeAudioMetadata(
-            'flac-1',
-            {},
-            probeFlac as unknown as FFprobeAudioResult
-        );
+        const { canonical } = normalizeAudioMetadata('flac-1', {}, probeFlac as unknown as FFprobeAudioResult);
         expect(canonical.codec).toBe('flac');
         expect(canonical.lossless).toBe(true);
     });

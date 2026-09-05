@@ -3,6 +3,7 @@ import path from 'path';
 
 /**
  * Ensures Windows path supports lengths > 260 characters by prefixing \\?\ if needed.
+ * e.g. C:\very\long\path\to\file.mp3 becomes \\?\C:\very\long\path\to\file.mp3
  */
 export function toCanonicalPath(filePath: string): string {
     const normalized = path.resolve(filePath);
@@ -14,6 +15,7 @@ export function toCanonicalPath(filePath: string): string {
 
 /**
  * Removes Windows long-path prefix for clean UI presentation.
+ * e.g. \\?\C:\very\long\path\to\file.mp3 becomes C:\very\long\path\to\file.mp3
  */
 export function toDisplayPath(filePath: string): string {
     if (filePath.startsWith('\\\\?\\')) {
@@ -25,9 +27,7 @@ export function toDisplayPath(filePath: string): string {
 /**
  * Validates that the path exists and is a directory.
  */
-export async function validateDirectory(
-    dirPath: string
-): Promise<{ valid: boolean; error?: string; resolvedPath: string }> {
+export async function validateDirectory(dirPath: string): Promise<{ valid: boolean; error?: string; resolvedPath: string }> {
     try {
         const resolved = path.resolve(dirPath);
         const stats = await fs.promises.stat(resolved);

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+
 import Icon from '@/components/ui/Icon';
 import { type Track } from '@/domain/media/track';
 
@@ -68,7 +69,7 @@ export function AudioSpecsTab({ metadata }: AudioSpecsTabProps) {
             </div>
 
             <div className="space-y-1.5 rounded border p-2.5">
-                <div className="text-primary font-semibold border-b pb-1 text-[10px] flex items-center gap-1.5">
+                <div className="text-primary flex items-center gap-1.5 border-b pb-1 text-[10px] font-semibold">
                     <Icon icon="gallery" className="size-3" />
                     <span>Artwork & Cover Details</span>
                 </div>
@@ -96,14 +97,12 @@ export function AudioSpecsTab({ metadata }: AudioSpecsTabProps) {
                 </div>
                 <div className="text-foreground flex justify-between border-b py-0.5">
                     <span>Type</span>
-                    <span className="text-muted-foreground">
-                        {metadata?.coverArtType || (metadata?.hasCoverArt ? 'Front Cover' : '-')}
-                    </span>
+                    <span className="text-muted-foreground">{metadata?.coverArtType || (metadata?.hasCoverArt ? 'Front Cover' : '-')}</span>
                 </div>
                 {metadata?.coverArtDescription && (
                     <div className="text-foreground flex justify-between border-b py-0.5">
                         <span>Description</span>
-                        <span className="text-muted-foreground truncate max-w-40">{metadata.coverArtDescription}</span>
+                        <span className="text-muted-foreground max-w-40 truncate">{metadata.coverArtDescription}</span>
                     </div>
                 )}
                 <div className="text-foreground flex justify-between py-0.5">

@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react';
-import { cva, type VariantProps } from 'class-variance-authority';
+
+import { type VariantProps, cva } from 'class-variance-authority';
 
 import { cn } from './cn';
 import { DISABLED, FOCUS_RING } from './tailwind.helpers';
@@ -134,12 +135,33 @@ const buttonInnerVariants = cva(
     {
         variants: {
             variant: {
-                primary: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-primary-foreground', 'shadow-xs', 'group-hover:brightness-105'],
+                primary: [
+                    'bg-linear-to-t',
+                    'from-(--button-inner-from)',
+                    'to-(--button-inner-to)',
+                    'text-primary-foreground',
+                    'shadow-xs',
+                    'group-hover:brightness-105',
+                ],
                 secondary: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-secondary-foreground'],
                 outline: ['bg-transparent', 'text-foreground'],
                 ghost: ['bg-transparent', 'text-inherit'],
-                destructive: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-destructive-foreground', 'shadow-xs', 'group-hover:brightness-105'],
-                success: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-success-foreground', 'shadow-xs', 'group-hover:brightness-105'],
+                destructive: [
+                    'bg-linear-to-t',
+                    'from-(--button-inner-from)',
+                    'to-(--button-inner-to)',
+                    'text-destructive-foreground',
+                    'shadow-xs',
+                    'group-hover:brightness-105',
+                ],
+                success: [
+                    'bg-linear-to-t',
+                    'from-(--button-inner-from)',
+                    'to-(--button-inner-to)',
+                    'text-success-foreground',
+                    'shadow-xs',
+                    'group-hover:brightness-105',
+                ],
                 warning: ['bg-linear-to-t', 'from-(--button-inner-from)', 'to-(--button-inner-to)', 'text-warning-foreground', 'shadow-xs'],
                 link: ['bg-transparent', 'text-primary'],
             },

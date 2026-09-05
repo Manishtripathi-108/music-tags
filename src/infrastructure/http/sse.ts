@@ -11,12 +11,7 @@ export interface EventStreamOptions {
  */
 export function createProgressEventStream(options: EventStreamOptions): Response {
     const encoder = new TextEncoder();
-    const isTerminal =
-        options.isTerminal ||
-        ((event) =>
-            event.status === 'COMPLETED' ||
-            event.status === 'FAILED' ||
-            event.status === 'CANCELLED');
+    const isTerminal = options.isTerminal || ((event) => event.status === 'COMPLETED' || event.status === 'FAILED' || event.status === 'CANCELLED');
 
     const stream = new ReadableStream({
         start(controller) {

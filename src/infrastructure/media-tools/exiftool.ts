@@ -1,4 +1,5 @@
 import { ChildProcess, spawn } from 'child_process';
+
 import { toCanonicalPath } from '../filesystem/paths';
 
 interface ExifToolTask {
@@ -23,15 +24,11 @@ export class ExifToolProcess {
     private start() {
         if (this.process) return;
 
-        this.process = spawn(
-            'exiftool',
-            ['-stay_open', 'True', '-@', '-', '-common_args', '-charset', 'filename=utf8'],
-            {
-                shell: false,
-                windowsHide: true,
-                stdio: ['pipe', 'pipe', 'pipe'],
-            }
-        );
+        this.process = spawn('exiftool', ['-stay_open', 'True', '-@', '-', '-common_args', '-charset', 'filename=utf8'], {
+            shell: false,
+            windowsHide: true,
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
 
         this.process.stdout?.setEncoding('utf-8');
         this.process.stderr?.setEncoding('utf-8');
@@ -145,11 +142,7 @@ export class ExifToolProcess {
         }
     }
 
-    public async writeTags(
-        filePath: string,
-        tags: Record<string, string | number | null>,
-        preserveOriginal = true
-    ): Promise<boolean> {
+    public async writeTags(filePath: string, tags: Record<string, string | number | null>, preserveOriginal = true): Promise<boolean> {
         const canonical = toCanonicalPath(filePath);
         const args: string[] = [];
 

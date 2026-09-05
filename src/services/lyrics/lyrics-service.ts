@@ -1,12 +1,13 @@
+import { eq } from 'drizzle-orm';
+import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
-import { EventEmitter } from 'events';
-import { eq } from 'drizzle-orm';
+
+import { type LrcTrackMetadata, normalizeLrc } from '@/domain/lyrics/lrc-parser';
+import { REGEX_LRC_TIMESTAMP } from '@/domain/media/lyrics';
+import { type ScanProgressEvent } from '@/domain/scanner/types';
 import { db } from '@/infrastructure/database/client';
 import { audioFiles, canonicalAudioMetadata } from '@/infrastructure/database/schema';
-import { REGEX_LRC_TIMESTAMP } from '@/domain/media/lyrics';
-import { normalizeLrc, type LrcTrackMetadata } from '@/domain/lyrics/lrc-parser';
-import { type ScanProgressEvent } from '@/domain/scanner/types';
 
 export interface NormalizeFileResult {
     success: boolean;
@@ -49,10 +50,7 @@ export function resolveLrcPath(audioFilePath: string): string {
  * Normalizes an individual audio file's LRC sidecar file or embedded lyrics.
  * Writes changes back to the .lrc file on disk and updates the database.
  */
-export async function normalizeTrackLrcFile(
-    track: LrcTrackMetadata & { id: string },
-    explicitLrcContent?: string
-): Promise<NormalizeFileResult> {
+export async function normalizeTrackLrcFile(track: LrcTrackMetadata & { id: string }, explicitLrcContent?: string): Promise<NormalizeFileResult> {
     if (!track.filePath) {
         return {
             success: false,
@@ -159,16 +157,10 @@ class LyricsNormalizationService extends EventEmitter {
         this.off(jobId, listener);
     }
 
-    public async normalizeAll(
-        jobId: string,
-        folderPath?: string
-    ): Promise<{ normalized: number; failed: number; skipped: number }> {
+    public async normalizeAll(jobId: string, folderPath?: string): Promise<{ normalized: number; failed: number; skipped: number }> {
         const job = this.activeJobs.get(jobId) || { abort: false };
 
-        const rows = await db
-            .select()
-            .from(audioFiles)
-            .leftJoin(canonicalAudioMetadata, eq(audioFiles.id, canonicalAudioMetadata.fileId));
+        const rows = await db.select().from(audioFiles).leftJoin(canonicalAudioMetadata, eq(audioFiles.id, canonicalAudioMetadata.fileId));
 
         let candidateTracks = rows.map((r) => ({
             id: r.audio_files.id,
@@ -185,9 +177,7 @@ class LyricsNormalizationService extends EventEmitter {
         }));
 
         if (folderPath) {
-            candidateTracks = candidateTracks.filter(
-                (t) => t.directory === folderPath || t.filePath.startsWith(folderPath)
-            );
+            candidateTracks = candidateTracks.filter((t) => t.directory === folderPath || t.filePath.startsWith(folderPath));
         }
 
         const totalEstimated = candidateTracks.length;

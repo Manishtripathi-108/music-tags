@@ -1,5 +1,5 @@
-import { type Track } from './track';
 import { isLrcContent } from './lyrics';
+import { type Track } from './track';
 
 export function isLossless(track: Track): boolean {
     return Boolean(track.lossless);
@@ -15,11 +15,7 @@ export function isMissingArt(track: Track): boolean {
 
 export function isLowResolutionArt(track: Track, threshold = 800): boolean {
     if (!track.hasCoverArt) return false;
-    return Boolean(
-        track.coverArtWidth &&
-        track.coverArtHeight &&
-        (track.coverArtWidth < threshold || track.coverArtHeight < threshold)
-    );
+    return Boolean(track.coverArtWidth && track.coverArtHeight && (track.coverArtWidth < threshold || track.coverArtHeight < threshold));
 }
 
 export function isMissingBpm(track: Track): boolean {
@@ -31,26 +27,15 @@ export function isMissingLyrics(track: Track): boolean {
 }
 
 export function isSyncedLyrics(track: Track): boolean {
-    return (
-        track.lyricsType === 'synced' ||
-        Boolean(track.lyricsSyncedJson) ||
-        isLrcContent(track.lyrics)
-    );
+    return track.lyricsType === 'synced' || Boolean(track.lyricsSyncedJson) || isLrcContent(track.lyrics);
 }
 
 export function isUnsyncedLyrics(track: Track): boolean {
-    return (
-        track.lyricsType === 'unsynced' ||
-        Boolean(track.lyricsUnsynced) ||
-        (Boolean(track.lyrics) && !isLrcContent(track.lyrics))
-    );
+    return track.lyricsType === 'unsynced' || Boolean(track.lyricsUnsynced) || (Boolean(track.lyrics) && !isLrcContent(track.lyrics));
 }
 
 export function matchesFolder(track: Track, folderPath: string): boolean {
-    return (
-        track.directory === folderPath ||
-        Boolean(track.filePath && track.filePath.startsWith(folderPath))
-    );
+    return track.directory === folderPath || Boolean(track.filePath && track.filePath.startsWith(folderPath));
 }
 
 export function matchesSearchQuery(track: Track, query: string): boolean {

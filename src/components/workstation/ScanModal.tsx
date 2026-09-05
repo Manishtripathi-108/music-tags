@@ -1,17 +1,18 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import axios from 'axios';
 import { Controller, useForm } from 'react-hook-form';
-import Icon from '@/components/ui/Icon';
+
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import { Field, FieldError, FieldInput, FieldLabel, FieldRequiredIndicator } from '@/components/ui/Field';
 import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
-import { Checkbox } from '@/components/ui/Checkbox';
-import axios from 'axios';
-import { useAudioStore } from '@/store/audioStore';
-import { type ScanFolderRequest, ScanFolderRequestSchema } from '@/schemas';
+import Icon from '@/components/ui/Icon';
 import { type ScanApiResponse } from '@/domain/media/dto';
+import { type ScanFolderRequest, ScanFolderRequestSchema } from '@/schemas';
+import { useAudioStore } from '@/store/audioStore';
 
 export function ScanModal() {
     const { isScanModalOpen, setIsScanModalOpen, setActiveScanJob, fetchTracks } = useAudioStore();

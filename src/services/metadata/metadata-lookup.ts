@@ -12,10 +12,7 @@ export interface TagLookup {
  * Creates a normalized, case-insensitive, group-agnostic lookup map
  * from raw ExifTool and FFprobe metadata.
  */
-export function createTagLookup(
-    rawExif: Record<string, unknown>,
-    probeResult?: FFprobeAudioResult | null
-): TagLookup {
+export function createTagLookup(rawExif: Record<string, unknown>, probeResult?: FFprobeAudioResult | null): TagLookup {
     const map = new Map<string, unknown>();
 
     // 1. Ingest raw ExifTool tags

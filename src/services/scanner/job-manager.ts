@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+
 import { type ScanProgressEvent } from '@/domain/scanner/types';
 
 export interface ScanJobState {

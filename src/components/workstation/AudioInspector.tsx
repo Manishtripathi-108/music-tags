@@ -1,19 +1,22 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useForm, FormProvider } from 'react-hook-form';
+
 import { zodResolver } from '@hookform/resolvers/zod';
+import axios from 'axios';
+import { FormProvider, useForm } from 'react-hook-form';
+
 import Icon from '@/components/ui/Icon';
 import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { useAudioStore } from '@/store/audioStore';
-import { TagFormSchema, type TagFormValues } from '@/schemas';
-import { type TrackPatchApiResponse } from '@/domain/media/track';
 import { isLrcContent } from '@/domain/media/lyrics';
-import { InspectorHeader } from './inspector/InspectorHeader';
+import { type TrackPatchApiResponse } from '@/domain/media/track';
+import { TagFormSchema, type TagFormValues } from '@/schemas';
+import { useAudioStore } from '@/store/audioStore';
+
 import { AudioSpecsTab } from './inspector/AudioSpecsTab';
-import { RawTagsTab } from './inspector/RawTagsTab';
+import { InspectorHeader } from './inspector/InspectorHeader';
 import { LyricsTab } from './inspector/LyricsTab';
+import { RawTagsTab } from './inspector/RawTagsTab';
 import { TagFormTab } from './inspector/TagFormTab';
 
 export function AudioInspector() {
@@ -95,10 +98,7 @@ export function AudioInspector() {
         };
 
         try {
-            const { data: responseData } = await axios.patch<TrackPatchApiResponse>(
-                `/api/files/${activeTrackId}/tags`,
-                payload
-            );
+            const { data: responseData } = await axios.patch<TrackPatchApiResponse>(`/api/files/${activeTrackId}/tags`, payload);
 
             const savedTrack = responseData.success && responseData.track ? responseData.track : { ...payload, id: activeTrackId };
             updateTrackInline(activeTrackId, savedTrack);
@@ -139,10 +139,7 @@ export function AudioInspector() {
         };
 
         try {
-            const { data: responseData } = await axios.patch<TrackPatchApiResponse>(
-                `/api/files/${activeTrackId}/tags`,
-                payload
-            );
+            const { data: responseData } = await axios.patch<TrackPatchApiResponse>(`/api/files/${activeTrackId}/tags`, payload);
 
             if (responseData.success && responseData.track) {
                 updateTrackInline(activeTrackId, responseData.track);

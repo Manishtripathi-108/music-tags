@@ -1,9 +1,10 @@
 import { type CanonicalAudioMetadata } from '@/domain/media/audio-metadata';
 import { type RawTag } from '@/domain/media/track';
 import { type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
+import { canonicalAudioMetadataInputSchema } from '@/schemas/audio-metadata.schema';
+
 import { createTagLookup } from './metadata-lookup';
 import { buildRawTagList } from './raw-tags';
-import { canonicalAudioMetadataInputSchema } from '@/schemas/audio-metadata.schema';
 
 export { buildRawTagList };
 

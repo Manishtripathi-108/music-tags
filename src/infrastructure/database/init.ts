@@ -1,5 +1,6 @@
-import { db } from './client';
 import { sql } from 'drizzle-orm';
+
+import { db } from './client';
 
 /**
  * Ensures all SQLite tables and columns exist in the database.

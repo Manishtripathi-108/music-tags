@@ -1,5 +1,6 @@
-import { type Track, type RawTag } from './track';
 import { type BinaryVerificationResult } from '@/infrastructure/media-tools/binary-status';
+
+import { type RawTag, type Track } from './track';
 
 export interface TracksApiResponse {
     tracks: Track[];

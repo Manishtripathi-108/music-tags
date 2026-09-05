@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { cleanMetadataString } from '@/domain/duplicates/normalization';
-import { soundexWord, phoneticSignature } from '@/domain/duplicates/phonetics';
-import { stringSimilarity } from '@/domain/duplicates/similarity';
-import { scoreTrackQuality } from '@/domain/duplicates/scoring';
+import { describe, expect, it } from 'vitest';
+
 import { findDuplicates } from '@/domain/duplicates/duplicate-matcher';
+import { cleanMetadataString } from '@/domain/duplicates/normalization';
+import { phoneticSignature, soundexWord } from '@/domain/duplicates/phonetics';
+import { scoreTrackQuality } from '@/domain/duplicates/scoring';
+import { stringSimilarity } from '@/domain/duplicates/similarity';
 import { type Track } from '@/domain/media/track';
 
 describe('cleanMetadataString', () => {

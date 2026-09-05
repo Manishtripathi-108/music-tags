@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+
 import { eq } from 'drizzle-orm';
-import { db } from '@/infrastructure/database/client';
-import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/infrastructure/database/schema';
-import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
-import { type Track, type RawTag } from '@/domain/media/track';
+
 import { type TrackPatchApiResponse } from '@/domain/media/dto';
-import { TrackPatchSchema } from '@/schemas';
-import { buildTrackFromDb } from '@/domain/media/mappers';
 import { isLrcContent } from '@/domain/media/lyrics';
+import { buildTrackFromDb } from '@/domain/media/mappers';
+import { type RawTag, type Track } from '@/domain/media/track';
+import { db } from '@/infrastructure/database/client';
+import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
+import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/infrastructure/database/schema';
 import { getExifTool } from '@/infrastructure/media-tools/exiftool';
-import { probeAudioFile, type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
+import { type FFprobeAudioResult, probeAudioFile } from '@/infrastructure/media-tools/ffprobe';
+import { TrackPatchSchema } from '@/schemas';
 import { buildRawTagList } from '@/services/metadata/raw-tags';
 
 type RouteContext = {
@@ -38,21 +40,21 @@ export async function GET(
         const { audio_files: file, canonical_audio_metadata: meta } = rows[0];
         const track = buildTrackFromDb(file, meta);
 
-        const rawRows = await db
-            .select()
-            .from(rawAudioMetadata)
-            .where(eq(rawAudioMetadata.fileId, id))
-            .limit(1);
+        const rawRows = await db.select().from(rawAudioMetadata).where(eq(rawAudioMetadata.fileId, id)).limit(1);
 
         let exifObj: Record<string, unknown> | null = null;
         let probeObj: FFprobeAudioResult | null = null;
 
         if (rawRows.length && (rawRows[0].exiftoolJson || rawRows[0].ffprobeJson)) {
             if (rawRows[0].exiftoolJson) {
-                try { exifObj = JSON.parse(rawRows[0].exiftoolJson); } catch {}
+                try {
+                    exifObj = JSON.parse(rawRows[0].exiftoolJson);
+                } catch {}
             }
             if (rawRows[0].ffprobeJson) {
-                try { probeObj = JSON.parse(rawRows[0].ffprobeJson); } catch {}
+                try {
+                    probeObj = JSON.parse(rawRows[0].ffprobeJson);
+                } catch {}
             }
         } else if (file.path) {
             // On-demand metadata extraction fallback
@@ -103,10 +105,7 @@ export async function PATCH(
         const validation = TrackPatchSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json(
-                { error: 'Invalid payload', details: validation.error.flatten() },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: 'Invalid payload', details: validation.error.flatten() }, { status: 400 });
         }
 
         const data = validation.data;
@@ -163,10 +162,7 @@ export async function PATCH(
         if (lyricsUnsynced !== undefined) updateSet.lyricsUnsynced = lyricsUnsynced;
         if (lyricsSyncedJson !== undefined) updateSet.lyricsSyncedJson = lyricsSyncedJson;
 
-        await db
-            .update(canonicalAudioMetadata)
-            .set(updateSet)
-            .where(eq(canonicalAudioMetadata.fileId, id));
+        await db.update(canonicalAudioMetadata).set(updateSet).where(eq(canonicalAudioMetadata.fileId, id));
 
         // Fetch and return the updated track using canonical mapper
         const rows = await db

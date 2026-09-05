@@ -1,20 +1,15 @@
-import { type MediaFile } from './media-file';
 import { type AudioMetadata } from './audio-metadata';
 import { type AudioTechnicalInfo } from './audio-technical-info';
 import { type CoverArtInfo } from './cover-art';
 import { type LyricsInfo } from './lyrics';
+import { type MediaFile } from './media-file';
 
 /**
  * The canonical Track domain aggregate.
  * Composes core file metadata, editorial tags, technical specifications,
  * cover art, and lyrics information.
  */
-export interface Track
-    extends MediaFile,
-        AudioMetadata,
-        AudioTechnicalInfo,
-        CoverArtInfo,
-        LyricsInfo {
+export interface Track extends MediaFile, AudioMetadata, AudioTechnicalInfo, CoverArtInfo, LyricsInfo {
     id: string;
     filename: string;
     filePath?: string;

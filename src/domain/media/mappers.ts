@@ -1,10 +1,6 @@
+import { deriveYearFromDate, isTrackModified, parseTrackFromDb, sanitizeFilenameTitle } from '@/schemas/track-output.schema';
+
 import { type Track } from './track';
-import {
-    parseTrackFromDb,
-    sanitizeFilenameTitle,
-    isTrackModified,
-    deriveYearFromDate,
-} from '@/schemas/track-output.schema';
 
 export { sanitizeFilenameTitle, isTrackModified, deriveYearFromDate };
 
@@ -87,9 +83,7 @@ export function buildTrackFromDb(
 /**
  * Maps metadata values to ExifTool tag arguments for writing back to files.
  */
-export function toExifToolWriteTags(
-    meta: Partial<CanonicalAudioMetadataDbRecord>
-): Record<string, string | number | null> {
+export function toExifToolWriteTags(meta: Partial<CanonicalAudioMetadataDbRecord>): Record<string, string | number | null> {
     const tagsToWrite: Record<string, string | number | null> = {};
 
     if (meta.title) tagsToWrite.Title = meta.title;

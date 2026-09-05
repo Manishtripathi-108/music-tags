@@ -1,11 +1,4 @@
-export type ScanJobStatus =
-    | 'IDLE'
-    | 'SCANNING'
-    | 'EXTRACTING'
-    | 'NORMALIZING'
-    | 'COMPLETED'
-    | 'FAILED'
-    | 'CANCELLED';
+export type ScanJobStatus = 'IDLE' | 'SCANNING' | 'EXTRACTING' | 'NORMALIZING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 export interface BaseScanStats {
     status: ScanJobStatus;

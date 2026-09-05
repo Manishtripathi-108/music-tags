@@ -11,12 +11,13 @@ import {
     sortFn_text,
     tableFeatures,
 } from '@tanstack/react-table';
+
+import Badge from '@/components/ui/Badge';
+import { InlineTableCellEditable } from '@/components/ui/Editable';
+import { Icon } from '@/components/ui/Icon';
 import { formatDuration } from '@/domain/media/formatters';
 import { type Track } from '@/domain/media/track';
 import { InlineEditSchemas } from '@/schemas';
-import { Icon } from '@/components/ui/Icon';
-import { InlineTableCellEditable } from '@/components/ui/Editable';
-import Badge from '@/components/ui/Badge';
 
 export type TrackTableMeta = {
     updateTrackInline: (id: string, fields: Partial<Track>) => void;
@@ -102,14 +103,14 @@ export const columns = col.columns([
                     {hasLyrics && (
                         <span
                             title={isLrc ? 'Synced Lyrics (LRC)' : 'Unsynced Lyrics'}
-                            className={`rounded px-1 py-0.5 text-[9px] leading-none font-mono shrink-0 ${
+                            className={`shrink-0 rounded px-1 py-0.5 font-mono text-[9px] leading-none ${
                                 isLrc
                                     ? isActive
-                                        ? 'bg-primary-foreground/20 text-primary-foreground border border-primary-foreground/30'
-                                        : 'bg-primary/15 text-primary border border-primary/20'
+                                        ? 'bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30 border'
+                                        : 'bg-primary/15 text-primary border-primary/20 border'
                                     : isActive
                                       ? 'bg-primary-foreground/10 text-primary-foreground/80'
-                                      : 'bg-muted text-muted-foreground border border-border'
+                                      : 'bg-muted text-muted-foreground border-border border'
                             }`}>
                             {isLrc ? 'LRC' : 'TXT'}
                         </span>
@@ -251,12 +252,8 @@ export const columns = col.columns([
 
             return (
                 <span
-                    className={`text-[10px] font-mono ${
-                        isActive
-                            ? 'text-primary-foreground/90'
-                            : depth && depth > 16
-                              ? 'text-primary font-semibold'
-                              : 'text-muted-foreground'
+                    className={`font-mono text-[10px] ${
+                        isActive ? 'text-primary-foreground/90' : depth && depth > 16 ? 'text-primary font-semibold' : 'text-muted-foreground'
                     }`}>
                     {depth ? `${depth}-bit` : '-'}
                 </span>

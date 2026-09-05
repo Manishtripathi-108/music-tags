@@ -2,11 +2,14 @@
 
 import * as React from 'react';
 import { createContext, memo, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { cn } from './cn';
-import Icon from '@/components/ui/Icon';
+
+import { AnimatePresence, motion } from 'motion/react';
+
 import { Badge } from '@/components/ui/Badge';
+import Icon from '@/components/ui/Icon';
 import { type T_IconType } from '@/constants/icons.constants';
+
+import { cn } from './cn';
 
 const EFFECTS_KEY = 'sidebar-effects-enabled';
 
