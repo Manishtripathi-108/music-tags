@@ -37,7 +37,9 @@ export class DirectoryCrawler {
     public async crawl(options: DirectoryCrawlerOptions): Promise<DiscoveredAudioFile[]> {
         const { rootPath, recursive = true, signal, onFileDiscovered, onDirectoryEntered } = options;
         const discovered: DiscoveredAudioFile[] = [];
-        const queue: string[] = [rootPath];
+        const cleanRoot = rootPath.replace(/^["']|["']$/g, '').trim();
+        const queue: string[] = [cleanRoot];
+        let isRoot = true;
 
         // Breadth-first traversal
         // This approach avoids deep recursion and allows for better control over cancellation
@@ -122,10 +124,15 @@ export class DirectoryCrawler {
                         }
                     }
                 }
-            } catch {
-                // Inaccessible directory skipped gracefully
+            } catch (err: unknown) {
+                if (isRoot) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    throw new Error(`Cannot access directory: "${currentDir}" (${msg})`);
+                }
+                // Inaccessible subfolder skipped gracefully
                 continue;
             } finally {
+                isRoot = false;
                 if (dirHandle) {
                     try {
                         await dirHandle.close();

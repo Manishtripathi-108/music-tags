@@ -69,6 +69,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         const localTrack = buildTrackFromDb(rows[0].audio_files, rows[0].canonical_audio_metadata);
+        console.log(`\n[API:DOWNLOAD:START] Mode: "${mode}" | Track: "${localTrack.title || localTrack.filename}" (ID: ${trackId})`);
 
         // 2. Fetch cached remote match record if available
         const matchRows = await db
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         streamUrl.searchParams.set('quality', streamQualityParam);
         streamUrl.searchParams.set('atmos', streamAtmosParam);
+        console.log(`[API:DOWNLOAD:RESOLVE] Resolving stream from: ${streamUrl.toString()}`);
 
         let streamData: RemoteStreamInfo;
         try {
@@ -174,6 +176,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         const destinationPath = path.join(/*turbopackIgnore: true*/ targetDir, fileName);
         const tempPath = path.join(/*turbopackIgnore: true*/ targetDir, `${fileName}.part`);
+        console.log(`[API:DOWNLOAD:DEST] Output file: "${destinationPath}" (ISRC: ${rawIsrc})`);
 
         // Mark downloading in database
         if (cachedMatch) {
@@ -189,6 +192,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         // 6. Download audio stream
         try {
+            console.log(`[API:DOWNLOAD:STREAMING] Initiating HTTP stream from: ${streamData.url}`);
             const mediaResponse = await fetch(streamData.url, {
                 method: 'GET',
                 headers: {
@@ -216,6 +220,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 fs.unlinkSync(destinationPath);
             }
             fs.renameSync(tempPath, destinationPath);
+            console.log(`[API:DOWNLOAD:SUCCESS] Download finished! Saved ${(stats.size / (1024 * 1024)).toFixed(2)} MB -> "${destinationPath}"`);
 
             const now = new Date();
             // Update database with success

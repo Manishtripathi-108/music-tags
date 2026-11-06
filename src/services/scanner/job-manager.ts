@@ -5,6 +5,7 @@ import { type ScanProgressEvent } from '@/domain/scanner/types';
 export interface ScanJobState {
     controller: AbortController;
     listeners: Set<(evt: ScanProgressEvent) => void>;
+    lastEvent?: ScanProgressEvent;
 }
 
 /**
@@ -26,7 +27,19 @@ export class ScanJobManager {
         const job = this.activeJobs.get(jobId);
         if (job) {
             job.listeners.add(listener);
+            // Replay the latest progress event immediately to avoid race conditions
+            if (job.lastEvent) {
+                try {
+                    listener(job.lastEvent);
+                } catch (err) {
+                    console.error(`[ScanJobManager] Error in initial event replay for job ${jobId}:`, err);
+                }
+            }
         }
+    }
+
+    public hasJob(jobId: string): boolean {
+        return this.activeJobs.has(jobId);
     }
 
     public unsubscribe(jobId: string, listener: (evt: ScanProgressEvent) => void): void {
@@ -55,6 +68,7 @@ export class ScanJobManager {
     public emit(jobId: string, event: ScanProgressEvent): void {
         const job = this.activeJobs.get(jobId);
         if (job) {
+            job.lastEvent = event;
             job.listeners.forEach((fn) => {
                 try {
                     fn(event);

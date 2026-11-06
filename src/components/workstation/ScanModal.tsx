@@ -38,9 +38,6 @@ export function ScanModal() {
         clearErrors('root.serverError');
 
         try {
-            setIsScanModalOpen(false);
-            reset();
-
             setActiveScanJob({
                 status: 'SCANNING',
                 scannedFiles: 0,
@@ -51,6 +48,9 @@ export function ScanModal() {
             });
 
             const { data } = await axios.post<ScanApiResponse>('/api/scan', values);
+            setIsScanModalOpen(false);
+            reset();
+
             if (data.jobId) {
                 const eventSource = new EventSource(`/api/scan?jobId=${data.jobId}`);
                 eventSource.onmessage = (event) => {
@@ -69,7 +69,12 @@ export function ScanModal() {
                 };
             }
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
+            setActiveScanJob(null);
+            const msg = axios.isAxiosError(err) && err.response?.data?.error
+                ? err.response.data.error
+                : err instanceof Error
+                ? err.message
+                : String(err);
             setError('root.serverError', {
                 type: 'server',
                 message: msg,

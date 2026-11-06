@@ -19,6 +19,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScanApiRe
 
         const { folderPath, recursive, forceReindex } = validation.data;
         const jobId = globalScanner.createJob();
+        console.log(`\n[API:SCAN:POST] Request received for folder: "${folderPath}" (recursive=${recursive}, forceReindex=${forceReindex}) -> Assigned Job ID: ${jobId}`);
 
         // Launch ingestion in the background
         globalScanner.scanDirectory(jobId, folderPath, recursive, forceReindex).catch((err) => {
@@ -44,6 +45,12 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Missing jobId parameter' }, { status: 400 });
     }
 
+    if (!globalScanner.hasJob(jobId)) {
+        console.warn(`[API:SCAN:SSE] SSE connection rejected: Job ID "${jobId}" not found or expired`);
+        return NextResponse.json({ error: 'Scan job not found or already expired' }, { status: 404 });
+    }
+
+    console.log(`[API:SCAN:SSE] Client connected to progress event stream for Job ID: ${jobId}`);
     return createProgressEventStream({
         subscribe: (listener) => globalScanner.subscribe(jobId, listener),
         unsubscribe: (listener) => globalScanner.unsubscribe(jobId, listener),

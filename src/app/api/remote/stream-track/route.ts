@@ -21,6 +21,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const streamUrl = new URL(`${normalizedApiUrl}/stream/${encodeURIComponent(remoteTrackId)}`);
         if (quality) streamUrl.searchParams.set('quality', quality);
         if (atmos) streamUrl.searchParams.set('atmos', atmos);
+        console.log(`\n[API:STREAM:REQUEST] Fetching stream info for ID: ${remoteTrackId} from ${streamUrl.toString()}`);
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             clearTimeout(timeoutId);
 
             if (!res.ok) {
+                console.error(`[API:STREAM:FAIL] Endpoint returned HTTP ${res.status}: ${res.statusText}`);
                 return NextResponse.json(
                     { error: `Remote stream endpoint returned HTTP ${res.status}: ${res.statusText}` },
                     { status: res.status }
@@ -45,10 +47,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             }
 
             const streamData: RemoteStreamInfo = await res.json();
+            console.log(`[API:STREAM:SUCCESS] Resolved stream URL: ${streamData.url ? `${streamData.url.substring(0, 50)}...` : 'None'} | Format: ${streamData.format || streamData.codec} | AudioMode: ${streamData.audioMode || 'Stereo'}`);
             return NextResponse.json({ stream: streamData });
         } catch (fetchErr: unknown) {
             clearTimeout(timeoutId);
             const msg = fetchErr instanceof Error ? fetchErr.message : 'Network error';
+            console.error(`[API:STREAM:ERROR] Resolution failed: ${msg}`);
             return NextResponse.json({ error: `Stream request failed: ${msg}` }, { status: 502 });
         }
     } catch (error) {

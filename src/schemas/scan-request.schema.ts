@@ -5,8 +5,11 @@ import { z } from 'zod';
  * and rejects `..` sequences to prevent directory traversal attacks.
  * Used by both `ScanFolderRequestSchema` and `RemoveFolderRequestSchema`.
  */
-const directoryPathValidator = z.string().trim()
-    .min(1, 'Directory path is required')
+const directoryPathValidator = z
+    .string()
+    .trim()
+    .transform((val) => val.replace(/^["']|["']$/g, '').trim())
+    .refine((val) => val.length > 0, 'Directory path is required')
     .refine((val) => !val.includes('..'), 'Directory path cannot contain ".." to prevent directory traversal');
 
 /**

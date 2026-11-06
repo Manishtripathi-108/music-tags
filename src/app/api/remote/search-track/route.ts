@@ -57,6 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         const localTrack = buildTrackFromDb(rows[0].audio_files, rows[0].canonical_audio_metadata);
         const localQuality = getLocalTrackQuality(localTrack);
+        console.log(`\n[API:SEARCH] Searching track "${localTrack.title || localTrack.filename}" by "${localTrack.artist || 'Unknown'}" (ID: ${trackId})`);
 
         // 2. Check cache first unless forceRefetch is true ("store the ids of tracks never fetch again unless specified")
         if (!forceRefetch) {
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             if (cachedMatches.length > 0) {
                 const cached = cachedMatches[0];
+                console.log(`[API:SEARCH:CACHE] Cache hit! Using stored Remote ID ${cached.remoteTrackId} ("${cached.title || 'Untitled'}" - ${cached.audioQuality})`);
                 const cachedRecord: RemoteTrackMatchRecord = {
                     id: cached.id,
                     localTrackId: cached.localTrackId,
@@ -146,6 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         // 5. Execute request with timeout
+        console.log(`[API:SEARCH:REMOTE] Calling GET ${searchUrl.toString()}`);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -164,6 +167,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             clearTimeout(timeoutId);
 
             if (!res.ok) {
+                console.error(`[API:SEARCH:FAIL] Remote endpoint responded HTTP ${res.status}: ${res.statusText}`);
                 return NextResponse.json(
                     { error: `Remote search returned HTTP ${res.status}: ${res.statusText}` },
                     { status: 502 }
@@ -174,14 +178,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         } catch (fetchErr: unknown) {
             clearTimeout(timeoutId);
             const msg = fetchErr instanceof Error ? fetchErr.message : 'Network error';
+            console.error(`[API:SEARCH:ERROR] Request failed: ${msg}`);
             return NextResponse.json({ error: `Search request failed: ${msg}` }, { status: 502 });
         }
 
         const candidates = Array.isArray(remoteData.tracks) ? remoteData.tracks : [];
+        console.log(`[API:SEARCH:CANDIDATES] Received ${candidates.length} tracks from remote API for query "${searchQuery}"`);
         const matchResult = selectBestTrackMatch(localTrack, candidates, preferDolby);
         const bestMatch = matchResult.bestMatch;
 
         if (!bestMatch) {
+            console.log(`[API:SEARCH:NO_MATCH] No suitable match found among ${candidates.length} candidates for "${localTrack.title}"`);
             // No matching candidate found
             const item: AudioComparisonItem = {
                 localTrack,
@@ -202,6 +209,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const hasDolby = matchResult.hasDolby || isDolby;
         const remoteQuality = parseQualityString(bestMatch.audioQuality, bestMatch.format);
         const now = new Date();
+        console.log(`[API:SEARCH:MATCH] Best match: "${bestMatch.title}" by "${bestMatch.artist}" (ID: ${bestMatch.id}, Quality: ${remoteQuality.label}, DolbyAtmos: ${hasDolby ? 'YES' : 'NO'}, Confidence: ${(matchResult.confidence * 100).toFixed(0)}%)`);
 
         // 6. Persist match in database
         const existingRecord = await db
