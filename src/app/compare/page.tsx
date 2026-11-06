@@ -6,6 +6,7 @@ import { CompareConfigPanel } from '@/components/compare/CompareConfigPanel';
 import { CompareProgressBar } from '@/components/compare/CompareProgressBar';
 import { CompareTopBar } from '@/components/compare/CompareTopBar';
 import { CompareTrackTable } from '@/components/compare/CompareTrackTable';
+import { EditMatchModal } from '@/components/compare/EditMatchModal';
 import { useCompareStore } from '@/store/compareStore';
 
 export default function ComparePage() {
@@ -21,6 +22,7 @@ export default function ComparePage() {
             <CompareConfigPanel />
             <CompareProgressBar />
             <CompareTrackTable />
+            <EditMatchModal />
         </main>
     );
 }

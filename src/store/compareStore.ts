@@ -2,7 +2,17 @@ import axios from 'axios';
 import { create } from 'zustand';
 import { type AudioComparisonItem, type AudioComparisonStatus } from '@/domain/remote-audio/types';
 
-export type CompareFilter = 'all' | 'upgrade' | 'dolby' | 'downloaded' | 'same' | 'nomatch';
+export type CompareFilter = 'all' | 'upgrade' | 'dolby' | 'downloaded' | 'same' | 'nomatch' | 'error';
+
+export interface CompareOperationError {
+    id: string;
+    trackId: string;
+    fileTitle: string;
+    fileName: string;
+    action: 'search' | 'download' | 'match_update';
+    errorMessage: string;
+    timestamp: number;
+}
 
 export interface CompareState {
     items: AudioComparisonItem[];
@@ -30,6 +40,14 @@ export interface CompareState {
         directoryMessage: string;
     } | null;
 
+    // Operation Errors
+    operationErrors: CompareOperationError[];
+    isErrorDrawerOpen: boolean;
+    setIsErrorDrawerOpen: (open: boolean) => void;
+    clearOperationErrors: () => void;
+    dismissOperationError: (errorId: string) => void;
+    retryOperation: (errorId: string) => Promise<void>;
+
     // Sequential search state
     isSearching: boolean;
     searchProgress: {
@@ -48,6 +66,13 @@ export interface CompareState {
         currentFileName: string;
         errorCount: number;
     };
+
+    // Manual match editing
+    editingMatchItem: AudioComparisonItem | null;
+    setEditingMatchItem: (item: AudioComparisonItem | null) => void;
+    clearTrackMatch: (localTrackId: string) => Promise<void>;
+    setCustomRemoteId: (localTrackId: string, customId: string) => Promise<void>;
+    selectCandidateMatch: (localTrackId: string, candidate: any) => Promise<void>;
 
     // Actions
     fetchComparisonItems: () => Promise<void>;
@@ -95,11 +120,105 @@ export const useCompareStore = create<CompareState>((set, get) => ({
     isTestingConnection: false,
     connectionStatus: null,
 
+    // Operation Errors
+    operationErrors: [],
+    isErrorDrawerOpen: false,
+    setIsErrorDrawerOpen: (open) => set({ isErrorDrawerOpen: open }),
+    clearOperationErrors: () => set({ operationErrors: [], isErrorDrawerOpen: false }),
+    dismissOperationError: (errorId) =>
+        set((s) => ({
+            operationErrors: s.operationErrors.filter((e) => e.id !== errorId),
+        })),
+    retryOperation: async (errorId) => {
+        const err = get().operationErrors.find((e) => e.id === errorId);
+        if (!err) return;
+        const targetItem = get().items.find((i) => i.localTrack.id === err.trackId);
+        if (!targetItem) return;
+
+        // Dismiss the error before retrying
+        get().dismissOperationError(errorId);
+
+        if (err.action === 'search') {
+            await get().startSequentialSearch([targetItem]);
+        } else if (err.action === 'download') {
+            await get().startSequentialDownload([targetItem]);
+        }
+    },
+
     isSearching: false,
     searchProgress: { current: 0, total: 0, currentTitle: '', errorCount: 0 },
 
     isDownloading: false,
     downloadProgress: { current: 0, total: 0, currentTitle: '', currentFileName: '', errorCount: 0 },
+
+    editingMatchItem: null,
+    setEditingMatchItem: (item) => set({ editingMatchItem: item }),
+
+    clearTrackMatch: async (localTrackId: string) => {
+        const { apiUrl } = get();
+        try {
+            const res = await axios.post<{ success: boolean; item: AudioComparisonItem }>('/api/remote/match/update', {
+                localTrackId,
+                apiUrl,
+                action: 'clear',
+            });
+            if (res.data.item) {
+                const updated = res.data.item;
+                set((s) => ({
+                    items: s.items.map((it) => (it.localTrack.id === localTrackId ? updated : it)),
+                    editingMatchItem: s.editingMatchItem?.localTrack.id === localTrackId ? updated : s.editingMatchItem,
+                }));
+            }
+        } catch (err) {
+            console.error('Failed clearing track match:', err);
+            alert('Failed to clear match');
+        }
+    },
+
+    setCustomRemoteId: async (localTrackId: string, customId: string) => {
+        const { apiUrl } = get();
+        try {
+            const res = await axios.post<{ success: boolean; item: AudioComparisonItem }>('/api/remote/match/update', {
+                localTrackId,
+                apiUrl,
+                action: 'set_id',
+                customId,
+            });
+            if (res.data.item) {
+                const updated = res.data.item;
+                set((s) => ({
+                    items: s.items.map((it) => (it.localTrack.id === localTrackId ? updated : it)),
+                    editingMatchItem: s.editingMatchItem?.localTrack.id === localTrackId ? updated : s.editingMatchItem,
+                }));
+            }
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Failed to set ID';
+            console.error('Failed setting custom remote ID:', err);
+            alert(msg);
+        }
+    },
+
+    selectCandidateMatch: async (localTrackId: string, candidate: any) => {
+        const { apiUrl } = get();
+        try {
+            const res = await axios.post<{ success: boolean; item: AudioComparisonItem }>('/api/remote/match/update', {
+                localTrackId,
+                apiUrl,
+                action: 'select_candidate',
+                candidate,
+            });
+            if (res.data.item) {
+                const updated = res.data.item;
+                set((s) => ({
+                    items: s.items.map((it) => (it.localTrack.id === localTrackId ? updated : it)),
+                    editingMatchItem: s.editingMatchItem?.localTrack.id === localTrackId ? updated : s.editingMatchItem,
+                }));
+            }
+        } catch (err) {
+            console.error('Failed selecting candidate match:', err);
+            alert('Failed to update match');
+        }
+    },
 
     fetchComparisonItems: async () => {
         set({ isLoading: true, error: null });
@@ -211,12 +330,41 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                     const updatedItem = res.data.item;
                     set((s) => ({
                         items: s.items.map((it) => (it.localTrack.id === updatedItem.localTrack.id ? updatedItem : it)),
+                        // Clear any previous search error for this track if successful
+                        operationErrors: s.operationErrors.filter(
+                            (e) => !(e.trackId === target.localTrack.id && e.action === 'search')
+                        ),
                     }));
                 }
             } catch (err: unknown) {
                 if (axios.isCancel(err)) break;
+                const errorMsg =
+                    axios.isAxiosError(err) && err.response?.data?.error
+                        ? err.response.data.error
+                        : err instanceof Error
+                        ? err.message
+                        : 'Search request failed';
+
+                console.error(`[API:SEARCH:FAIL] Track "${titleDisplay}" (${target.localTrack.id}): ${errorMsg}`);
+
+                const opError: CompareOperationError = {
+                    id: `${target.localTrack.id}-search-${Date.now()}`,
+                    trackId: target.localTrack.id,
+                    fileTitle: titleDisplay,
+                    fileName: target.localTrack.filename,
+                    action: 'search',
+                    errorMessage: errorMsg,
+                    timestamp: Date.now(),
+                };
+
                 set((s) => ({
                     searchProgress: { ...s.searchProgress, errorCount: s.searchProgress.errorCount + 1 },
+                    operationErrors: [
+                        opError,
+                        ...s.operationErrors.filter(
+                            (e) => !(e.trackId === target.localTrack.id && e.action === 'search')
+                        ),
+                    ],
                 }));
             }
 
@@ -311,17 +459,60 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                                         downloadStatus: 'completed',
                                         downloadPath: res.data.filePath,
                                         downloadedAt: new Date(),
+                                        downloadError: null,
                                     },
                                 };
                             }
                             return it;
                         }),
+                        // Clear any previous download error for this track if successful
+                        operationErrors: s.operationErrors.filter(
+                            (e) => !(e.trackId === target.localTrack.id && e.action === 'download')
+                        ),
                     }));
                 }
             } catch (err: unknown) {
                 if (axios.isCancel(err)) break;
+                const errorMsg =
+                    axios.isAxiosError(err) && err.response?.data?.error
+                        ? err.response.data.error
+                        : err instanceof Error
+                        ? err.message
+                        : 'Download request failed';
+
+                console.error(`[API:DOWNLOAD:FAIL] Track "${titleDisplay}" (${target.localTrack.id}): ${errorMsg}`);
+
+                const opError: CompareOperationError = {
+                    id: `${target.localTrack.id}-download-${Date.now()}`,
+                    trackId: target.localTrack.id,
+                    fileTitle: titleDisplay,
+                    fileName: target.localTrack.filename,
+                    action: 'download',
+                    errorMessage: errorMsg,
+                    timestamp: Date.now(),
+                };
+
                 set((s) => ({
                     downloadProgress: { ...s.downloadProgress, errorCount: s.downloadProgress.errorCount + 1 },
+                    operationErrors: [
+                        opError,
+                        ...s.operationErrors.filter(
+                            (e) => !(e.trackId === target.localTrack.id && e.action === 'download')
+                        ),
+                    ],
+                    items: s.items.map((it) => {
+                        if (it.localTrack.id === target.localTrack.id && it.cachedMatch) {
+                            return {
+                                ...it,
+                                cachedMatch: {
+                                    ...it.cachedMatch,
+                                    downloadStatus: 'failed',
+                                    downloadError: errorMsg,
+                                },
+                            };
+                        }
+                        return it;
+                    }),
                 }));
             }
 

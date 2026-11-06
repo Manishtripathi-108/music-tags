@@ -77,6 +77,16 @@ export async function GET(): Promise<NextResponse<{ items: AudioComparisonItem[]
             const remoteQuality = remoteTrack ? parseQualityString(remoteTrack.audioQuality, remoteTrack.format) : null;
             const hasDolby = cached ? Boolean(cached.hasDolby || cached.isDolby) : false;
 
+            let candidates: RemoteTrackSummary[] = [];
+            if (cached?.rawSearchJson) {
+                try {
+                    const parsedJson = JSON.parse(cached.rawSearchJson);
+                    if (Array.isArray(parsedJson?.candidates)) {
+                        candidates = parsedJson.candidates;
+                    }
+                } catch {}
+            }
+
             const { status, statusMessage, canDownloadLossless, canDownloadDolby } = evaluateQualityComparison(
                 localQuality,
                 remoteQuality,
@@ -94,6 +104,7 @@ export async function GET(): Promise<NextResponse<{ items: AudioComparisonItem[]
                 isDolbyAvailable: hasDolby,
                 canDownloadLossless,
                 canDownloadDolby,
+                candidates,
             };
         });
 

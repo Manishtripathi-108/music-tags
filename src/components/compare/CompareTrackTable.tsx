@@ -27,6 +27,8 @@ export function CompareTrackTable() {
         downloadMode,
         isSearching,
         isDownloading,
+        setEditingMatchItem,
+        operationErrors,
     } = useCompareStore();
 
     // Filtering logic
@@ -43,6 +45,10 @@ export function CompareTrackTable() {
             list = list.filter((i) => i.status === 'same_quality');
         } else if (activeFilter === 'nomatch') {
             list = list.filter((i) => i.status === 'no_match');
+        } else if (activeFilter === 'error') {
+            list = list.filter(
+                (i) => operationErrors.some((e) => e.trackId === i.localTrack.id) || i.cachedMatch?.downloadStatus === 'failed'
+            );
         }
 
         if (searchQuery.trim()) {
@@ -58,13 +64,16 @@ export function CompareTrackTable() {
         }
 
         return list;
-    }, [items, activeFilter, searchQuery]);
+    }, [items, activeFilter, searchQuery, operationErrors]);
 
     const upgradeCount = items.filter((i) => i.status === 'upgrade_available').length;
     const dolbyCount = items.filter((i) => i.isDolbyAvailable).length;
     const downloadedCount = items.filter((i) => i.cachedMatch?.downloadStatus === 'completed').length;
     const sameCount = items.filter((i) => i.status === 'same_quality').length;
     const nomatchCount = items.filter((i) => i.status === 'no_match').length;
+    const errorCount = items.filter(
+        (i) => operationErrors.some((e) => e.trackId === i.localTrack.id) || i.cachedMatch?.downloadStatus === 'failed'
+    ).length;
 
     const allFilteredSelected = filteredItems.length > 0 && filteredItems.every((i) => selectedIds.has(i.localTrack.id));
 
@@ -140,6 +149,20 @@ export function CompareTrackTable() {
                     >
                         No Match ({nomatchCount})
                     </button>
+
+                    {errorCount > 0 && (
+                        <button
+                            onClick={() => setActiveFilter('error')}
+                            className={`px-2.5 py-1 rounded cursor-pointer transition-colors flex items-center gap-1 ${
+                                activeFilter === 'error'
+                                    ? 'bg-rose-600 text-white font-semibold'
+                                    : 'text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20'
+                            }`}
+                        >
+                            <Icon icon="warning" className="size-3" />
+                            <span>Errors ({errorCount})</span>
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -203,13 +226,15 @@ export function CompareTrackTable() {
                             filteredItems.map((item) => {
                                 const isSelected = selectedIds.has(item.localTrack.id);
                                 const isDownloaded = item.cachedMatch?.downloadStatus === 'completed';
+                                const activeError = operationErrors.find((e) => e.trackId === item.localTrack.id);
+                                const downloadFailure = item.cachedMatch?.downloadStatus === 'failed' ? item.cachedMatch.downloadError : null;
 
                                 return (
                                     <tr
                                         key={item.localTrack.id}
                                         className={`transition-colors hover:bg-muted/30 ${
                                             isSelected ? 'bg-primary/5' : ''
-                                        }`}
+                                        } ${activeError || downloadFailure ? 'bg-rose-500/5 border-l-2 border-l-rose-500' : ''}`}
                                     >
                                         {/* Checkbox */}
                                         <td className="p-2.5 text-center">
@@ -233,6 +258,17 @@ export function CompareTrackTable() {
                                             {item.localTrack.isrc && (
                                                 <div className="text-[10px] font-mono text-muted-foreground/80">
                                                     ISRC: {item.localTrack.isrc}
+                                                </div>
+                                            )}
+                                            {activeError && (
+                                                <div
+                                                    className="mt-1 flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/25 px-1.5 py-0.5 rounded font-mono truncate max-w-xs"
+                                                    title={`${activeError.action.toUpperCase()} ERROR: ${activeError.errorMessage}`}
+                                                >
+                                                    <Icon icon="warning" className="size-3 shrink-0 text-rose-400" />
+                                                    <span className="truncate">
+                                                        {activeError.action.toUpperCase()}: {activeError.errorMessage}
+                                                    </span>
                                                 </div>
                                             )}
                                         </td>
@@ -362,11 +398,36 @@ export function CompareTrackTable() {
                                                     </Badge>
                                                 </div>
                                             )}
+
+                                            {downloadFailure && (
+                                                <div className="mt-1">
+                                                    <Badge
+                                                        variant="outline"
+                                                        size="xs"
+                                                        className="bg-rose-500/15 text-rose-400 border-rose-500/30 cursor-help flex items-center gap-1 truncate max-w-[140px]"
+                                                        title={downloadFailure}
+                                                    >
+                                                        <Icon icon="warning" className="size-2.5 shrink-0" />
+                                                        <span className="truncate">Download Failed</span>
+                                                    </Badge>
+                                                </div>
+                                            )}
                                         </td>
 
                                         {/* Actions */}
                                         <td className="p-2.5 text-right font-mono">
                                             <div className="flex items-center justify-end gap-1.5">
+                                                {/* Edit / Manage match (set ID, clear, select candidate) */}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="xs"
+                                                    onClick={() => setEditingMatchItem(item)}
+                                                    title="Manage Match (Set ID, Alternative Candidates, or Remove Match)"
+                                                    className="size-7 p-0 text-muted-foreground hover:text-foreground"
+                                                >
+                                                    <Icon icon="edit" className="size-3.5" />
+                                                </Button>
+
                                                 {/* Re-search single track */}
                                                 <Button
                                                     variant="ghost"

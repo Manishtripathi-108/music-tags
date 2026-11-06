@@ -10,7 +10,7 @@ import ThemeToggler from '@/components/ui/ThemeToggler';
 import { useCompareStore } from '@/store/compareStore';
 
 export function CompareTopBar() {
-    const { items, isLoading, fetchComparisonItems } = useCompareStore();
+    const { items, isLoading, fetchComparisonItems, operationErrors, setIsErrorDrawerOpen, isErrorDrawerOpen } = useCompareStore();
 
     const upgradeCount = items.filter((i) => i.status === 'upgrade_available').length;
     const dolbyCount = items.filter((i) => i.isDolbyAvailable).length;
@@ -66,6 +66,19 @@ export function CompareTopBar() {
                             <Icon icon="check" className="size-3 text-blue-400" />
                             <span>{downloadedCount} Downloaded</span>
                         </Badge>
+                    )}
+
+                    {operationErrors.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setIsErrorDrawerOpen(!isErrorDrawerOpen)}
+                            className="cursor-pointer"
+                        >
+                            <Badge variant="outline" size="sm" className="gap-1 bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20 transition-colors">
+                                <Icon icon="warning" className="size-3 text-rose-400" />
+                                <span>{operationErrors.length} Errors</span>
+                            </Badge>
+                        </button>
                     )}
                 </div>
             </div>

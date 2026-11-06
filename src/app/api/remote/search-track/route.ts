@@ -235,7 +235,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             isDolby,
             hasDolby,
             qualityScore: remoteQuality.score,
-            rawSearchJson: JSON.stringify(bestMatch),
+            rawSearchJson: JSON.stringify({ selected: bestMatch, candidates }),
             lastCheckedAt: now,
             updatedAt: now,
         };
@@ -266,7 +266,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             hasDolby,
             qualityScore: remoteQuality.score,
             streamUrl: null,
-            rawSearchJson: JSON.stringify(bestMatch),
+            rawSearchJson: JSON.stringify({ selected: bestMatch, candidates }),
             rawStreamJson: null,
             downloadStatus: 'idle',
             downloadError: null,
@@ -292,6 +292,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             isDolbyAvailable: hasDolby,
             canDownloadLossless,
             canDownloadDolby,
+            candidates,
         };
 
         return NextResponse.json({ item, cached: false });
