@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import Link from 'next/link';
 
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -139,6 +140,13 @@ export function WorkstationTopBar() {
                     <Icon icon="copy" className="text-primary size-3.5" />
                     <span>Find Duplicates</span>
                 </Button>
+
+                <Link href="/compare">
+                    <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs text-primary border-primary/40 hover:bg-primary/10">
+                        <Icon icon="audio" className="text-primary size-3.5" />
+                        <span>Quality Compare</span>
+                    </Button>
+                </Link>
 
                 <Button variant="primary" size="sm" onClick={() => setIsScanModalOpen(true)}>
                     <Icon icon="open" className="size-3.5" />

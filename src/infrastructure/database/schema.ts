@@ -142,3 +142,35 @@ export const rawAudioMetadata = sqliteTable('raw_audio_metadata', {
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
+
+/**
+ * Cached remote track searches, audio quality matches, and download state.
+ */
+export const remoteTrackMatches = sqliteTable('remote_track_matches', {
+    id: text('id').primaryKey(),
+    localTrackId: text('local_track_id')
+        .notNull()
+        .references(() => audioFiles.id),
+    providerUrl: text('provider_url').notNull(),
+    remoteTrackId: text('remote_track_id').notNull(),
+    title: text('title'),
+    artist: text('artist'),
+    album: text('album'),
+    duration: real('duration'),
+    artworkUrl: text('artwork_url'),
+    format: text('format'),
+    audioQuality: text('audio_quality'),
+    isDolby: integer('is_dolby', { mode: 'boolean' }).default(false),
+    hasDolby: integer('has_dolby', { mode: 'boolean' }).default(false),
+    qualityScore: integer('quality_score'),
+    streamUrl: text('stream_url'),
+    rawSearchJson: text('raw_search_json'),
+    rawStreamJson: text('raw_stream_json'),
+    downloadStatus: text('download_status').default('idle'),
+    downloadError: text('download_error'),
+    downloadPath: text('download_path'),
+    downloadedAt: integer('downloaded_at', { mode: 'timestamp_ms' }),
+    lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});

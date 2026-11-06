@@ -1,0 +1,31 @@
+# Task Checklist: Remote Audio Comparison & Sequential Downloader
+
+- [x] Task 1: Database Schema & Persistence for Remote Track Matches <!-- id: 1 -->
+  - Add `remoteTrackMatches` to `src/infrastructure/database/schema.ts`
+  - Add `CREATE TABLE IF NOT EXISTS remote_track_matches` and indices to `src/infrastructure/database/init.ts`
+  - Verify database initialization
+- [x] Task 2: Domain Types & Audio Quality Analyzer <!-- id: 2 -->
+  - Define `types.ts` in `src/domain/remote-audio/`
+  - Create `src/domain/remote-audio/quality-analyzer.ts` (parsing, scoring, comparison)
+  - Create `src/domain/remote-audio/track-matcher.ts` (fuzzy score, Dolby identification)
+  - Create Vitest test suite in `tests/remote-audio/quality-analyzer.test.ts`
+- [x] Task 3: Backend API Routes <!-- id: 3 -->
+  - Implement `/api/remote/compare` (GET cached matches + local tracks)
+  - Implement `/api/remote/search-track` (POST search single track with cache check & SQLite persistence)
+  - Implement `/api/remote/stream-track` (POST resolve stream URL & metadata)
+  - Implement `/api/remote/download-track` (POST sequential streaming file download with validation)
+  - Implement `/api/remote/test-connection` (POST check API URL ping & folder writable)
+- [x] Task 4: Store & Sequential Queue Orchestration <!-- id: 4 -->
+  - Create `src/store/compareStore.ts`
+  - Implement sequential search engine (one-by-one with polite delay, cancellable)
+  - Implement sequential download engine (one-by-one, enforces strict mode rules: highest lossless vs Dolby Atmos)
+  - Handle persistent API link and download directory in localStorage
+- [x] Task 5: Dedicated UI Route (`/compare`) <!-- id: 5 -->
+  - Create `src/app/compare/page.tsx`
+  - Create `CompareTopBar.tsx`, `CompareConfigPanel.tsx`, `CompareProgressBar.tsx`, `CompareTrackTable.tsx`
+  - Add link/button to `/compare` in `WorkstationTopBar.tsx` and `WorkstationSidebar.tsx`
+  - Ensure high-fidelity styling, dark/light theme compatibility, and accessibility
+- [x] Task 6: Testing, Build & End-to-End Verification <!-- id: 6 -->
+  - Run all Vitest tests (90 tests passing)
+  - Run `npm run build` (0 build errors, 16 static pages generated)
+  - Verify all constraints (sequential, cache reuse, file naming, Dolby vs Lossless rules)

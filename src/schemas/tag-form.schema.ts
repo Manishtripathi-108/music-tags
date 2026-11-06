@@ -40,6 +40,7 @@ export const TagFormSchema = z.object({
     mood: coreFieldValidators.mood,
     rating: coreFieldValidators.rating,
     lyrics: coreFieldValidators.lyrics,
+    lyricsType: z.enum(['synced', 'unsynced']).nullish(),
 });
 
 /**

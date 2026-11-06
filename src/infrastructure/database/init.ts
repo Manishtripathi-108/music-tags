@@ -161,6 +161,42 @@ export async function ensureDatabaseInitialized(): Promise<void> {
             console.error('Migration error for release_date:', e);
         }
 
+        await db.run(sql`
+            CREATE TABLE IF NOT EXISTS remote_track_matches (
+                id TEXT PRIMARY KEY,
+                local_track_id TEXT NOT NULL REFERENCES audio_files(id),
+                provider_url TEXT NOT NULL,
+                remote_track_id TEXT NOT NULL,
+                title TEXT,
+                artist TEXT,
+                album TEXT,
+                duration REAL,
+                artwork_url TEXT,
+                format TEXT,
+                audio_quality TEXT,
+                is_dolby INTEGER DEFAULT 0,
+                has_dolby INTEGER DEFAULT 0,
+                quality_score INTEGER,
+                stream_url TEXT,
+                raw_search_json TEXT,
+                raw_stream_json TEXT,
+                download_status TEXT DEFAULT 'idle',
+                download_error TEXT,
+                download_path TEXT,
+                downloaded_at INTEGER,
+                last_checked_at INTEGER,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+        `);
+
+        await db.run(sql`
+            CREATE INDEX IF NOT EXISTS idx_remote_matches_local ON remote_track_matches(local_track_id);
+        `);
+        await db.run(sql`
+            CREATE INDEX IF NOT EXISTS idx_remote_matches_provider_remote ON remote_track_matches(provider_url, remote_track_id);
+        `);
+
         isInitialized = true;
     } catch (err) {
         console.error('Failed to initialize database tables:', err);

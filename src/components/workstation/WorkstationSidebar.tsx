@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
@@ -329,6 +330,19 @@ export function WorkstationSidebar() {
                                     </span>
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="px-1 pt-2">
+                            <Link href="/compare">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="xs"
+                                    className="w-full justify-start gap-1.5 text-[11px] text-primary border-primary/30 hover:bg-primary/10">
+                                    <Icon icon="audio" className="text-primary size-3.5" />
+                                    <span>Quality Compare & Downloader</span>
+                                </Button>
+                            </Link>
                         </div>
                     </SidebarGroup>
                 </SidebarContent>
