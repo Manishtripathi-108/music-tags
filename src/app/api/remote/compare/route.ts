@@ -6,6 +6,7 @@ import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { audioFiles, canonicalAudioMetadata, remoteTrackMatches } from '@/infrastructure/database/schema';
 import { buildTrackFromDb } from '@/domain/media/mappers';
 import { evaluateQualityComparison, getLocalTrackQuality, parseQualityString } from '@/domain/remote-audio/quality-analyzer';
+import { calculateMatchConfidence } from '@/domain/remote-audio/track-matcher';
 import { type AudioComparisonItem, type RemoteTrackMatchRecord, type RemoteTrackSummary } from '@/domain/remote-audio/types';
 
 export async function GET(): Promise<NextResponse<{ items: AudioComparisonItem[]; count: number } | { error: string }>> {
@@ -51,6 +52,7 @@ export async function GET(): Promise<NextResponse<{ items: AudioComparisonItem[]
                     isDolby: Boolean(cached.isDolby),
                     hasDolby: Boolean(cached.hasDolby),
                     qualityScore: cached.qualityScore,
+                    matchConfidence: cached.matchConfidence ?? null,
                     streamUrl: cached.streamUrl,
                     rawSearchJson: cached.rawSearchJson,
                     rawStreamJson: cached.rawStreamJson,
@@ -87,6 +89,22 @@ export async function GET(): Promise<NextResponse<{ items: AudioComparisonItem[]
                 } catch {}
             }
 
+            const confidence = remoteTrack
+                ? typeof cached?.matchConfidence === 'number'
+                    ? cached.matchConfidence
+                    : calculateMatchConfidence(track, remoteTrack)
+                : 0;
+
+            if (remoteTrack) {
+                remoteTrack.confidence = confidence;
+            }
+
+            for (const cand of candidates) {
+                if (typeof cand.confidence !== 'number') {
+                    cand.confidence = calculateMatchConfidence(track, cand);
+                }
+            }
+
             const { status, statusMessage, canDownloadLossless, canDownloadDolby } = evaluateQualityComparison(
                 localQuality,
                 remoteQuality,
@@ -105,6 +123,7 @@ export async function GET(): Promise<NextResponse<{ items: AudioComparisonItem[]
                 canDownloadLossless,
                 canDownloadDolby,
                 candidates,
+                confidence,
             };
         });
 

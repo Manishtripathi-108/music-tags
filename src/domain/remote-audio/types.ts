@@ -12,6 +12,7 @@ export interface RemoteTrackSummary {
     atmos?: boolean;
     audioModes?: string[];
     streamURL?: string;
+    confidence?: number;
 }
 
 export interface RemoteStreamInfo {
@@ -63,6 +64,7 @@ export interface RemoteTrackMatchRecord {
     isDolby: boolean;
     hasDolby: boolean;
     qualityScore: number | null;
+    matchConfidence?: number | null;
     streamUrl: string | null;
     rawSearchJson: string | null;
     rawStreamJson: string | null;
@@ -85,6 +87,7 @@ export interface AudioComparisonItem {
     canDownloadLossless: boolean;
     canDownloadDolby: boolean;
     candidates?: RemoteTrackSummary[];
+    confidence: number;
 }
 
 export interface RemoteApiConfig {

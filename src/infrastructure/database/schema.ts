@@ -163,6 +163,7 @@ export const remoteTrackMatches = sqliteTable('remote_track_matches', {
     isDolby: integer('is_dolby', { mode: 'boolean' }).default(false),
     hasDolby: integer('has_dolby', { mode: 'boolean' }).default(false),
     qualityScore: integer('quality_score'),
+    matchConfidence: real('match_confidence'),
     streamUrl: text('stream_url'),
     rawSearchJson: text('raw_search_json'),
     rawStreamJson: text('raw_stream_json'),

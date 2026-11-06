@@ -39,6 +39,47 @@ export interface MatchSelectionResult {
 }
 
 /**
+ * Computes a normalized match confidence score (0.0 to 1.0) between a local track and a remote candidate.
+ */
+export function calculateMatchConfidence(localTrack: Track, candidate: RemoteTrackSummary | null): number {
+    if (!candidate) return 0;
+    const localTitle = cleanString(localTrack.title || localTrack.filename);
+    const candidateTitle = cleanString(candidate.title);
+    if (!candidateTitle) return 0;
+
+    const titleSim = tokenSimilarity(localTitle, candidateTitle);
+
+    let artistSim = 0.6;
+    const localArtist = cleanString(localTrack.artist);
+    const candidateArtist = cleanString(candidate.artist);
+    if (localArtist && candidateArtist) {
+        artistSim = tokenSimilarity(localArtist, candidateArtist);
+    }
+
+    let albumSim = 0.6;
+    const localAlbum = cleanString(localTrack.album);
+    const candidateAlbum = cleanString(candidate.album);
+    if (localAlbum && candidateAlbum) {
+        albumSim = tokenSimilarity(localAlbum, candidateAlbum);
+    }
+
+    let durationSim = 1.0;
+    if (localTrack.durationSeconds && candidate.duration) {
+        const diff = Math.abs(localTrack.durationSeconds - candidate.duration);
+        const ratio = Math.max(localTrack.durationSeconds, candidate.duration) / Math.max(1, Math.min(localTrack.durationSeconds, candidate.duration));
+        if (diff > 120 || ratio > 2.0) durationSim = 0.0;
+        else if (diff > 45 || ratio > 1.4) durationSim = 0.25;
+        else if (diff > 20) durationSim = 0.55;
+        else if (diff > 10) durationSim = 0.8;
+        else if (diff > 3) durationSim = 0.95;
+        else durationSim = 1.0;
+    }
+
+    const score = titleSim * 0.50 + artistSim * 0.30 + durationSim * 0.15 + albumSim * 0.05;
+    return Math.round(Math.min(1, Math.max(0, score)) * 100) / 100;
+}
+
+/**
  * Evaluates candidate tracks returned from remote search against local track metadata.
  */
 export function selectBestTrackMatch(
@@ -54,6 +95,11 @@ export function selectBestTrackMatch(
             hasDolby: false,
             confidence: 0,
         };
+    }
+
+    // Populate individual confidence for each candidate
+    for (const c of candidates) {
+        c.confidence = calculateMatchConfidence(localTrack, c);
     }
 
     const localTitle = cleanString(localTrack.title || localTrack.filename);
@@ -146,6 +192,6 @@ export function selectBestTrackMatch(
         bestLosslessMatch,
         bestDolbyMatch,
         hasDolby,
-        confidence: bestOverallScore > 0 ? Math.min(1, bestOverallScore / 2500) : 0,
+        confidence: selected ? calculateMatchConfidence(localTrack, selected) : 0,
     };
 }

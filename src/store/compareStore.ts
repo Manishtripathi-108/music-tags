@@ -22,6 +22,12 @@ export interface CompareState {
     searchQuery: string;
     selectedIds: Set<string>;
 
+    // Sorting
+    sortBy: 'confidence' | 'title' | 'artist' | 'status' | 'none';
+    sortOrder: 'asc' | 'desc';
+    setSort: (by: 'confidence' | 'title' | 'artist' | 'status' | 'none', order?: 'asc' | 'desc') => void;
+    toggleSort: (by: 'confidence' | 'title' | 'artist' | 'status') => void;
+
     // Config
     apiUrl: string;
     downloadDirectory: string;
@@ -108,6 +114,22 @@ export const useCompareStore = create<CompareState>((set, get) => ({
     activeFilter: 'all',
     searchQuery: '',
     selectedIds: new Set<string>(),
+
+    sortBy: 'none',
+    sortOrder: 'desc',
+    setSort: (by, order = 'desc') => set({ sortBy: by, sortOrder: order }),
+    toggleSort: (by) => {
+        const { sortBy, sortOrder } = get();
+        if (sortBy === by) {
+            if (sortOrder === 'desc') {
+                set({ sortOrder: 'asc' });
+            } else {
+                set({ sortBy: 'none', sortOrder: 'desc' });
+            }
+        } else {
+            set({ sortBy: by, sortOrder: 'desc' });
+        }
+    },
 
     apiUrl: typeof window !== 'undefined' ? localStorage.getItem('remote_api_url') || '' : '',
     downloadDirectory: typeof window !== 'undefined' ? localStorage.getItem('remote_download_dir') || '' : '',

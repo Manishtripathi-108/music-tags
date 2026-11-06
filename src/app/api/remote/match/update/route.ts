@@ -7,6 +7,7 @@ import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { audioFiles, canonicalAudioMetadata, remoteTrackMatches } from '@/infrastructure/database/schema';
 import { buildTrackFromDb } from '@/domain/media/mappers';
 import { evaluateQualityComparison, getLocalTrackQuality, isDolbyAtmosAudio, parseQualityString } from '@/domain/remote-audio/quality-analyzer';
+import { calculateMatchConfidence } from '@/domain/remote-audio/track-matcher';
 import { type AudioComparisonItem, type RemoteStreamInfo, type RemoteTrackMatchRecord, type RemoteTrackSummary } from '@/domain/remote-audio/types';
 
 interface UpdateMatchRequestBody {
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 canDownloadLossless: false,
                 canDownloadDolby: false,
                 candidates: preservedCandidates,
+                confidence: 0,
             };
 
             return NextResponse.json({ success: true, item });
@@ -96,6 +98,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const remoteQuality = parseQualityString(candidate.audioQuality, candidate.format);
             const now = new Date();
             const matchId = existingRecord.length ? existingRecord[0].id : randomUUID();
+            const confidence = calculateMatchConfidence(localTrack, candidate);
+            candidate.confidence = confidence;
 
             const recordValues = {
                 id: matchId,
@@ -112,6 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 isDolby,
                 hasDolby: isDolby,
                 qualityScore: remoteQuality.score,
+                matchConfidence: confidence,
                 rawSearchJson: JSON.stringify({ selected: candidate, candidates: preservedCandidates }),
                 downloadStatus: 'idle',
                 downloadError: null,
@@ -152,6 +157,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 canDownloadLossless,
                 canDownloadDolby,
                 candidates: preservedCandidates,
+                confidence,
             };
 
             return NextResponse.json({ success: true, item });
@@ -184,6 +190,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const qualityTier = parseQualityString(streamData?.quality || 'Lossless', streamData?.format || streamData?.codec, streamData);
             const now = new Date();
             const matchId = existingRecord.length ? existingRecord[0].id : randomUUID();
+            const confidence = 1.0; // User explicitly assigned this ID
 
             const customRemoteTrack: RemoteTrackSummary = {
                 id: rawId,
@@ -193,6 +200,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 format: streamData?.format || streamData?.codec || undefined,
                 audioQuality: streamData?.quality || (qualityTier.isLossless ? `${qualityTier.bitDepth || 16}-bit / ${(qualityTier.sampleRateHz || 44100) / 1000} kHz` : 'Lossy'),
                 atmos: isDolby,
+                confidence,
             };
 
             const recordValues = {
@@ -210,6 +218,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 isDolby,
                 hasDolby: isDolby,
                 qualityScore: qualityTier.score,
+                matchConfidence: confidence,
                 streamUrl: streamData?.url || null,
                 rawSearchJson: JSON.stringify({ selected: customRemoteTrack, candidates: preservedCandidates }),
                 rawStreamJson: streamData ? JSON.stringify(streamData) : null,
@@ -250,6 +259,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 canDownloadLossless,
                 canDownloadDolby,
                 candidates: preservedCandidates,
+                confidence,
             };
 
             return NextResponse.json({ success: true, item });

@@ -29,11 +29,15 @@ export function CompareTrackTable() {
         isDownloading,
         setEditingMatchItem,
         operationErrors,
+        sortBy,
+        sortOrder,
+        toggleSort,
+        setSort,
     } = useCompareStore();
 
-    // Filtering logic
+    // Filtering and sorting logic
     const filteredItems = useMemo(() => {
-        let list = items;
+        let list = [...items];
 
         if (activeFilter === 'upgrade') {
             list = list.filter((i) => i.status === 'upgrade_available');
@@ -63,8 +67,35 @@ export function CompareTrackTable() {
             });
         }
 
+        // Apply sorting
+        if (sortBy === 'confidence') {
+            list.sort((a, b) => {
+                const diff = (a.confidence ?? 0) - (b.confidence ?? 0);
+                return sortOrder === 'asc' ? diff : -diff;
+            });
+        } else if (sortBy === 'title') {
+            list.sort((a, b) => {
+                const valA = (a.localTrack.title || a.localTrack.filename || '').toLowerCase();
+                const valB = (b.localTrack.title || b.localTrack.filename || '').toLowerCase();
+                const cmp = valA.localeCompare(valB);
+                return sortOrder === 'asc' ? cmp : -cmp;
+            });
+        } else if (sortBy === 'artist') {
+            list.sort((a, b) => {
+                const valA = (a.localTrack.artist || '').toLowerCase();
+                const valB = (b.localTrack.artist || '').toLowerCase();
+                const cmp = valA.localeCompare(valB);
+                return sortOrder === 'asc' ? cmp : -cmp;
+            });
+        } else if (sortBy === 'status') {
+            list.sort((a, b) => {
+                const cmp = a.status.localeCompare(b.status);
+                return sortOrder === 'asc' ? cmp : -cmp;
+            });
+        }
+
         return list;
-    }, [items, activeFilter, searchQuery, operationErrors]);
+    }, [items, activeFilter, searchQuery, operationErrors, sortBy, sortOrder]);
 
     const upgradeCount = items.filter((i) => i.status === 'upgrade_available').length;
     const dolbyCount = items.filter((i) => i.isDolbyAvailable).length;
@@ -166,6 +197,21 @@ export function CompareTrackTable() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {sortBy !== 'none' && (
+                        <div className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground bg-muted/50 px-2 py-0.5 rounded border border-border/60">
+                            <span>Sort:</span>
+                            <span className="text-foreground font-semibold uppercase">{sortBy}</span>
+                            <span className="text-primary font-bold">({sortOrder === 'asc' ? '▲ Low→High' : '▼ High→Low'})</span>
+                            <button
+                                onClick={() => setSort('none')}
+                                className="ml-1 text-muted-foreground hover:text-foreground text-[10px] cursor-pointer"
+                                title="Reset sorting"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    )}
+
                     <div className="relative w-64">
                         <Icon icon="search" className="text-muted-foreground absolute top-2 left-2 size-3.5" />
                         <FieldInput
@@ -200,9 +246,38 @@ export function CompareTrackTable() {
                                     className="cursor-pointer rounded"
                                 />
                             </th>
-                            <th className="p-2.5 min-w-[220px]">Local Audio & File</th>
-                            <th className="p-2.5 min-w-[140px]">Local Specs</th>
+                            <th
+                                onClick={() => toggleSort('title')}
+                                className="p-2.5 min-w-[220px] cursor-pointer hover:text-foreground transition-colors select-none"
+                                title="Click to sort by title"
+                            >
+                                <div className="flex items-center gap-1">
+                                    <span>Local Audio & File</span>
+                                    {sortBy === 'title' ? (
+                                        <span className="text-primary font-bold">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                                    ) : (
+                                        <Icon icon="sort" className="size-3 text-muted-foreground/30" />
+                                    )}
+                                </div>
+                            </th>
+                            <th className="p-2.5 min-w-[130px]">Local Specs</th>
                             <th className="p-2.5 min-w-[240px]">Remote Available Match</th>
+                            <th
+                                onClick={() => toggleSort('confidence')}
+                                className="p-2.5 min-w-[130px] cursor-pointer hover:text-foreground transition-colors select-none group"
+                                title="Click to sort by match confidence score"
+                            >
+                                <div className="flex items-center gap-1.5">
+                                    <span>Confidence</span>
+                                    {sortBy === 'confidence' ? (
+                                        <Badge variant="outline" size="xs" className="px-1 py-0 text-primary border-primary/40 font-bold">
+                                            {sortOrder === 'asc' ? '▲ Low→High' : '▼ High→Low'}
+                                        </Badge>
+                                    ) : (
+                                        <Icon icon="sort" className="size-3 text-muted-foreground/40 group-hover:text-foreground" />
+                                    )}
+                                </div>
+                            </th>
                             <th className="p-2.5 min-w-[140px]">Available Quality</th>
                             <th className="p-2.5 min-w-[170px]">Comparison Status</th>
                             <th className="p-2.5 min-w-[110px] text-right">Actions</th>
@@ -211,14 +286,14 @@ export function CompareTrackTable() {
                     <tbody className="divide-y divide-border/60">
                         {isLoading ? (
                             <tr>
-                                <td colSpan={7} className="p-8 text-center text-muted-foreground font-mono">
+                                <td colSpan={8} className="p-8 text-center text-muted-foreground font-mono">
                                     <Icon icon="loading" className="size-5 animate-spin mx-auto mb-2 text-primary" />
                                     <span>Loading audio catalogue & comparisons...</span>
                                 </td>
                             </tr>
                         ) : filteredItems.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="p-8 text-center text-muted-foreground font-mono">
+                                <td colSpan={8} className="p-8 text-center text-muted-foreground font-mono">
                                     No tracks match the active filter or search query.
                                 </td>
                             </tr>
@@ -336,6 +411,45 @@ export function CompareTrackTable() {
                                                 <span className="text-muted-foreground italic text-[11px]">No match in remote catalogue</span>
                                             ) : (
                                                 <span className="text-muted-foreground/60 italic text-[11px]">Not searched yet</span>
+                                            )}
+                                        </td>
+
+                                        {/* Match Confidence Score */}
+                                        <td className="p-2.5 font-mono text-[11px]">
+                                            {item.remoteTrack ? (
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Badge
+                                                            variant="outline"
+                                                            size="xs"
+                                                            className={`font-semibold font-mono ${
+                                                                (item.confidence ?? 0) >= 0.85
+                                                                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                                                    : (item.confidence ?? 0) >= 0.65
+                                                                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                                                    : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                                            }`}
+                                                        >
+                                                            {Math.round((item.confidence ?? 0) * 100)}% Match
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="w-16 bg-muted/60 h-1 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full transition-all duration-300 ${
+                                                                (item.confidence ?? 0) >= 0.85
+                                                                    ? 'bg-emerald-500'
+                                                                    : (item.confidence ?? 0) >= 0.65
+                                                                    ? 'bg-amber-500'
+                                                                    : 'bg-rose-500'
+                                                            }`}
+                                                            style={{ width: `${Math.round((item.confidence ?? 0) * 100)}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : item.status === 'no_match' ? (
+                                                <span className="text-muted-foreground/50 text-[10px]">0%</span>
+                                            ) : (
+                                                <span className="text-muted-foreground/40 text-[10px]">—</span>
                                             )}
                                         </td>
 

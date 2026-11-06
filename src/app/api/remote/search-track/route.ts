@@ -7,7 +7,7 @@ import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { audioFiles, canonicalAudioMetadata, remoteTrackMatches } from '@/infrastructure/database/schema';
 import { buildTrackFromDb } from '@/domain/media/mappers';
 import { evaluateQualityComparison, getLocalTrackQuality, isDolbyAtmosAudio, parseQualityString } from '@/domain/remote-audio/quality-analyzer';
-import { selectBestTrackMatch } from '@/domain/remote-audio/track-matcher';
+import { calculateMatchConfidence, selectBestTrackMatch } from '@/domain/remote-audio/track-matcher';
 import { type AudioComparisonItem, type RemoteTrackMatchRecord, type RemoteTrackSummary } from '@/domain/remote-audio/types';
 
 interface SearchTrackRequestBody {
@@ -85,6 +85,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     isDolby: Boolean(cached.isDolby),
                     hasDolby: Boolean(cached.hasDolby),
                     qualityScore: cached.qualityScore,
+                    matchConfidence: cached.matchConfidence ?? null,
                     streamUrl: cached.streamUrl,
                     rawSearchJson: cached.rawSearchJson,
                     rawStreamJson: cached.rawStreamJson,
@@ -107,6 +108,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     atmos: Boolean(cached.isDolby),
                 };
 
+                const confidence =
+                    typeof cached.matchConfidence === 'number'
+                        ? cached.matchConfidence
+                        : calculateMatchConfidence(localTrack, remoteTrack);
+                remoteTrack.confidence = confidence;
+
+                let candidates: RemoteTrackSummary[] = [];
+                if (cached.rawSearchJson) {
+                    try {
+                        const parsed = JSON.parse(cached.rawSearchJson);
+                        if (Array.isArray(parsed?.candidates)) {
+                            candidates = parsed.candidates.map((c: RemoteTrackSummary) => ({
+                                ...c,
+                                confidence: calculateMatchConfidence(localTrack, c),
+                            }));
+                        }
+                    } catch {}
+                }
+
                 const remoteQuality = parseQualityString(remoteTrack.audioQuality, remoteTrack.format);
                 const hasDolby = Boolean(cached.hasDolby || cached.isDolby);
 
@@ -127,6 +147,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     isDolbyAvailable: hasDolby,
                     canDownloadLossless,
                     canDownloadDolby,
+                    candidates,
+                    confidence,
                 };
 
                 return NextResponse.json({ item, cached: true });
@@ -201,6 +223,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 isDolbyAvailable: false,
                 canDownloadLossless: false,
                 canDownloadDolby: false,
+                confidence: 0,
             };
             return NextResponse.json({ item, cached: false });
         }
@@ -209,7 +232,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const hasDolby = matchResult.hasDolby || isDolby;
         const remoteQuality = parseQualityString(bestMatch.audioQuality, bestMatch.format);
         const now = new Date();
-        console.log(`[API:SEARCH:MATCH] Best match: "${bestMatch.title}" by "${bestMatch.artist}" (ID: ${bestMatch.id}, Quality: ${remoteQuality.label}, DolbyAtmos: ${hasDolby ? 'YES' : 'NO'}, Confidence: ${(matchResult.confidence * 100).toFixed(0)}%)`);
+        const confidence = matchResult.confidence;
+        bestMatch.confidence = confidence;
+
+        console.log(`[API:SEARCH:MATCH] Best match: "${bestMatch.title}" by "${bestMatch.artist}" (ID: ${bestMatch.id}, Quality: ${remoteQuality.label}, DolbyAtmos: ${hasDolby ? 'YES' : 'NO'}, Confidence: ${(confidence * 100).toFixed(0)}%)`);
 
         // 6. Persist match in database
         const existingRecord = await db
@@ -235,6 +261,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             isDolby,
             hasDolby,
             qualityScore: remoteQuality.score,
+            matchConfidence: confidence,
             rawSearchJson: JSON.stringify({ selected: bestMatch, candidates }),
             lastCheckedAt: now,
             updatedAt: now,
@@ -265,6 +292,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             isDolby,
             hasDolby,
             qualityScore: remoteQuality.score,
+            matchConfidence: confidence,
             streamUrl: null,
             rawSearchJson: JSON.stringify({ selected: bestMatch, candidates }),
             rawStreamJson: null,
@@ -293,6 +321,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             canDownloadLossless,
             canDownloadDolby,
             candidates,
+            confidence,
         };
 
         return NextResponse.json({ item, cached: false });

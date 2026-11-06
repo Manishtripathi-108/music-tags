@@ -12,6 +12,11 @@ export async function ensureDatabaseInitialized(): Promise<void> {
     if (isInitialized) return;
 
     try {
+        try {
+            await db.run(sql`PRAGMA journal_mode = WAL;`);
+            await db.run(sql`PRAGMA busy_timeout = 5000;`);
+        } catch {}
+
         await db.run(sql`
             CREATE TABLE IF NOT EXISTS audio_files (
                 id TEXT PRIMARY KEY,
@@ -177,6 +182,7 @@ export async function ensureDatabaseInitialized(): Promise<void> {
                 is_dolby INTEGER DEFAULT 0,
                 has_dolby INTEGER DEFAULT 0,
                 quality_score INTEGER,
+                match_confidence REAL,
                 stream_url TEXT,
                 raw_search_json TEXT,
                 raw_stream_json TEXT,
@@ -189,6 +195,10 @@ export async function ensureDatabaseInitialized(): Promise<void> {
                 updated_at INTEGER NOT NULL
             );
         `);
+
+        try {
+            await db.run(sql`ALTER TABLE remote_track_matches ADD COLUMN match_confidence REAL;`);
+        } catch {}
 
         await db.run(sql`
             CREATE INDEX IF NOT EXISTS idx_remote_matches_local ON remote_track_matches(local_track_id);

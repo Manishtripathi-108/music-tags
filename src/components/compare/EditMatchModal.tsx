@@ -120,9 +120,22 @@ export function EditMatchModal() {
                                 <div className="min-w-0 flex-1 space-y-0.5 text-xs">
                                     <div className="font-semibold text-foreground truncate">{remoteTrack.title}</div>
                                     <div className="text-muted-foreground truncate">{remoteTrack.artist || '—'} {remoteTrack.album ? `• ${remoteTrack.album}` : ''}</div>
-                                    <div className="flex items-center gap-2 pt-1 font-mono text-[11px]">
+                                    <div className="flex items-center gap-2 pt-1 font-mono text-[11px] flex-wrap">
                                         <Badge variant="outline" size="xs" className="font-bold">
                                             ID: {remoteTrack.id}
+                                        </Badge>
+                                        <Badge
+                                            variant="outline"
+                                            size="xs"
+                                            className={`font-bold ${
+                                                (editingMatchItem.confidence ?? 0) >= 0.85
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                                    : (editingMatchItem.confidence ?? 0) >= 0.65
+                                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                            }`}
+                                        >
+                                            {Math.round((editingMatchItem.confidence ?? 0) * 100)}% Match
                                         </Badge>
                                         <Badge variant="success" size="xs" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
                                             {remoteTrack.audioQuality || 'Lossless'}
@@ -205,8 +218,21 @@ export function EditMatchModal() {
                                                     <div className="text-[11px] text-muted-foreground truncate">
                                                         {cand.artist || '—'} {cand.album ? `• ${cand.album}` : ''}
                                                     </div>
-                                                    <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[10px]">
+                                                    <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[10px] flex-wrap">
                                                         <span className="text-muted-foreground">ID: {cand.id}</span>
+                                                        {typeof cand.confidence === 'number' && (
+                                                            <span
+                                                                className={`font-semibold ${
+                                                                    cand.confidence >= 0.85
+                                                                        ? 'text-emerald-400'
+                                                                        : cand.confidence >= 0.65
+                                                                        ? 'text-amber-400'
+                                                                        : 'text-rose-400'
+                                                                }`}
+                                                            >
+                                                                • {Math.round(cand.confidence * 100)}% Match
+                                                            </span>
+                                                        )}
                                                         <span className="text-emerald-500 font-semibold">• {cand.audioQuality || 'Lossless'}</span>
                                                         {cand.atmos && <span className="text-purple-400">• Dolby Atmos</span>}
                                                     </div>
