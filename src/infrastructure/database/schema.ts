@@ -31,12 +31,12 @@ export const audioFiles = sqliteTable('audio_files', {
     // Scan state
     scanStatus: text('scan_status'),
     scanError: text('scan_error'),
-    lastScannedAt: integer('last_scanned_at'),
-    lastVerifiedAt: integer('last_verified_at'),
+    lastScannedAt: integer('last_scanned_at', { mode: 'timestamp_ms' }),
+    lastVerifiedAt: integer('last_verified_at', { mode: 'timestamp_ms' }),
 
     // Record timestamps
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
 /**
@@ -62,7 +62,7 @@ export const canonicalAudioMetadata = sqliteTable('canonical_audio_metadata', {
     totalDiscs: integer('total_discs'),
 
     // Release & compilation
-    releaseDate: text('release_date'),
+    releaseDate: integer('release_date', { mode: 'timestamp_ms' }),
     originalReleaseDate: text('original_release_date'),
     compilation: integer('compilation', { mode: 'boolean' }),
 
@@ -88,8 +88,7 @@ export const canonicalAudioMetadata = sqliteTable('canonical_audio_metadata', {
 
     // Lyrics
     lyrics: text('lyrics'),
-    lyricsUnsynced: text('lyrics_unsynced'),
-    lyricsSyncedJson: text('lyrics_synced_json'),
+    lyricsType: text('lyrics_type', { enum: ['synced', 'unsynced'] }),
 
     // Playback metadata
     bpm: real('bpm'),
@@ -118,8 +117,8 @@ export const canonicalAudioMetadata = sqliteTable('canonical_audio_metadata', {
     coverArtHeight: integer('cover_art_height'),
 
     // Record timestamps
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
 /**
@@ -140,6 +139,6 @@ export const rawAudioMetadata = sqliteTable('raw_audio_metadata', {
     extractionError: text('extraction_error'),
 
     // Record timestamps
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

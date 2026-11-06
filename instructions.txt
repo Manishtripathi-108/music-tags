@@ -1,0 +1,856 @@
+Build an addon for BitChord
+Connect your own audio catalogue to BitChord with three small JSON endpoints. Your server searches tracks, resolves a playable stream, and describes the audio accurately.
+
+3 HTTP routes
+JSON wire format
+GET every request
+Quickstart
+Expose three routes from any HTTPS server.
+Manifest
+Declare your addon, its resources and switches.
+Addon auth
+New: answer only the official BitChord app.
+The core idea
+
+BitChord never downloads or executes addon code. It calls your server over HTTP, reads JSON, and hands the returned media URL to its player.
+Addon auth · New
+
+Lock your addon to BitChord
+From BitChord 1.9.1, your addon can require proof that a request comes from the official BitChord Android app. The app attaches a hardware-backed proof to each request, and your server checks it. Forks of BitChord, other music apps, scripts, curl and browsers get 401. It’s optional, and recommended for any addon you don’t want used outside BitChord.
+
+What happens to addons that don’t adopt it
+Nothing breaks. BitChord keeps searching, streaming and downloading from them exactly as before, without sending any credentials. If your manifest doesn’t declare "bitchordAuth": true, or there is no manifest at all, the addon’s row in Settings → Sources shows a small Outdated addon line. Tapping it tells the listener:
+
+This addon is out of date. It still works, but ask its developer to update it by following the latest BitChord addon docs.
+Once you publish the updated manifest, the note goes away the next time BitChord reads it, within about 10 minutes of the listener using the addon. Nobody has to re-add the addon.
+
+Why a User-Agent or client-name check isn’t enough
+BitChord is open source, so anything the app sends (its name, its User-Agent, an API key) can be copied into a fork in a minute. That is exactly how forks and other apps have been using addons built for BitChord. The one thing a fork can’t copy is BitChord’s release signing key. Addon auth has Android itself vouch for it.
+
+01
+Attest
+Key made in phone hardware
+02
+Token
+1-hour token, bound to that key
+03
+Sign
+Every request signed by the key
+04
+Verify
+Your server checks, offline
+1
+The app makes a key inside the phone’s secure hardware.
+Android’s key attestation produces a certificate chain, signed by Google, that names the app’s package and signing certificate and says whether the phone’s OS is genuine and its bootloader locked.
+
+2
+BitChord’s auth service checks that proof.
+It accepts only the official, release-signed BitChord on a phone with a verified OS, and issues a 1-hour token bound to that hardware key. A fork can’t produce this proof without BitChord’s private signing key.
+
+3
+Every addon request carries the token and a fresh signature.
+The signature is made by the hardware key over your hostname, the time and the token. The key never leaves the phone, so a token copied off a real install is useless anywhere else.
+
+4
+Your server checks both, locally, in under a millisecond.
+It downloads BitChord’s public keys from https://bitchord-auth.kushagrasingh.in/.well-known/jwks.json about once an hour. It never calls the auth service per request, and there’s nothing to register: no account, no API key.
+
+Who gets refused
+Client	Works	Why
+Official BitChord for Android	Yes	On an ordinary phone with a locked bootloader, as before.
+Forks, rebuilds, modified APKs	No	Even if they keep the BitChord name, package or client string: they aren’t signed with BitChord’s key.
+Other apps, scripts, curl, browsers	No	They can’t produce the hardware-backed proof.
+Rooted phones, custom ROMs	No	BitChord only accepts phones with a locked bootloader and a verified, unmodified OS.
+Emulators, phones without secure key storage	No	No hardware to hold the key.
+BitChord desktop and web	No	They can’t prove they’re genuine. Once you enforce auth, they can’t use your addon.
+About 15 minutes of work
+
+One manifest field, one file to copy, and a few lines in your server. If you use an AI coding assistant, give it the Markdown for AI: it has every step below plus the full verifier source.
+Addon auth
+
+Set it up
+Five steps. Step 1 clears the “Outdated addon” note; steps 2–4 are what keep other apps out, and step 5 protects your audio files.
+
+bitchord-addon-auth.mjs
+Verifier for Node, Workers, Deno, Bun, Next.js. No dependencies.
+bitchord_addon_auth.py
+Verifier for Python 3.9+. Needs pip install cryptography.
+bitchord-addon-auth-for-ai.md
+This whole guide plus both verifiers, for Claude, Cursor, Copilot or ChatGPT.
+01
+Declare the flag in your manifest
+Add "bitchordAuth": true to manifest.json. true, 1 and the same values as strings are accepted. Keep the manifest itself public: BitChord reads it without credentials to learn that it has to authenticate.
+
+json
+Copy
+{
+  "id": "com.example.myaddon",
+  "name": "My Addon",
+  "version": "1.2.0",
+  "resources": ["search", "stream"],
+  "bitchordAuth": true
+}
+02
+Add the verifier file to your project
+Download the file for your stack above and add it unchanged. Don’t rewrite it: it’s about 200 lines and it’s the reference implementation.
+
+The verifier makes one outbound request: about once an hour it fetches BitChord’s public keys from https://bitchord-auth.kushagrasingh.in/.well-known/jwks.json. That address is built in, so there’s nothing to configure, but if your server restricts outbound traffic, allow HTTPS to bitchord-auth.kushagrasingh.in.
+
+Your stack	File	Needs
+Node 20+, Express, Fastify, Hono, Next.js, Cloudflare Workers, Deno, Bun, Vercel/Netlify edge	bitchord-addon-auth.mjs	Nothing. It uses WebCrypto only.
+Python 3.9+: FastAPI, Flask, Django, anything	bitchord_addon_auth.py	pip install cryptography
+Anything else: Go, Rust, PHP, Java…	Port it	An Ed25519 and ECDSA P-256 library. See Protocol reference.
+03
+Check every route except the manifest
+Create one verifier per process, at module scope, and run it before search, stream and anything else your addon serves. Send refusals with the helper it gives you, because BitChord reads the WWW-Authenticate header to decide whether to refresh its token. Recipes for each framework are in Framework recipes.
+
+javascript · express
+Copy
+import express from "express"
+import { createBitChordAuth } from "./bitchord-addon-auth.mjs"
+
+const app = express()
+const bitchord = createBitChordAuth({ hosts: ["myaddon.example.com"] })
+
+app.get("/manifest.json", (req, res) => res.json(manifest)) // stays public
+app.use(bitchord.express())                                  // everything below needs BitChord
+
+app.get("/search", async (req, res) => { /* ... */ })
+app.get("/stream/:id", async (req, res) => { /* ... */ })
+
+// On success, req.bitchord holds the token's claims.
+04
+Set hosts to your public hostname(s)
+The app signs each request for the hostname in the addon URL the listener pasted: lowercase, no https://, no port, no path. The verifier deliberately ignores the Host header and only trusts the hostnames you configure. If hosts is wrong, every request fails with invalid_proof.
+
+Listener pastes	hosts	Note
+https://myaddon.example.com/manifest.json	["myaddon.example.com"]	The usual case.
+https://myaddon.example.com:8443/abc123/manifest.json	["myaddon.example.com"]	Port and path are dropped.
+A custom domain and *.workers.dev both in use	List both	Same for *.onrender.com, *.vercel.app, *.pages.dev.
+05
+Make media URLs short-lived
+Auth protects your JSON endpoints. The audio URL your /stream returns is fetched by the player without BitChord’s headers, so a permanent URL can be shared. Sign it and let it expire: see Short-lived media URLs.
+
+Adding the flag without verifying
+
+The flag on its own clears the “Outdated addon” note, but it protects nothing: every fork and script still gets in. Ship steps 2–4 with it, even if you start in log-only mode.
+Addon auth
+
+Framework recipes
+The same three rules in every framework: one verifier at module scope, the manifest route stays public, and refusals go out through the helper so BitChord gets the status, the WWW-Authenticate header and the JSON body it expects.
+
+Express
+Workers / Deno / Bun
+Hono
+Next.js
+Fastify
+FastAPI
+Flask
+Django
+javascript
+Copy
+import express from "express"
+import { createBitChordAuth } from "./bitchord-addon-auth.mjs"
+
+const app = express()
+const bitchord = createBitChordAuth({ hosts: ["myaddon.example.com"] })
+
+app.get("/manifest.json", (req, res) => res.json(manifest)) // stays public
+app.use(bitchord.express())                                  // everything below needs BitChord
+
+app.get("/search", async (req, res) => { /* ... */ })
+app.get("/stream/:id", async (req, res) => { /* ... */ })
+
+// On success, req.bitchord holds the token's claims.
+What the helpers give you
+Helper	Where	What it does
+express()	JS	Express/Connect middleware. Sends the refusal itself; sets req.bitchord on success.
+guard(request)	JS	For Fetch-API handlers. Returns a 401/503 Response to send, or null when the request is allowed.
+verifyRequest(req)	JS	Verifies a Fetch Request or a Node request. Returns { ok, claims } or { ok: false, status, error }.
+rejection(result)	JS	The status, headers and body to send for a failed result, for any other framework.
+verify_headers(headers)	Python	Works with Flask, Starlette/FastAPI and Django header objects, or a plain dict.
+result.status / headers / body	Python	What to send back when result.ok is false.
+In Python, verify_headers makes a blocking request about once an hour to refresh BitChord’s keys. That’s fine in FastAPI’s sync def routes and dependencies, which run in a thread pool. In an async def route, call it through run_in_threadpool.
+
+Addon auth
+
+Short-lived media URLs
+Auth protects /search and /stream. The media URL you return is then opened by the player directly, without the BitChord headers. If that URL never expires, anyone who gets hold of one can play it anywhere.
+
+1
+Expire media URLs in 15–30 minutes.
+Never less than 5: BitChord caches a stream answer for 5 minutes, and a long track that is paused and resumed fetches the URL again.
+
+2
+Use your storage provider’s signed URLs.
+S3, R2, GCS and B2 can all pre-sign a URL with an expiry. Return that from /stream.
+
+3
+Or sign your own.
+If you proxy audio yourself, put an HMAC of the track id and expiry in the query string and check it on the media route.
+
+4
+Don’t require BitChord headers on the media route.
+The player doesn’t send them, so playback would fail.
+
+javascript · node
+Copy
+import crypto from "node:crypto"
+const MEDIA_SECRET = process.env.MEDIA_SECRET // long random string, server-side only
+
+// Return this from /stream instead of a permanent URL.
+export function signedMediaUrl(id, ttlSeconds = 1800) {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds
+  const sig = crypto.createHmac("sha256", MEDIA_SECRET).update(`${id}.${exp}`).digest("base64url")
+  return `https://myaddon.example.com/media/${encodeURIComponent(id)}?exp=${exp}&sig=${sig}`
+}
+
+// Check this on the media route. Do NOT require X-BitChord-* headers there.
+export function mediaAllowed(id, exp, sig) {
+  if (!/^\d+$/.test(String(exp)) || Number(exp) < Date.now() / 1000) return false
+  const want = crypto.createHmac("sha256", MEDIA_SECRET).update(`${id}.${exp}`).digest()
+  const got = Buffer.from(String(sig ?? ""), "base64url")
+  return got.length === want.length && crypto.timingSafeEqual(got, want)
+}
+Addon auth
+
+Test and roll out
+Check it from a terminal
+shell
+Copy
+# Manifest: public, and it declares the flag
+curl -s https://myaddon.example.com/manifest.json
+
+# Anything else without BitChord: refused with the BitChord challenge
+curl -si "https://myaddon.example.com/search?q=test"
+# HTTP/1.1 401
+# www-authenticate: BitChord realm="bitchord-addons", error="missing", ...
+
+curl -si https://myaddon.example.com/stream/anything     # 401 as well
+
+# Forged headers are refused too
+curl -si -H "X-BitChord-Token: x.y.z" -H "X-BitChord-Proof: v1.0.x" \
+  "https://myaddon.example.com/search?q=test"            # 401
+Check it in BitChord
+Add the addon in the official BitChord app (Settings → Sources → Add an addon) and play a track. The row must not show “Outdated addon”, and search and playback must work. If BitChord is refused, its logs show didn’t accept BitChord’s verification (<code>) with one of the error codes.
+
+Roll out without breaking anyone
+01
+Ship the flag with log-only verification
+BitChord sends credentials as soon as it sees the flag. Verify them and log failures, but keep serving every request.
+
+02
+Watch the logs for a few days
+invalid_proof should be near zero; if it isn’t, hosts is wrong. missing is expected: that’s every client that isn’t BitChord.
+
+03
+Switch to blocking
+Replace the log-only check with the recipe for your framework. From then on, only BitChord gets through.
+
+Express
+Python
+javascript
+Copy
+// Step 1 of the rollout: verify, log, but still serve.
+app.use(async (req, res, next) => {
+  if (req.path.endsWith("/manifest.json")) return next()
+  const result = await bitchord.verifyRequest(req)
+  if (!result.ok) console.log("bitchord-auth would refuse:", result.error)
+  next()
+})
+Log-only isn’t a place to stay
+
+It keeps your addon working in BitChord, but it lets forks and scripts in too. Listeners on BitChord versions from before addon auth get 401 once you block; ask them to update.
+Addon auth
+
+Errors and claims
+Every refusal is a 401 (or 503) with a WWW-Authenticate: BitChord header and a JSON body. The helpers produce exactly this; BitChord reads the header to decide what to do next.
+
+http
+Copy
+HTTP/1.1 401 Unauthorized
+content-type: application/json
+cache-control: no-store
+www-authenticate: BitChord realm="bitchord-addons", error="expired", error_description="Token expired"
+
+{ "error": "bitchord_auth", "code": "expired", "message": "Token expired" }
+Code	Status	Meaning	What BitChord does
+missing	401	No BitChord credentials: a fork, script or browser, or BitChord before its first authenticated request.	Attaches credentials and retries.
+expired	401	The token is past its expiry.	Gets a new token and retries once.
+invalid_token	401	The token is malformed, tampered with, or not signed by BitChord (for example a fork running its own auth server).	Gets a new token and retries once.
+invalid_proof	401	The signature doesn’t match: hosts is wrong, or a token is being used without its hardware key.	Shows an error.
+stale_proof	401	The proof is more than 2 minutes old. Your server’s clock is wrong; the app corrects its own.	Shows an error.
+unavailable	503	Your server couldn’t download BitChord’s public keys the first time.	Treats it as a temporary outage.
+What you get on success
+Claim	Meaning
+sub	A random id for this install’s hardware key. It changes when the token refreshes, about hourly. Use it with the IP for rate limiting. It is not a user identity.
+ver	BitChord’s version code, for example 37. Use it if you need a minimum app version.
+exp	When the token expires, in Unix seconds.
+sl	tee or strongbox: where the key is held.
+No account, email, device id or IMEI is ever sent. Express puts these on req.bitchord; the other helpers return them as result.claims.
+
+Addon auth
+
+Protocol reference
+For porting the verifier to another language. Protocol version 1. The two reference verifiers are the authoritative implementation; when in doubt, match them.
+
+Request headers
+Sent only to addons that declare the flag (or answer with WWW-Authenticate: BitChord), and only over HTTPS.
+
+http
+Copy
+GET /search?q=midnight&quality=lossless
+X-BitChord-Token: eyJhbGciOiJFZERTQSIsImtpZCI6Ii4uLiJ9.eyJpc3MiOi...
+X-BitChord-Proof: v1.1793895893081.MEUCIQ...  (86 base64url characters)
+The token
+A compact JWT signed with Ed25519 (alg: EdDSA, with a kid). The public keys are at https://bitchord-auth.kushagrasingh.in/.well-known/jwks.json. Cache them for an hour, refetch early when a token names an unknown kid (at most every 5 minutes), and answer 503 unavailable if they were never loaded.
+
+json
+Copy
+// Header
+{ "alg": "EdDSA", "kid": "h0nr3tdm5pQ", "typ": "JWT" }
+
+// Payload
+{
+  "iss": "https://bitchord-auth.kushagrasingh.in",
+  "aud": "bitchord-addons",
+  "sub": "Qm9…",          // install's key thumbprint, rotates hourly
+  "iat": 1793895893,
+  "exp": 1793899493,      // 1 hour
+  "ver": 37,              // BitChord version code
+  "sl": "tee",            // tee | strongbox
+  "cnf": { "jwk": { "kty": "EC", "crv": "P-256", "x": "…", "y": "…" } }
+}
+The proof
+text
+Copy
+// The bytes the device signs (UTF-8, \n is a single line feed):
+bitchord-addon-proof/v1\n<host>\n<unix-ms>\n<base64url(SHA-256(token))>
+
+// <host>    one of YOUR configured hostnames, never the request's Host header
+// <unix-ms> the number from the proof header, within ±120 s of your clock
+// signature ECDSA P-256 / SHA-256, raw r||s (64 bytes), base64url, no padding
+Verification order
+1
+Both headers present.
+Otherwise missing.
+
+2
+Token signature.
+Three parts, alg is EdDSA, the kid is a known key, and the Ed25519 signature over header.payload verifies. Otherwise invalid_token.
+
+3
+Claims.
+iss is https://bitchord-auth.kushagrasingh.in; aud contains bitchord-addons; iat isn’t in the future and exp hasn’t passed, each with 60 s of skew (expired for the latter); cnf.jwk is an EC P-256 key.
+
+4
+Proof format and age.
+Matches ^v1\.(\d{10,16})\.([A-Za-z0-9_-]{86})$ (else invalid_proof), and the time is within ±120 s (else stale_proof).
+
+5
+Proof signature.
+Verify the ECDSA signature with the cnf.jwk key for each configured host. Accept if any verifies, otherwise invalid_proof.
+
+Addon auth
+
+Auth FAQ
+Can a fork get past this?
+Do I need to register my addon or get an API key?
+Does BitChord send these headers to every addon?
+Does this slow my addon down?
+What if BitChord’s auth service is down?
+My addon shows “Outdated addon” in BitChord.
+Every request fails with invalid_proof.
+Requests fail with stale_proof.
+Rooted users are complaining.
+Can BitChord desktop or web use my addon?
+Overview
+
+How addons work
+A listener adds either your root URL or its manifest.json URL. BitChord stores the normalized root, checks the manifest, then tries enabled addons in the order chosen by the listener. When one misses or is unavailable, resolution continues.
+
+01
+Discover
+GET /manifest.json
+02
+Match
+GET /search?q=…
+03
+Resolve
+GET /stream/{id}
+04
+Play
+Open returned URL
+What BitChord does with your answer
+Matches title, artist, album, and duration to avoid the wrong recording.
+Sends the listener’s pick from your quality options, or a lossless, high, or low tier.
+Uses declared codec and transport metadata before guessing from a URL.
+Caches manifests and searches for 10 minutes, streams for 5 minutes.
+Attaches a hardware-backed proof to every request for addons that declare
+bitchordAuth
+, and marks the rest as outdated without blocking them. See
+Addon auth
+.
+Build
+
+Quickstart
+Expose three routes from any HTTPS server. The example below is deliberately runtime-neutral: connect handleRequest to the router you already use.
+
+manifest.json
+identity + capabilities
+GET /search
+catalogue lookup
+GET /stream/:id
+playable audio
+javascript
+Copy
+import { createBitChordAuth } from "./bitchord-addon-auth.mjs"
+
+// Recommended: only the official BitChord app gets past this. See Addon auth.
+const bitchord = createBitChordAuth({ hosts: ["audio.example"] })
+
+const tracks = [
+  {
+    id: "track_8f31",
+    title: "Midnight Signal",
+    artist: "Example Artist",
+    album: "Night Drive",
+    duration: 242,
+    artworkURL: "https://audio.example/art/8f31.jpg",
+    format: "flac",
+    audioQuality: "LOSSLESS"
+  }
+]
+
+const MANIFEST = {
+  id: "dev.example.reference-addon",
+  name: "Reference Addon",
+  version: "1.0.0",
+  resources: ["search", "stream"],
+  bitchordAuth: true
+}
+
+export async function handleRequest(request) {
+  const url = new URL(request.url)
+
+  if (url.pathname === "/manifest.json") {
+    return json(MANIFEST) // stays public
+  }
+
+  const denied = await bitchord.guard(request) // 401 for anything but BitChord
+  if (denied) return denied
+
+  if (url.pathname === "/search") {
+    const query = (url.searchParams.get("q") || "").toLowerCase()
+    return json({
+      tracks: tracks.filter((track) =>
+        [track.title, track.artist, track.album]
+          .join(" ").toLowerCase().includes(query)
+      )
+    })
+  }
+
+  if (url.pathname.startsWith("/stream/")) {
+    const id = decodeURIComponent(url.pathname.slice(8))
+    if (!tracks.some((track) => track.id === id)) {
+      return new Response(null, { status: 404 })
+    }
+    return json({
+      url: signedMediaUrl(id),
+      codec: "flac",
+      container: "flac",
+      manifest: "none",
+      encrypted: false,
+      sampleRate: 96000,
+      bitDepth: 24
+    })
+  }
+
+  return new Response(null, { status: 404 })
+}
+
+function json(value) {
+  return Response.json(value, {
+    headers: { "Cache-Control": "no-store" }
+  })
+}
+
+function signedMediaUrl(id) {
+  // Sign and expire this in production: see Short-lived media URLs.
+  return `https://audio.example/media/${encodeURIComponent(id)}.flac`
+}
+Use absolute URLs
+
+Artwork and media URLs must include their scheme and host. A relative media path is rejected before playback.
+Build
+
+Manifest
+Serve the manifest at GET /manifest.json. BitChord needs a stableid and a searchable addon. Unknown fields are ignored, so the document can carry additional metadata for your own tooling.
+
+json
+Copy
+{
+  "id": "dev.example.reference-addon",
+  "name": "Reference Addon",
+  "version": "1.0.0",
+  "resources": ["search", "stream"],
+  "bitchordAuth": true,
+  "allowDownloads": 1,
+  "checkValidLossless": 0,
+  "settings": [
+    {
+      "key": "quality",
+      "type": "select",
+      "default": "lossless",
+      "options": [
+        { "label": "Lossless", "value": "lossless" },
+        { "label": "High", "value": "high" },
+        { "label": "Low", "value": "low" }
+      ]
+    }
+  ]
+}
+Field	Required	Meaning
+id	Required	Stable, unique addon identifier. An empty id is rejected.
+bitchordAuth	Recommended	Set true to accept only the official BitChord app (see Addon auth). Without it the addon still works, and Sources marks it as outdated.
+name	Recommended	Human-readable name shown in the source list.
+version	Recommended	Displayed with health information.
+resources	Recommended	Include search. Stream may be omitted only when rows carry streamURL.
+settings	Optional	A quality select becomes a picker in Sources. Other settings send their defaults as query parameters.
+allowDownloads	Optional · default 1	Set 0 to allow playback but not downloads. See Download permission.
+checkValidLossless	Optional · default 0	Set 1 to be used only on a lossless-capable output. See Lossless output gate.
+Only quality gets a picker
+
+BitChord does not render a full addon settings screen. A quality select becomes a picker under your addon in Sources (see Quality options). Every other setting sends its scalar default value.
+Build
+
+Search endpoint
+Accept GET /search?q=… and return an object with atracks array. Only rows with a non-empty id and title are considered. Return results in your preferred order; BitChord keeps it while evaluating recording matches.
+
+json
+Copy
+GET /search?q=midnight&quality=lossless&atmos=auto
+
+{
+  "tracks": [
+    {
+      "id": "track_8f31",
+      "title": "Midnight Signal",
+      "artist": "Example Artist",
+      "album": "Night Drive",
+      "duration": 242,
+      "artworkURL": "https://audio.example/art/8f31.jpg",
+      "format": "flac",
+      "audioQuality": "LOSSLESS"
+    }
+  ]
+}
+Field	Required	Meaning
+id	Required	Opaque track id. It is safely encoded when used in the stream path.
+title	Required	Track title used for matching.
+artist	Recommended	Primary artist used for matching.
+album	Recommended	Album improves match confidence.
+duration	Recommended	Length in seconds; decimals are accepted.
+artworkURL	Optional	Absolute artwork URL. albumArtworkURL is also accepted.
+format	Recommended	A short format hint such as flac, mp3, aac, or dash.
+audioQuality	Recommended	Free-text quality tier such as LOSSLESS or HIGH.
+streamURL	Optional	Direct fallback URL when the stream endpoint has no answer.
+Search has no limit parameter. Keep responses focused and fast; BitChord trims what it uses.
+
+Build
+
+Stream endpoint
+Accept GET /stream/{id}. Return one openable rendition for the requested quality. A 404 means “not in this addon” and cleanly moves resolution onward.
+
+json
+Copy
+GET /stream/track_8f31?quality=lossless&atmos=auto
+
+{
+  "url": "https://audio.example/media/track_8f31.flac",
+  "format": "flac",
+  "quality": "Lossless · 24-bit / 96 kHz",
+  "codec": "flac",
+  "container": "flac",
+  "manifest": "none",
+  "encrypted": false,
+  "sampleRate": 96000,
+  "bitDepth": 24,
+  "bitrate": 2800000
+}
+Field	Required	Meaning
+url	Required	Absolute, directly playable media or manifest URL.
+codec	Recommended	Most reliable codec signal: flac, alac, mp3, aac, eac3-joc, and others.
+container	Recommended	Container when known.
+manifest	Recommended	none, hls, or dash. Declare it for extensionless manifest URLs.
+encrypted	Recommended	Use false. Protected renditions are refused.
+sampleRate	Optional	Sample rate in Hz; a kHz value below 1000 is also normalized.
+bitDepth	Optional	Integer sample bit depth.
+bitrate	Optional	Bits per second or kbps; BitChord normalizes either convention.
+error	Optional	Helpful explanation when no URL can be returned.
+Describe transport explicitly
+
+If the URL points to an HLS or DASH manifest, set manifest. An extensionless manifest cannot be reliably identified from its URL.
+Playback
+
+Quality negotiation
+BitChord sends a quality parameter on both search and stream requests. If your manifest lists quality options, the value comes from that list. Otherwise it is one of the native tiers below.
+
+Quality options
+Declare a setting with key: "quality" and an options list, and BitChord shows the option in use under your addon’s name in Settings → Sources. Listeners tap it to pick another option. Whenever BitChord asks for its best audio, which covers playback and search, it sends their pick, or your first option when they haven’t picked one.
+
+json + http
+Copy
+// manifest.json — a quality select, best option first:
+{
+  "id": "dev.example.hires-addon",
+  "name": "Hi-Res Addon",
+  "resources": ["search", "stream"],
+  "settings": [
+    {
+      "key": "quality",
+      "type": "select",
+      "label": "Audio quality",
+      "default": "max",
+      "options": [
+        { "value": "max", "label": "Max (best available)" },
+        { "value": "hires", "label": "Hi-Res (up to 24-bit / 192 kHz FLAC)" },
+        { "value": "lossless", "label": "CD (16-bit / 44.1 kHz FLAC)" },
+        { "value": "high", "label": "AAC (320 kbps)" }
+      ]
+    }
+  ]
+}
+
+// Settings → Sources shows "Max (best available)" under the addon's name.
+// Nothing picked yet, so the first option is sent:
+GET /search?q=midnight&quality=max
+GET /stream/track_8f31?quality=max
+
+// The listener taps it and picks "Hi-Res (up to 24-bit / 192 kHz FLAC)":
+GET /search?q=midnight&quality=hires
+GET /stream/track_8f31?quality=hires
+
+// Other query parameters are left out here.
+Option field	Required	Meaning
+value	Yes	Sent as quality=. A string or number. Options without one are skipped.
+label	Recommended	What the listener reads in the picker. The value is shown when it is missing.
+Quality option rules that matter
+1
+List your best option first.
+With nothing picked, BitChord sends the first option. It doesn’t use default for this, and it doesn’t look for the word lossless, so the order you list the options in is what decides.
+
+2
+Offer at least two options.
+With a single option there is nothing to choose: BitChord sends it but shows no picker.
+
+3
+The pick is the listener’s.
+It is stored on their device for your addon, and the same value goes on search and stream requests. Remove an option and anyone who picked it moves to your first option.
+
+4
+Changes apply on the next manifest read.
+BitChord saves your options when the addon is added and updates them each time it reads your manifest. Manifests are cached for 10 minutes. Because the options are stored, the picker also works while your addon is unreachable or waiting on the lossless output gate, without contacting you.
+
+5
+Smaller requests are still matched by name.
+A download the listener keeps at High or Standard asks for HIGH or LOW instead, and their pick doesn’t apply. BitChord sends the option named like that tier: an exact name, then words such as high, 320 or normal for HIGH, and low, 96, 128 or min for LOW. If nothing matches, the first option is sent, so name your smaller renditions that way.
+
+Only the quality key
+
+BitChord shows a picker for quality alone. help, perNetwork and other form fields are ignored, so there is one pick per addon for every connection. Every other setting sends its default.
+The picker needs BitChord 1.9.1 or later. Earlier versions show no picker and send the option whose name best matches the tier being asked for, so on those an option named lossless is sent ahead of one listed above it.
+
+Without options
+An addon that lists no quality options receives one of these tiers as the value.
+
+LOSSLESS
+Bit-exact request
+Prefer FLAC, ALAC, WAV, or another lossless codec.
+
+HIGH
+Best lossy request
+Return your best lossy rendition, commonly near 320 kbps.
+
+LOW
+Metered request
+Return a compact rendition, commonly 128 kbps or below.
+
+Do not overstate the stream
+BitChord verifies quality using the codec it actually decodes. A lossless label on a lossy URL does not create a lossless badge. Accurate codec, sample-rate, bit-depth, and bitrate fields make selection and playback diagnostics reliable.
+
+Playback
+
+Dolby Atmos
+Dolby support has two layers: selecting the immersive recording and describing its stream. Some catalogues expose Dolby as another rendition of one id; others return a separate track id. Your addon should support both shapes.
+
+Request behavior
+Respond to atmos=auto
+
+BitChord adds this hint only when the device has a compatible decoder and the listener has Dolby enabled. “Auto” means prefer Dolby when available, otherwise return stereo.
+
+http + json
+Copy
+// BitChord sends this only when Dolby is enabled and supported:
+GET /search?q=midnight&quality=lossless&atmos=auto
+GET /stream/dolby_8f31?quality=lossless&atmos=auto
+
+// Search result for a distinct Dolby mix:
+{
+  "id": "dolby_8f31",
+  "title": "Midnight Signal",
+  "artist": "Example Artist",
+  "album": "Night Drive",
+  "duration": 242,
+  "format": "dash",
+  "audioModes": ["DOLBY_ATMOS"],
+  "atmos": true
+}
+
+// Stream response:
+{
+  "url": "https://audio.example/media/dolby_8f31",
+  "format": "dash",
+  "quality": "Dolby Atmos",
+  "codec": "eac3-joc",
+  "container": "mp4",
+  "manifest": "dash",
+  "sampleRate": 48000,
+  "audioMode": "DOLBY_ATMOS",
+  "encrypted": false
+}
+Dolby rules that matter
+1
+Mark separate rows.
+Use atmos: true, audioMode, or audioModes. This lets BitChord prefer the Dolby row even if its catalogue quality label says LOW.
+
+2
+Use a recognized codec.
+Return eac3-joc or a clear Dolby label. BitChord normalizes common underscore and hyphen spellings.
+
+3
+Return stereo when Dolby is absent.
+With atmos=auto, an ordinary track must still play. Do not turn “no Dolby mix” into an error.
+
+4
+Declare the transport.
+Dolby is often carried by DASH. Set manifest: "dash" even when the URL has no file extension.
+
+Dolby is immersive, not lossless
+
+BitChord treats E-AC-3 JOC as a premium immersive mix, but not as a bit-exact lossless stream. When Dolby is wanted, it is preferred as a mix rather than mislabelled as lossless.
+Playback
+
+Download permission
+Listeners can save tracks for offline playback. By default an addon serves those downloads the same way it serves playback. Set allowDownloads to 0 in your manifest if your addon may be streamed but should never be the source of a saved file.
+
+Manifest switch
+allowDownloads · default 1
+
+With 0, BitChord leaves your addon out of every download and asks the next enabled source in the listener’s order instead. Playback is not affected. If the key is missing, downloads are allowed.
+
+json + behaviour
+Copy
+// manifest.json — stream in BitChord, but never be saved from it:
+{
+  "id": "dev.example.reference-addon",
+  "name": "Reference Addon",
+  "resources": ["search", "stream"],
+  "allowDownloads": 0
+}
+
+// Listener taps Download on a track this addon would play:
+//   1. Your addon is skipped for the download.
+//   2. The next enabled source in the listener's order is asked
+//      (another addon, then JioSaavn if enabled, then YouTube).
+//   3. Playback is unaffected — /search and /stream keep working.
+Download rules that matter
+1
+Write it as a number or a boolean.
+1/0, true/false, and the same values as strings are all accepted. Any other value is ignored and the default applies, so a typo never flips the setting the wrong way.
+
+2
+Expect no separate download request.
+A download uses the same /search and /stream calls as playback. With 0, those calls are never made for a download, so you don’t need to detect downloads on your server.
+
+3
+Listeners see it.
+The addon’s row in Settings → Sources shows Streaming only. That tells the listener why a download came from another source.
+
+4
+Changes apply on the next manifest read.
+BitChord saves the value when the addon is added and updates it each time it reads your manifest. Manifests are cached for 10 minutes.
+
+A policy, not DRM
+
+allowDownloads is a promise BitChord keeps, not protection on your media. A stream URL can still be fetched by anything that has it. If files must not leave your server, rely on short-lived signed URLs and your own access control as well.
+Playback
+
+Lossless output gate
+Some catalogues only want to serve listeners who will actually hear lossless audio. On BitChord for Android, set checkValidLossless to 1 and BitChord uses your addon only while the phone has a lossless-capable output connected. Otherwise your server isn’t contacted at all.
+
+Manifest switch
+checkValidLossless · default 0
+
+With 1, BitChord checks the connected audio output before every request. On the phone speaker or a lossy Bluetooth codec it sends nothing: no manifest, health check, search or stream. If the key is missing, there is no check.
+
+json + http
+Copy
+// manifest.json — only use this addon on a lossless-capable output:
+{
+  "id": "dev.example.hires-addon",
+  "name": "Hi-Res Addon",
+  "resources": ["search", "stream"],
+  "checkValidLossless": 1
+}
+
+// Phone speaker, or Bluetooth on SBC / AAC / aptX:
+//   no requests at all — not /manifest.json, not /search, not /stream.
+//   Tracks resolve from the next source; Sources shows a warning.
+
+// Wired, USB, HDMI, or Bluetooth on LDAC / LHDC / aptX Lossless:
+GET /search?q=midnight&quality=lossless&atmos=auto
+GET /stream/track_8f31?quality=lossless&atmos=auto
+Outputs that qualify
+Output	Qualifies	Notes
+3.5mm headphones / headset	Yes	Wired headphones or a headset on the headphone jack.
+USB-C audio	Yes	USB-C headphones, USB DACs and USB audio accessories.
+Line out / aux	Yes	Analog or digital line out, and aux line.
+HDMI, ARC, eARC	Yes	A TV, AV receiver or soundbar over HDMI.
+Dock	Yes	Digital and analog audio docks.
+Bluetooth · LDAC	Yes	Any LDAC quality mode: 990, 660, 330 kbps or adaptive.
+Bluetooth · LHDC	Yes	LHDC V3, V4 and V5.
+Bluetooth · aptX Lossless	Yes	When Android reports the codec as aptX Lossless.
+Bluetooth · SBC, AAC, aptX, aptX HD, aptX Adaptive	No	Lossy codecs below CD bitrate.
+LE Audio (LC3), Opus, hearing aids	No	Lossy codecs.
+Phone speaker / earpiece, casting	No	The audio doesn’t reach a lossless path.
+How Bluetooth is checked
+BitChord reads the codec Android reports
+
+On Android 12 and later this needs the Nearby devices permission. If an addon is waiting and BitChord can’t read the codec, Settings → Sources offers Check Bluetooth codec to grant it. LHDC and aptX Lossless are named by Android 15+ and by phones whose maker reports vendor codecs. Where Android doesn’t report the codec, BitChord treats it as unknown and doesn’t count it.
+
+Lossless gate rules that matter
+1
+The first contact is the manifest.
+BitChord has to read your manifest once to learn the switch: when the listener tests or saves the addon. After that the value is stored on the device, so a gated addon is never contacted just to check whether it is still gated.
+
+2
+Nothing reaches you while no output qualifies.
+The addon is left out of playback, search and downloads, and every request path refuses before it opens a connection. That includes queued tracks that already name your addon. They resolve from the next source.
+
+3
+It resumes on its own.
+When the listener plugs in headphones or switches Bluetooth to LDAC/LHDC, the addon rejoins the source order immediately, with no restart. Its health check runs again on the Sources screen.
+
+4
+The listener is told why.
+The addon’s row in Settings → Sources says Needs a lossless output. If Bluetooth is connected, the row names the current codec so the listener knows what to change.
+
+5
+Turning it on for an existing addon.
+Devices that already have your addon learn the new value the next time they read your manifest (cached for 10 minutes). That read is the last request they make until a qualifying output is connected.
+
+LDAC and LHDC are high-resolution, not bit-exact
+
+Strictly, only a cable carries a bit-exact signal. LDAC and LHDC are high-bitrate lossy codecs. They qualify because they are the closest wireless option and what listeners expect a lossless addon to work with. If you need a strictly bit-exact path, say so in your addon’s own description.
+Both switches need BitChord 1.7.1 or later. allowDownloads is honoured by BitChord for Android and desktop; checkValidLossless by Android only, and the desktop app ignores it. Earlier versions ignore unknown manifest keys, so adding them is always safe.

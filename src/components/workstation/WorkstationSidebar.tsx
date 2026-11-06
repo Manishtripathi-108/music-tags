@@ -15,6 +15,14 @@ import {
     isMissingLyrics,
     isSyncedLyrics,
     isUnsyncedLyrics,
+    hasScanError,
+    isMissingFile,
+    isLockedFile,
+    isReadOnlyFile,
+    isCorruptFile,
+    isSymlinkFile,
+    isIncompleteScan,
+    hasAnyFileProblem,
 } from '@/domain/media/predicates';
 import { useAudioStore } from '@/store/audioStore';
 
@@ -50,6 +58,15 @@ export function WorkstationSidebar() {
     const missingLyricsCount = tracks.filter(isMissingLyrics).length;
     const syncedLyricsCount = tracks.filter(isSyncedLyrics).length;
     const unsyncedLyricsCount = tracks.filter(isUnsyncedLyrics).length;
+
+    const scanErrorCount = tracks.filter(hasScanError).length;
+    const missingFileCount = tracks.filter(isMissingFile).length;
+    const lockedFileCount = tracks.filter(isLockedFile).length;
+    const readOnlyFileCount = tracks.filter(isReadOnlyFile).length;
+    const corruptFileCount = tracks.filter(isCorruptFile).length;
+    const symlinkFileCount = tracks.filter(isSymlinkFile).length;
+    const incompleteScanCount = tracks.filter(isIncompleteScan).length;
+    const totalProblemsCount = tracks.filter(hasAnyFileProblem).length;
 
     const folders: FolderItemInfo[] = useMemo(() => {
         const map = new Map<string, { directory: string; count: number; modifiedCount: number }>();
@@ -125,6 +142,90 @@ export function WorkstationSidebar() {
                             />
                         ))}
                     </SidebarGroup>
+
+                    {(totalProblemsCount > 0 || symlinkFileCount > 0 || readOnlyFileCount > 0) && (
+                        <SidebarGroup label="File Status & Health" icon="warning" defaultOpen>
+                            <SidebarItem
+                                id="problems"
+                                label="Problem Files"
+                                icon="warning"
+                                count={totalProblemsCount}
+                                isActive={activeFilter === 'problems'}
+                                onClick={() => setActiveFilter(activeFilter === 'problems' ? 'all' : 'problems')}
+                            />
+                            {scanErrorCount > 0 && (
+                                <SidebarItem
+                                    id="scan-errors"
+                                    label="Scan Errors"
+                                    icon="close"
+                                    count={scanErrorCount}
+                                    isActive={activeFilter === 'scan-errors'}
+                                    onClick={() => setActiveFilter(activeFilter === 'scan-errors' ? 'all' : 'scan-errors')}
+                                />
+                            )}
+                            {missingFileCount > 0 && (
+                                <SidebarItem
+                                    id="missing-files"
+                                    label="Missing Files"
+                                    icon="close"
+                                    count={missingFileCount}
+                                    isActive={activeFilter === 'missing-files'}
+                                    onClick={() => setActiveFilter(activeFilter === 'missing-files' ? 'all' : 'missing-files')}
+                                />
+                            )}
+                            {corruptFileCount > 0 && (
+                                <SidebarItem
+                                    id="corrupt-files"
+                                    label="Corrupt Files"
+                                    icon="trash"
+                                    count={corruptFileCount}
+                                    isActive={activeFilter === 'corrupt-files'}
+                                    onClick={() => setActiveFilter(activeFilter === 'corrupt-files' ? 'all' : 'corrupt-files')}
+                                />
+                            )}
+                            {lockedFileCount > 0 && (
+                                <SidebarItem
+                                    id="locked-files"
+                                    label="Locked Files"
+                                    icon="settings"
+                                    count={lockedFileCount}
+                                    isActive={activeFilter === 'locked-files'}
+                                    onClick={() => setActiveFilter(activeFilter === 'locked-files' ? 'all' : 'locked-files')}
+                                />
+                            )}
+                            {readOnlyFileCount > 0 && (
+                                <SidebarItem
+                                    id="readonly-files"
+                                    label="Read-Only Files"
+                                    icon="fileText"
+                                    count={readOnlyFileCount}
+                                    isActive={activeFilter === 'readonly-files'}
+                                    onClick={() => setActiveFilter(activeFilter === 'readonly-files' ? 'all' : 'readonly-files')}
+                                />
+                            )}
+                            {symlinkFileCount > 0 && (
+                                <SidebarItem
+                                    id="symlinks"
+                                    label="Symbolic Links"
+                                    icon="open"
+                                    count={symlinkFileCount}
+                                    badge="Link"
+                                    isActive={activeFilter === 'symlinks'}
+                                    onClick={() => setActiveFilter(activeFilter === 'symlinks' ? 'all' : 'symlinks')}
+                                />
+                            )}
+                            {incompleteScanCount > 0 && (
+                                <SidebarItem
+                                    id="incomplete-scan"
+                                    label="Incomplete Scans"
+                                    icon="refresh"
+                                    count={incompleteScanCount}
+                                    isActive={activeFilter === 'incomplete-scan'}
+                                    onClick={() => setActiveFilter(activeFilter === 'incomplete-scan' ? 'all' : 'incomplete-scan')}
+                                />
+                            )}
+                        </SidebarGroup>
+                    )}
 
                     {folders.length > 0 && (
                         <SidebarGroup label="Scanned Folders" icon="folder" defaultOpen>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import axios from 'axios';
@@ -8,9 +8,11 @@ import { FormProvider, useForm } from 'react-hook-form';
 
 import Icon from '@/components/ui/Icon';
 import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { isLrcContent } from '@/domain/media/lyrics';
-import { type TrackPatchApiResponse } from '@/domain/media/track';
-import { TagFormSchema, type TagFormValues } from '@/schemas';
+import { parseDateSafe } from '@/domain/media/date';
+import { hasLrcTimestamps } from '@/domain/media/lyrics';
+import { Track } from '@/domain/media/track';
+import { type TrackPatchApiResponse } from '@/domain/media/dto';
+import { DEFAULT_TAG_FORM_VALUES, TagFormSchema, type TagFormValues } from '@/schemas';
 import { useAudioStore } from '@/store/audioStore';
 
 import { AudioSpecsTab } from './inspector/AudioSpecsTab';
@@ -18,124 +20,87 @@ import { InspectorHeader } from './inspector/InspectorHeader';
 import { LyricsTab } from './inspector/LyricsTab';
 import { RawTagsTab } from './inspector/RawTagsTab';
 import { TagFormTab } from './inspector/TagFormTab';
+import { ZodError } from 'zod';
+
+function toTagFormValues(metadata: Partial<Track>): TagFormValues {
+    return {
+        title: metadata.title || '',
+        artist: metadata.artist || '',
+        albumArtist: metadata.albumArtist || '',
+        album: metadata.album || '',
+        genre: metadata.genre || '',
+        initialKey: metadata.initialKey || '',
+        comment: metadata.comment || '',
+        trackNumber: metadata.trackNumber != null ? String(metadata.trackNumber) : '',
+        discNumber: metadata.discNumber != null ? String(metadata.discNumber) : '',
+        releaseDate: parseDateSafe(metadata.releaseDate),
+        year: metadata.year != null ? String(metadata.year) : '',
+        bpm: metadata.bpm != null ? String(metadata.bpm) : '',
+        composer: metadata.composer || '',
+        publisher: metadata.publisher || '',
+        copyright: metadata.copyright || '',
+        isrc: metadata.isrc || '',
+        lyrics: metadata.lyrics || '',
+    };
+}
 
 export function AudioInspector() {
     const { activeTrackId, activeTrackDetail, fetchTracks, updateTrackInline, normalizeTrackLrc } = useAudioStore();
     const { metadata, rawTags, isLoading } = activeTrackDetail;
 
     const [isSaved, setIsSaved] = useState(false);
-    const [lyricsText, setLyricsText] = useState('');
 
-    const formMethods = useForm<TagFormValues>({
+    const formValues = useMemo(() => (metadata ? toTagFormValues(metadata) : DEFAULT_TAG_FORM_VALUES), [metadata]);
+
+    const formMethods = useForm({
         resolver: zodResolver(TagFormSchema),
         mode: 'onTouched',
-        defaultValues: {
-            title: '',
-            artist: '',
-            albumArtist: '',
-            album: '',
-            trackNumber: '',
-            year: '',
-            genre: '',
-            bpm: '',
-            initialKey: '',
-            comment: '',
-            composer: '',
-            publisher: '',
-            copyright: '',
-            isrc: '',
-            lyrics: '',
+        values: formValues,
+        resetOptions: {
+            keepDirtyValues: false,
         },
     });
 
-    const { reset, watch } = formMethods;
-    const [watchedTitle, watchedArtist] = watch(['title', 'artist']);
+    const { reset, watch, setValue, setError } = formMethods;
+    const [watchedTitle, watchedArtist, watchedLyrics] = watch(['title', 'artist', 'lyrics']);
 
     useEffect(() => {
-        if (metadata) {
-            reset({
-                title: metadata.title || '',
-                artist: metadata.artist || '',
-                albumArtist: metadata.albumArtist || '',
-                album: metadata.album || '',
-                trackNumber: metadata.trackNumber != null ? String(metadata.trackNumber) : '',
-                year: metadata.year != null ? String(metadata.year) : '',
-                genre: metadata.genre || '',
-                bpm: metadata.bpm != null ? String(metadata.bpm) : '',
-                initialKey: metadata.initialKey || '',
-                comment: metadata.comment || '',
-                composer: metadata.composer || '',
-                publisher: metadata.publisher || '',
-                copyright: metadata.copyright || '',
-                isrc: metadata.isrc || '',
-                lyrics: metadata.lyrics || '',
-            });
-            setLyricsText(metadata.lyrics || '');
-        }
-    }, [metadata, reset]);
+        setIsSaved(false);
+    }, [activeTrackId]);
 
     const onSave = async (data: TagFormValues) => {
         if (!activeTrackId) return;
 
         setIsSaved(false);
 
-        const payload = {
-            title: data.title,
-            artist: data.artist || '',
-            albumArtist: data.albumArtist || '',
-            album: data.album || '',
-            trackNumber: data.trackNumber ? parseInt(data.trackNumber, 10) : null,
-            year: data.year ? parseInt(data.year, 10) : null,
-            genre: data.genre || '',
-            bpm: data.bpm ? parseFloat(data.bpm) : null,
-            initialKey: data.initialKey || '',
-            comment: data.comment || '',
-            composer: data.composer || '',
-            publisher: data.publisher || '',
-            copyright: data.copyright || '',
-            isrc: data.isrc || '',
-            lyrics: data.lyrics || '',
-        };
-
         try {
-            const { data: responseData } = await axios.patch<TrackPatchApiResponse>(`/api/files/${activeTrackId}/tags`, payload);
+            const { data: responseData } = await axios.patch<TrackPatchApiResponse>(`/api/files/${activeTrackId}/tags`, data);
 
-            const savedTrack = responseData.success && responseData.track ? responseData.track : { ...payload, id: activeTrackId };
-            updateTrackInline(activeTrackId, savedTrack);
-
-            reset({
-                title: savedTrack.title || '',
-                artist: savedTrack.artist || '',
-                albumArtist: savedTrack.albumArtist || '',
-                album: savedTrack.album || '',
-                trackNumber: savedTrack.trackNumber != null ? String(savedTrack.trackNumber) : '',
-                year: savedTrack.year != null ? String(savedTrack.year) : '',
-                genre: savedTrack.genre || '',
-                bpm: savedTrack.bpm != null ? String(savedTrack.bpm) : '',
-                initialKey: savedTrack.initialKey || '',
-                comment: savedTrack.comment || '',
-                composer: savedTrack.composer || '',
-                publisher: savedTrack.publisher || '',
-                copyright: savedTrack.copyright || '',
-                isrc: savedTrack.isrc || '',
-                lyrics: savedTrack.lyrics || '',
-            });
-
-            setIsSaved(true);
-            fetchTracks().catch(console.error);
+            if (responseData.success && responseData.track) {
+                updateTrackInline(activeTrackId, responseData.track);
+                reset(toTagFormValues(responseData.track));
+                setIsSaved(true);
+                // fetchTracks().catch(console.error);
+            }
         } catch (error) {
-            console.error('Error saving track tags:', error);
+            if (axios.isAxiosError(error) && error.response?.data?.details) {
+                const details = error.response.data.details as ZodError['issues'];
+                details.forEach((issue) => {
+                    const fieldName = issue.path[0] as keyof TagFormValues;
+                    setError(fieldName, { type: 'manual', message: issue.message });
+                });
+            }
         }
     };
 
     const handleSaveLyrics = async (text: string): Promise<boolean> => {
         if (!activeTrackId) return false;
 
-        const isLrc = isLrcContent(text);
+        const trimmed = text.trim();
+        const lyricsType = trimmed ? (hasLrcTimestamps(text) ? 'synced' : 'unsynced') : null;
         const payload = {
             lyrics: text,
-            lyricsSyncedJson: isLrc ? JSON.stringify(text) : null,
-            lyricsUnsynced: isLrc ? null : text,
+            lyricsType,
         };
 
         try {
@@ -148,6 +113,7 @@ export function AudioInspector() {
             return true;
         } catch (err) {
             console.error('Failed to save lyrics:', err);
+
             return false;
         }
     };
@@ -161,8 +127,8 @@ export function AudioInspector() {
         );
     }
 
-    const isLrc = isLrcContent(lyricsText);
-    const hasLyrics = Boolean(lyricsText.trim());
+    const isLrc = hasLrcTimestamps(watchedLyrics);
+    const hasLyrics = Boolean(watchedLyrics?.trim());
 
     return (
         <aside className="bg-background flex h-full w-90 flex-col overflow-hidden border border-l text-xs select-none">
@@ -175,32 +141,30 @@ export function AudioInspector() {
                 isLrc={isLrc}
             />
 
-            <Tabs defaultValue="tags" className="flex min-h-0 flex-1 flex-col">
-                <div className="px-3 pt-2">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="tags" className="text-xs">
-                            <Icon icon="document" className="size-3" />
-                            Tags
-                        </TabsTrigger>
-                        <TabsTrigger value="lyrics" className="text-xs">
-                            <Icon icon="lyrics" className="size-3" />
-                            Lyrics
-                        </TabsTrigger>
-                        <TabsTrigger value="specs" className="text-xs">
-                            <Icon icon="settings" className="size-3" />
-                            Specs
-                        </TabsTrigger>
-                        <TabsTrigger value="raw" className="text-xs">
-                            <Icon icon="raw" className="size-3" />
-                            Raw
-                        </TabsTrigger>
-                        <TabsIndicator />
-                    </TabsList>
-                </div>
+            <Tabs defaultValue="tags" className="flex min-h-0 flex-1 flex-col px-3 py-2">
+                <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="tags" className="text-xs">
+                        <Icon icon="document" className="size-3" />
+                        Tags
+                    </TabsTrigger>
+                    <TabsTrigger value="lyrics" className="text-xs">
+                        <Icon icon="lyrics" className="size-3" />
+                        Lyrics
+                    </TabsTrigger>
+                    <TabsTrigger value="specs" className="text-xs">
+                        <Icon icon="settings" className="size-3" />
+                        Specs
+                    </TabsTrigger>
+                    <TabsTrigger value="raw" className="text-xs">
+                        <Icon icon="raw" className="size-3" />
+                        Raw
+                    </TabsTrigger>
+                    <TabsIndicator />
+                </TabsList>
 
                 <TabsContent value="tags" className="flex-1 overflow-auto">
                     <FormProvider {...formMethods}>
-                        <TagFormTab onSubmit={onSave} isSaved={isSaved} />
+                        <TagFormTab key={activeTrackId || 'no-track'} onSubmit={onSave} isSaved={isSaved} />
                     </FormProvider>
                 </TabsContent>
 
@@ -208,8 +172,8 @@ export function AudioInspector() {
                     <LyricsTab
                         activeTrackId={activeTrackId}
                         metadata={metadata}
-                        lyricsText={lyricsText}
-                        setLyricsText={setLyricsText}
+                        lyricsText={watchedLyrics || ''}
+                        setLyricsText={(lrc) => setValue('lyrics', lrc)}
                         onSaveLyrics={handleSaveLyrics}
                         onNormalizeTrackLrc={normalizeTrackLrc}
                     />

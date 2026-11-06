@@ -10,6 +10,13 @@ export interface DiscoveredAudioFile {
     extension: string;
     sizeBytes: number;
     mtimeMs: number;
+    ctimeMs?: number | null;
+    birthtimeMs?: number | null;
+    isReadOnly?: boolean;
+    isLocked?: boolean;
+    isSymlink?: boolean;
+    isMissing?: boolean;
+    scanError?: string | null;
 }
 
 export interface DirectoryCrawlerOptions {
@@ -58,9 +65,17 @@ export class DirectoryCrawler {
                         if (!dirent.name.startsWith('.') && !IGNORED_DIRECTORY_NAMES.has(lowerName)) {
                             queue.push(fullPath);
                         }
-                    } else if (dirent.isFile() && SUPPORTED_AUDIO_EXTENSIONS.has(ext)) {
+                    } else if ((dirent.isFile() || dirent.isSymbolicLink()) && SUPPORTED_AUDIO_EXTENSIONS.has(ext)) {
+                        const isSymlink = dirent.isSymbolicLink();
                         try {
                             const stat = await fs.promises.stat(fullPath);
+                            let isReadOnly = false;
+                            try {
+                                await fs.promises.access(fullPath, fs.constants.W_OK);
+                            } catch {
+                                isReadOnly = true;
+                            }
+
                             const fileInfo: DiscoveredAudioFile = {
                                 path: fullPath,
                                 filename: dirent.name,
@@ -68,13 +83,42 @@ export class DirectoryCrawler {
                                 extension: ext,
                                 sizeBytes: stat.size,
                                 mtimeMs: Math.floor(stat.mtimeMs),
+                                ctimeMs: stat.ctimeMs ? Math.floor(stat.ctimeMs) : null,
+                                birthtimeMs: stat.birthtimeMs ? Math.floor(stat.birthtimeMs) : null,
+                                isSymlink,
+                                isReadOnly,
+                                isLocked: false,
+                                isMissing: false,
+                                scanError: null,
                             };
 
                             discovered.push(fileInfo);
                             onFileDiscovered?.(fileInfo);
-                        } catch {
-                            // Inaccessible or unreadable file stats skipped gracefully
-                            continue;
+                        } catch (err: unknown) {
+                            const errorObj = err as NodeJS.ErrnoException;
+                            const isLocked = errorObj?.code === 'EBUSY';
+                            const isReadOnly = errorObj?.code === 'EACCES' || errorObj?.code === 'EPERM';
+                            const isMissing = errorObj?.code === 'ENOENT';
+                            const errorMsg = errorObj?.message || 'Failed to inspect audio file';
+
+                            const fileInfo: DiscoveredAudioFile = {
+                                path: fullPath,
+                                filename: dirent.name,
+                                directory: currentDir,
+                                extension: ext,
+                                sizeBytes: 0,
+                                mtimeMs: 0,
+                                ctimeMs: null,
+                                birthtimeMs: null,
+                                isSymlink,
+                                isReadOnly,
+                                isLocked,
+                                isMissing,
+                                scanError: errorMsg,
+                            };
+
+                            discovered.push(fileInfo);
+                            onFileDiscovered?.(fileInfo);
                         }
                     }
                 }

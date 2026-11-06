@@ -4,76 +4,34 @@ import { type Track } from './track';
 
 export { sanitizeFilenameTitle, isTrackModified, deriveYearFromDate };
 
-export type AudioFileDbRecord = {
-    id: string;
-    path: string;
-    filename: string;
-    directory: string;
-    extension: string;
-    sizeBytes: number;
-    mtimeMs?: number | null;
-    createdAt?: number | null;
-    updatedAt?: number | null;
-};
+import { type CanonicalAudioMetadataOutput } from '@/schemas/audio-metadata.schema';
+import { type MediaFileInput } from '@/schemas/media-file.schema';
 
-export type CanonicalAudioMetadataDbRecord = {
-    fileId?: string | null;
-    title?: string | null;
-    artist?: string | null;
-    albumArtist?: string | null;
-    album?: string | null;
-    trackNumber?: number | null;
-    totalTracks?: number | null;
-    discNumber?: number | null;
-    totalDiscs?: number | null;
+/**
+ * Makes every property of T both optional and nullable.
+ * Used to represent loose DB row shapes where any field may be absent or null.
+ */
+type NullablePartial<T> = { [K in keyof T]?: T[K] | null };
+
+/**
+ * Loose representation of a canonical audio metadata DB row.
+ * Derived from `CanonicalAudioMetadataOutput` (Zod schema output) with every
+ * field made optional and nullable, plus `year` which is a derived/computed
+ * field not present in the canonical schema.
+ *
+ * Used by:
+ * - `buildTrackFromDb()` — types the `meta` parameter.
+ * - `toExifToolWriteTags()` — types the input for tag write-back.
+ */
+export type CanonicalAudioMetadataDbRecord = NullablePartial<CanonicalAudioMetadataOutput> & {
     year?: number | null;
-    releaseDate?: string | null;
-    originalReleaseDate?: string | null;
-    compilation?: boolean | null;
-    genre?: string | null;
-    composer?: string | null;
-    conductor?: string | null;
-    lyricist?: string | null;
-    publisher?: string | null;
-    label?: string | null;
-    catalogNumber?: string | null;
-    barcode?: string | null;
-    copyright?: string | null;
-    isrc?: string | null;
-    mood?: string | null;
-    comment?: string | null;
-    lyrics?: string | null;
-    lyricsUnsynced?: string | null;
-    lyricsSyncedJson?: string | null;
-    bpm?: number | null;
-    initialKey?: string | null;
-    rating?: number | null;
-    durationSeconds?: number | null;
-    containerFormat?: string | null;
-    codec?: string | null;
-    encoder?: string | null;
-    bitrateKbps?: number | null;
-    variableBitrate?: boolean | null;
-    sampleRateHz?: number | null;
-    channels?: number | null;
-    channelLayout?: string | null;
-    bitDepth?: number | null;
-    lossless?: boolean | null;
-    hasCoverArt?: boolean | null;
-    coverArtMime?: string | null;
-    coverArtType?: string | null;
-    coverArtDescription?: string | null;
-    coverArtWidth?: number | null;
-    coverArtHeight?: number | null;
-    createdAt?: number | null;
-    updatedAt?: number | null;
 };
 
 /**
  * Parses raw database rows through trackOutputSchema into a verified, modified Track.
  */
 export function buildTrackFromDb(
-    file: AudioFileDbRecord,
+    file: MediaFileInput,
     meta?: CanonicalAudioMetadataDbRecord | null,
     options: { forceModified?: boolean } = {}
 ): Track {
@@ -107,10 +65,27 @@ export function toExifToolWriteTags(meta: Partial<CanonicalAudioMetadataDbRecord
     if (meta.comment) tagsToWrite.Comment = meta.comment;
     if (meta.isrc) tagsToWrite.ISRC = meta.isrc;
 
-    const lyricsContent = meta.lyrics || meta.lyricsUnsynced;
-    if (lyricsContent) {
-        tagsToWrite.Lyrics = lyricsContent;
+    if (meta.lyrics) {
+        tagsToWrite.Lyrics = meta.lyrics;
     }
 
     return tagsToWrite;
 }
+
+import { parseDateSafe } from './date';
+
+/**
+ * Ensures all date fields on a Track (which may be ISO strings after JSON deserialization over HTTP)
+ * are revived into real native JavaScript Date instances or null.
+ */
+export function hydrateTrackDates(track: Track): Track {
+    return {
+        ...track,
+        releaseDate: parseDateSafe(track.releaseDate),
+        createdAt: parseDateSafe(track.createdAt),
+        updatedAt: parseDateSafe(track.updatedAt),
+        lastScannedAt: parseDateSafe(track.lastScannedAt),
+        lastVerifiedAt: parseDateSafe(track.lastVerifiedAt),
+    };
+}
+

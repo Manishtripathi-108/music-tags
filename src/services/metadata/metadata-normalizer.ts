@@ -1,10 +1,11 @@
-import { type CanonicalAudioMetadata } from '@/domain/media/audio-metadata';
 import { type RawTag } from '@/domain/media/track';
 import { type FFprobeAudioResult } from '@/infrastructure/media-tools/ffprobe';
-import { canonicalAudioMetadataInputSchema } from '@/schemas/audio-metadata.schema';
+import { canonicalAudioMetadataInputSchema, type CanonicalAudioMetadataInput } from '@/schemas/audio-metadata.schema';
 
 import { createTagLookup } from './metadata-lookup';
 import { buildRawTagList } from './raw-tags';
+import { hasLrcTimestamps } from '@/domain/media/lyrics';
+import { normalizeReleaseDate, parseReleaseDate } from '@/domain/media/date';
 
 export { buildRawTagList };
 
@@ -17,7 +18,7 @@ export function normalizeAudioMetadata(
     rawExif: Record<string, unknown>,
     probeResult?: FFprobeAudioResult | null
 ): {
-    canonical: CanonicalAudioMetadata;
+    canonical: CanonicalAudioMetadataInput;
     rawTags: RawTag[];
 } {
     const lookup = createTagLookup(rawExif, probeResult);
@@ -60,14 +61,9 @@ export function normalizeAudioMetadata(
         'tdrc'
     );
 
-    let releaseDate: string | null = null;
-    if (rawDate !== null && rawDate !== undefined) {
-        const dateStr = String(rawDate).trim();
-        releaseDate = dateStr || null;
-    }
-
+    const releaseDate = parseReleaseDate(rawDate);
     const rawOriginalDate = lookup.get('originalreleaseyear', 'originalyear', 'originaldate');
-    const originalReleaseDate = rawOriginalDate ? String(rawOriginalDate).trim() : null;
+    const originalReleaseDate = normalizeReleaseDate(rawOriginalDate);
 
     // Genre extraction with cleaning for "None" or prefix artifacts
     let genre = lookup.getString('genre', 'id3:genre', 'vorbis:genre', 'quicktime:genre');
@@ -221,10 +217,22 @@ export function normalizeAudioMetadata(
         'sylt'
     );
 
-    const isLrc = rawLyrics ? /\[\d{2}:\d{2}/.test(rawLyrics) : false;
-    const lyrics = rawSyncedLyrics || rawLyrics;
-    const lyricsUnsynced = rawSyncedLyrics ? rawLyrics : isLrc ? null : rawLyrics;
-    const lyricsSyncedJson = rawSyncedLyrics ? JSON.stringify(rawSyncedLyrics) : isLrc && rawLyrics ? JSON.stringify(rawLyrics) : null;
+    let lyrics: string | null = null;
+    let lyricsType: 'synced' | 'unsynced' | null = null;
+
+    if (rawLyrics && hasLrcTimestamps(rawLyrics)) {
+        lyrics = rawLyrics;
+        lyricsType = 'synced';
+    } else if (rawSyncedLyrics && hasLrcTimestamps(rawSyncedLyrics)) {
+        lyrics = rawSyncedLyrics;
+        lyricsType = 'synced';
+    } else if (rawLyrics) {
+        lyrics = rawLyrics;
+        lyricsType = 'unsynced';
+    } else if (rawSyncedLyrics) {
+        lyrics = rawSyncedLyrics;
+        lyricsType = 'unsynced';
+    }
 
     // Mutate and validate through input schema
     const canonical = canonicalAudioMetadataInputSchema.parse({
@@ -253,8 +261,7 @@ export function normalizeAudioMetadata(
         mood,
         comment,
         lyrics,
-        lyricsUnsynced,
-        lyricsSyncedJson,
+        lyricsType,
         bpm,
         initialKey,
         rating,

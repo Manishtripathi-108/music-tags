@@ -1,82 +1,105 @@
 import { z } from 'zod';
 
+import { parseDateOrNow, parseDateSafe } from '@/domain/media/date';
+
+/**
+ * Canonical schema for normalised audio metadata as persisted in the
+ * `audio_metadata` SQLite table. Uses `z.coerce` throughout because input
+ * arrives from heterogeneous sources (ExifTool JSON, FFprobe output, raw tag
+ * strings) and must be coerced into consistent types.
+ *
+ * Used by:
+ * - `metadata-normalizer.ts` — parses merged ExifTool + FFprobe output into
+ *   this canonical shape before persistence.
+ * - `audio-repository.ts` — validates canonical metadata before INSERT/UPDATE
+ *   into the `audio_metadata` table.
+ * - `metadata-normalizer.ts` — types the normalised output as
+ *   `CanonicalAudioMetadataInput`.
+ */
 export const canonicalAudioMetadataInputSchema = z.object({
     fileId: z.string().min(1),
 
     // Track identity
-    title: z.coerce.string().trim().max(255).nullable(),
-    artist: z.coerce.string().trim().max(255).nullable(),
-    albumArtist: z.coerce.string().trim().max(255).nullable(),
-    album: z.coerce.string().trim().max(255).nullable(),
+    title: z.coerce.string().trim().max(255).nullish(),
+    artist: z.coerce.string().trim().max(255).nullish(),
+    albumArtist: z.coerce.string().trim().max(255).nullish(),
+    album: z.coerce.string().trim().max(255).nullish(),
 
     // Track and disc numbering
-    trackNumber: z.coerce.number().int().min(1).max(999).nullable(),
-    totalTracks: z.coerce.number().int().min(1).max(999).nullable(),
-    discNumber: z.coerce.number().int().min(1).max(99).nullable(),
-    totalDiscs: z.coerce.number().int().min(1).max(99).nullable(),
+    trackNumber: z.coerce.number().int().min(1).max(999).nullish(),
+    totalTracks: z.coerce.number().int().min(1).max(999).nullish(),
+    discNumber: z.coerce.number().int().min(1).max(99).nullish(),
+    totalDiscs: z.coerce.number().int().min(1).max(99).nullish(),
 
     // Release & compilation
-    releaseDate: z.coerce.string().trim().max(50).nullable(),
-    originalReleaseDate: z.coerce.string().trim().max(50).nullable(),
-    compilation: z.coerce.boolean().nullable(),
+    releaseDate: z.preprocess(parseDateSafe, z.date().nullish()),
+    originalReleaseDate: z.coerce.string().trim().max(50).nullish(),
+    compilation: z.coerce.boolean().nullish(),
 
     // Genre
-    genre: z.coerce.string().trim().max(100).nullable(),
+    genre: z.coerce.string().trim().max(100).nullish(),
 
     // Credits
-    composer: z.coerce.string().trim().max(255).nullable(),
-    conductor: z.coerce.string().trim().max(255).nullable(),
-    lyricist: z.coerce.string().trim().max(255).nullable(),
+    composer: z.coerce.string().trim().max(255).nullish(),
+    conductor: z.coerce.string().trim().max(255).nullish(),
+    lyricist: z.coerce.string().trim().max(255).nullish(),
 
     // Publishing & identifiers
-    publisher: z.coerce.string().trim().max(255).nullable(),
-    label: z.coerce.string().trim().max(255).nullable(),
-    catalogNumber: z.coerce.string().trim().max(50).nullable(),
-    barcode: z.coerce.string().trim().max(50).nullable(),
-    copyright: z.coerce.string().trim().max(255).nullable(),
-    isrc: z.coerce.string().trim().max(50).nullable(),
+    publisher: z.coerce.string().trim().max(255).nullish(),
+    label: z.coerce.string().trim().max(255).nullish(),
+    catalogNumber: z.coerce.string().trim().max(50).nullish(),
+    barcode: z.coerce.string().trim().max(50).nullish(),
+    copyright: z.coerce.string().trim().max(255).nullish(),
+    isrc: z.coerce.string().trim().max(50).nullish(),
 
     // Mood & comment
-    mood: z.coerce.string().trim().max(100).nullable(),
-    comment: z.coerce.string().trim().max(2000).nullable(),
+    mood: z.coerce.string().trim().max(100).nullish(),
+    comment: z.coerce.string().trim().max(2000).nullish(),
 
     // Lyrics
-    lyrics: z.coerce.string().trim().max(50_000).nullable(),
-    lyricsUnsynced: z.coerce.string().trim().max(50_000).nullable(),
-    lyricsSyncedJson: z.coerce.string().trim().max(100_000).nullable(),
+    lyrics: z.coerce.string().trim().max(100_000).nullish(),
+    lyricsType: z.enum(['synced', 'unsynced']).nullish(),
 
     // Musical / playback
-    bpm: z.coerce.number().min(20).max(400).nullable(),
-    initialKey: z.coerce.string().trim().max(20).nullable(),
-    rating: z.coerce.number().int().min(0).max(100).nullable(),
+    bpm: z.coerce.number().min(20).max(400).nullish(),
+    initialKey: z.coerce.string().trim().max(20).nullish(),
+    rating: z.coerce.number().int().min(0).max(100).nullish(),
 
     // Technical specifications
-    durationSeconds: z.coerce.number().nonnegative().nullable(),
-    containerFormat: z.coerce.string().trim().max(50).nullable(),
-    codec: z.coerce.string().trim().max(50).nullable(),
-    encoder: z.coerce.string().trim().max(255).nullable(),
-    bitrateKbps: z.coerce.number().int().positive().nullable(),
-    variableBitrate: z.coerce.boolean().nullable(),
-    sampleRateHz: z.coerce.number().int().min(1_000).nullable(),
-    channels: z.coerce.number().int().min(1).max(16).nullable(),
-    channelLayout: z.coerce.string().trim().max(50).nullable(),
-    bitDepth: z.coerce.number().int().min(1).max(64).nullable(),
-    lossless: z.coerce.boolean(),
+    durationSeconds: z.coerce.number().nonnegative().nullish(),
+    containerFormat: z.coerce.string().trim().max(50).nullish(),
+    codec: z.coerce.string().trim().max(50).nullish(),
+    encoder: z.coerce.string().trim().max(255).nullish(),
+    bitrateKbps: z.coerce.number().int().positive().nullish(),
+    variableBitrate: z.coerce.boolean().nullish(),
+    sampleRateHz: z.coerce.number().int().min(1_000).nullish(),
+    channels: z.coerce.number().int().min(1).max(16).nullish(),
+    channelLayout: z.coerce.string().trim().max(50).nullish(),
+    bitDepth: z.coerce.number().int().min(1).max(64).nullish(),
+    lossless: z.coerce.boolean().default(false),
 
     // Artwork
-    hasCoverArt: z.coerce.boolean(),
-    coverArtMime: z.coerce.string().trim().max(100).nullable(),
-    coverArtType: z.coerce.string().trim().max(100).nullable(),
-    coverArtDescription: z.coerce.string().trim().max(255).nullable(),
-    coverArtWidth: z.coerce.number().int().positive().nullable(),
-    coverArtHeight: z.coerce.number().int().positive().nullable(),
+    hasCoverArt: z.coerce.boolean().default(false),
+    coverArtMime: z.coerce.string().trim().max(100).nullish(),
+    coverArtType: z.coerce.string().trim().max(100).nullish(),
+    coverArtDescription: z.coerce.string().trim().max(255).nullish(),
+    coverArtWidth: z.coerce.number().int().positive().nullish(),
+    coverArtHeight: z.coerce.number().int().positive().nullish(),
 
     // Record timestamps
-    updatedAt: z.coerce
-        .number()
-        .int()
-        .nonnegative()
-        .default(() => Date.now()),
+    createdAt: z.preprocess(parseDateOrNow, z.date().default(() => new Date())),
+    updatedAt: z.preprocess(parseDateOrNow, z.date().default(() => new Date())),
 });
 
-export type CanonicalAudioMetadataInput = z.infer<typeof canonicalAudioMetadataInputSchema>;
+/**
+ * Pre-parse input type — accepts raw heterogeneous values before coercion.
+ * Used as the parameter type in `audio-repository.upsertCanonicalMetadata()`.
+ */
+export type CanonicalAudioMetadataInput = z.input<typeof canonicalAudioMetadataInputSchema>;
+
+/**
+ * Post-parse output type — all values coerced, trimmed, and defaults applied.
+ * Used by `CanonicalAudioMetadataDbRecord` (derived in `mappers.ts`) for
+ * typed access to validated DB rows.
+ */
+export type CanonicalAudioMetadataOutput = z.infer<typeof canonicalAudioMetadataInputSchema>;

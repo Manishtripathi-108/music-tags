@@ -185,7 +185,7 @@ export function NumberInputField({ ref, label, placeholder, inputClassName, clas
             </NumberInputControl>
 
             {error && (
-                <div role="alert" className={cn('text-destructive', 'flex items-center gap-1', 'font-mono text-[10px]', 'leading-tight font-medium')}>
+                <div role="alert" title={typeof error === 'string' ? error : undefined} className={cn('text-destructive', 'flex items-center gap-1', 'font-mono text-[10px]', 'leading-tight font-medium')}>
                     <Icon icon="warning" aria-hidden="true" className="size-2.5 shrink-0" />
 
                     <span className="min-w-0 truncate">{error}</span>

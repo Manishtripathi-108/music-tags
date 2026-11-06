@@ -44,7 +44,7 @@ describe('normalizeAudioMetadata', () => {
         expect(canonical.album).toBe('Test Album');
         expect(canonical.trackNumber).toBe(3);
         expect(canonical.totalTracks).toBe(10);
-        expect(canonical.releaseDate).toBe('2023');
+        expect(canonical.releaseDate).toEqual(new Date(Date.UTC(2023, 0, 1)));
         expect(canonical.genre).toBe('Rock');
         expect(canonical.bpm).toBe(128);
         expect(canonical.durationSeconds).toBe(185.5);

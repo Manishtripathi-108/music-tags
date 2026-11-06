@@ -115,8 +115,8 @@ export async function normalizeTrackLrcFile(track: LrcTrackMetadata & { id: stri
             .update(canonicalAudioMetadata)
             .set({
                 lyrics: result.normalizedLrc,
-                lyricsSyncedJson: JSON.stringify(result.normalizedLrc),
-                updatedAt: Date.now(),
+                lyricsType: 'synced',
+                updatedAt: new Date(),
             })
             .where(eq(canonicalAudioMetadata.fileId, track.id));
     } catch (dbErr) {
@@ -173,7 +173,7 @@ class LyricsNormalizationService extends EventEmitter {
             albumArtist: r.canonical_audio_metadata?.albumArtist,
             durationSeconds: r.canonical_audio_metadata?.durationSeconds,
             lyrics: r.canonical_audio_metadata?.lyrics,
-            lyricsSyncedJson: r.canonical_audio_metadata?.lyricsSyncedJson,
+            lyricsType: r.canonical_audio_metadata?.lyricsType,
         }));
 
         if (folderPath) {

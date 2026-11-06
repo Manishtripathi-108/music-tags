@@ -1,4 +1,4 @@
-import { isLrcContent } from './lyrics';
+import { hasLrcTimestamps } from './lyrics';
 import { type Track } from './track';
 
 export function isLossless(track: Track): boolean {
@@ -23,15 +23,52 @@ export function isMissingBpm(track: Track): boolean {
 }
 
 export function isMissingLyrics(track: Track): boolean {
-    return !track.lyrics && !track.lyricsUnsynced && !track.lyricsSyncedJson;
+    return !track.lyrics || track.lyrics.trim().length === 0;
 }
 
 export function isSyncedLyrics(track: Track): boolean {
-    return track.lyricsType === 'synced' || Boolean(track.lyricsSyncedJson) || isLrcContent(track.lyrics);
+    return track.lyricsType === 'synced' || hasLrcTimestamps(track.lyrics);
 }
 
 export function isUnsyncedLyrics(track: Track): boolean {
-    return track.lyricsType === 'unsynced' || Boolean(track.lyricsUnsynced) || (Boolean(track.lyrics) && !isLrcContent(track.lyrics));
+    return track.lyricsType === 'unsynced' || (!hasLrcTimestamps(track.lyrics) && Boolean(track.lyrics && track.lyrics.trim().length > 0));
+}
+
+export function hasScanError(track: Track): boolean {
+    return Boolean(track.scanError) || track.scanStatus === 'ERROR' || track.scanStatus === 'FAILED';
+}
+
+export function isMissingFile(track: Track): boolean {
+    return Boolean(track.isMissing);
+}
+
+export function isLockedFile(track: Track): boolean {
+    return Boolean(track.isLocked);
+}
+
+export function isReadOnlyFile(track: Track): boolean {
+    return Boolean(track.isReadOnly);
+}
+
+export function isCorruptFile(track: Track): boolean {
+    return Boolean(track.isCorrupt);
+}
+
+export function isSymlinkFile(track: Track): boolean {
+    return Boolean(track.isSymlink);
+}
+
+export function isIncompleteScan(track: Track): boolean {
+    return (
+        track.scanStatus === 'PENDING' ||
+        track.scanStatus === 'INCOMPLETE' ||
+        track.scanStatus === 'ERROR' ||
+        track.scanStatus === 'FAILED'
+    );
+}
+
+export function hasAnyFileProblem(track: Track): boolean {
+    return hasScanError(track) || isMissingFile(track) || isLockedFile(track) || isCorruptFile(track) || isIncompleteScan(track);
 }
 
 export function matchesFolder(track: Track, folderPath: string): boolean {
@@ -68,7 +105,23 @@ export function filterTracks(tracks: Track[], options: TrackFilterOptions): Trac
     const { activeFilter = 'all', searchQuery = '' } = options;
     let result = tracks;
 
-    if (activeFilter === 'lossless') {
+    if (activeFilter === 'problems') {
+        result = result.filter(hasAnyFileProblem);
+    } else if (activeFilter === 'scan-errors') {
+        result = result.filter(hasScanError);
+    } else if (activeFilter === 'missing-files') {
+        result = result.filter(isMissingFile);
+    } else if (activeFilter === 'corrupt-files') {
+        result = result.filter(isCorruptFile);
+    } else if (activeFilter === 'locked-files') {
+        result = result.filter(isLockedFile);
+    } else if (activeFilter === 'readonly-files') {
+        result = result.filter(isReadOnlyFile);
+    } else if (activeFilter === 'symlinks') {
+        result = result.filter(isSymlinkFile);
+    } else if (activeFilter === 'incomplete-scan') {
+        result = result.filter(isIncompleteScan);
+    } else if (activeFilter === 'lossless') {
         result = result.filter(isLossless);
     } else if (activeFilter === 'hi-res') {
         result = result.filter(isHiRes);

@@ -50,7 +50,7 @@ export function scoreTrackQuality(track: Track): { score: number; reasons: strin
         }
     }
 
-    if (track.lyricsType === 'synced' || Boolean(track.lyricsSyncedJson)) {
+    if (track.lyricsType === 'synced') {
         score += 20;
         reasons.push('Synced Lyrics');
     } else if (track.lyrics) {

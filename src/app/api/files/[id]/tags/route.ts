@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 
 import { type TrackPatchApiResponse } from '@/domain/media/dto';
-import { isLrcContent } from '@/domain/media/lyrics';
+import { parseDateSafe } from '@/domain/media/date';
+import { hasLrcTimestamps } from '@/domain/media/lyrics';
 import { buildTrackFromDb } from '@/domain/media/mappers';
 import { type RawTag, type Track } from '@/domain/media/track';
 import { db } from '@/infrastructure/database/client';
@@ -11,7 +12,7 @@ import { ensureDatabaseInitialized } from '@/infrastructure/database/init';
 import { audioFiles, canonicalAudioMetadata, rawAudioMetadata } from '@/infrastructure/database/schema';
 import { getExifTool } from '@/infrastructure/media-tools/exiftool';
 import { type FFprobeAudioResult, probeAudioFile } from '@/infrastructure/media-tools/ffprobe';
-import { TrackPatchSchema } from '@/schemas';
+import { TagFormSchema } from '@/schemas';
 import { buildRawTagList } from '@/services/metadata/raw-tags';
 
 type RouteContext = {
@@ -62,21 +63,22 @@ export async function GET(
                 exifObj = await getExifTool().readMetadata(file.path);
                 probeObj = await probeAudioFile(file.path);
 
+                const now = new Date();
                 await db
                     .insert(rawAudioMetadata)
                     .values({
                         fileId: id,
                         exiftoolJson: exifObj ? JSON.stringify(exifObj) : null,
                         ffprobeJson: probeObj ? JSON.stringify(probeObj) : null,
-                        createdAt: Date.now(),
-                        updatedAt: Date.now(),
+                        createdAt: now,
+                        updatedAt: now,
                     })
                     .onConflictDoUpdate({
                         target: rawAudioMetadata.fileId,
                         set: {
                             exiftoolJson: exifObj ? JSON.stringify(exifObj) : null,
                             ffprobeJson: probeObj ? JSON.stringify(probeObj) : null,
-                            updatedAt: Date.now(),
+                            updatedAt: now,
                         },
                     });
             } catch (err) {
@@ -93,6 +95,12 @@ export async function GET(
     }
 }
 
+/**
+ * Updates the tags of a specific audio file.
+ * @param request The HTTP request object.
+ * @param context The route context.
+ * @returns A response indicating the success or failure of the update.
+ */
 export async function PATCH(
     request: NextRequest,
     context: RouteContext
@@ -102,30 +110,19 @@ export async function PATCH(
 
     try {
         const body = await request.json();
-        const validation = TrackPatchSchema.safeParse(body);
+        if (body.releaseDate !== undefined && body.releaseDate !== null) {
+            body.releaseDate = parseDateSafe(body.releaseDate);
+        }
+        const validation = TagFormSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json({ error: 'Invalid payload', details: validation.error.flatten() }, { status: 400 });
+            return NextResponse.json({ error: 'Invalid payload', details: validation.error.issues }, { status: 400 });
         }
 
         const data = validation.data;
 
-        // Auto-detect lyrics format if lyrics provided
-        let lyricsSyncedJson = data.lyricsSyncedJson;
-        let lyricsUnsynced = data.lyricsUnsynced;
-        if (data.lyrics !== undefined) {
-            const isLrc = isLrcContent(data.lyrics);
-            if (isLrc) {
-                lyricsSyncedJson = JSON.stringify(data.lyrics);
-                lyricsUnsynced = null;
-            } else {
-                lyricsUnsynced = data.lyrics;
-                lyricsSyncedJson = null;
-            }
-        }
-
         const updateSet: Record<string, unknown> = {
-            updatedAt: Date.now(),
+            updatedAt: new Date(),
         };
 
         if (data.title !== undefined) updateSet.title = data.title;
@@ -137,16 +134,12 @@ export async function PATCH(
         if (data.releaseDate !== undefined) {
             updateSet.releaseDate = data.releaseDate;
         } else if (data.year !== undefined) {
-            updateSet.releaseDate = data.year != null ? String(data.year) : null;
+            updateSet.releaseDate = data.year != null ? new Date(Date.UTC(data.year, 0, 1)) : null;
         }
         if (data.genre !== undefined) updateSet.genre = data.genre;
         if (data.bpm !== undefined) updateSet.bpm = data.bpm;
         if (data.initialKey !== undefined) updateSet.initialKey = data.initialKey;
-        if (data.comment !== undefined) {
-            updateSet.comment = data.comment;
-        } else if (data.description !== undefined) {
-            updateSet.comment = data.description;
-        }
+        if (data.comment !== undefined) updateSet.comment = data.comment;
         if (data.composer !== undefined) updateSet.composer = data.composer;
         if (data.conductor !== undefined) updateSet.conductor = data.conductor;
         if (data.lyricist !== undefined) updateSet.lyricist = data.lyricist;
@@ -158,9 +151,17 @@ export async function PATCH(
         if (data.catalogNumber !== undefined) updateSet.catalogNumber = data.catalogNumber;
         if (data.mood !== undefined) updateSet.mood = data.mood;
         if (data.rating !== undefined) updateSet.rating = data.rating;
-        if (data.lyrics !== undefined) updateSet.lyrics = data.lyrics;
-        if (lyricsUnsynced !== undefined) updateSet.lyricsUnsynced = lyricsUnsynced;
-        if (lyricsSyncedJson !== undefined) updateSet.lyricsSyncedJson = lyricsSyncedJson;
+        if (data.lyrics !== undefined) {
+            updateSet.lyrics = data.lyrics;
+            if (data.lyrics && data.lyrics.trim().length > 0) {
+                updateSet.lyricsType = hasLrcTimestamps(data.lyrics) ? 'synced' : 'unsynced';
+            } else {
+                updateSet.lyrics = null;
+                updateSet.lyricsType = null;
+            }
+        } else if (data.lyricsType !== undefined) {
+            updateSet.lyricsType = data.lyricsType;
+        }
 
         await db.update(canonicalAudioMetadata).set(updateSet).where(eq(canonicalAudioMetadata.fileId, id));
 

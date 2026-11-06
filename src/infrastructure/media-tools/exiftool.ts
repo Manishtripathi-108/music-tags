@@ -123,7 +123,7 @@ export class ExifToolProcess {
             if (Array.isArray(parsed) && parsed.length > 0) {
                 return parsed[0];
             }
-            return parsed;
+            return parsed;  
         } catch {
             return {};
         }

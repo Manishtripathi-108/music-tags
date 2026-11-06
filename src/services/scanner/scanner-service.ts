@@ -106,7 +106,7 @@ export class AudioLibraryScanner {
 
                     indexedCount++;
 
-                    if (needsMetadata) {
+                    if (needsMetadata && !file.scanError) {
                         pendingExtraction.push({
                             ...file,
                             id: fileId,
@@ -127,8 +127,11 @@ export class AudioLibraryScanner {
                             filesPerSecond: Math.round(scannedCount / elapsedSec),
                         });
                     }
-                } catch {
-                    // Skip un-indexable file record gracefully
+                } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    try {
+                        await this.repository.recordFileErrorByPath(file.path, msg);
+                    } catch {}
                 }
             },
         });
@@ -189,35 +192,65 @@ export class AudioLibraryScanner {
                 for (let j = 0; j < chunk.length; j++) {
                     const item = chunk[j];
                     const extraction = extractionResults[j];
-                    if (!extraction) continue;
-
-                    const { canonical } = normalizeAudioMetadata(item.id, extraction.rawExif, extraction.probeResult);
-
-                    if (canonical.hasCoverArt) {
-                        // Extract cover art asynchronously, but don't block the main extraction flow
-                        extractCoverArt(item.path, item.id).catch(() => null);
+                    if (!extraction) {
+                        await this.repository.recordScanFailure(item.id, 'Metadata extraction produced empty result');
+                        continue;
                     }
 
-                    await this.repository.upsertTrackMetadata(item.id, canonical, extraction.rawExif, extraction.probeResult);
+                    try {
+                        const { canonical } = normalizeAudioMetadata(item.id, extraction.rawExif, extraction.probeResult);
 
-                    extractedCount++;
+                        if (canonical.hasCoverArt) {
+                            extractCoverArt(item.path, item.id).catch(() => null);
+                        }
+
+                        await this.repository.upsertTrackMetadata(item.id, canonical, extraction.rawExif, extraction.probeResult);
+                        extractedCount++;
+                    } catch (itemErr: unknown) {
+                        const msg = itemErr instanceof Error ? itemErr.message : String(itemErr);
+                        await this.repository.recordScanFailure(item.id, msg);
+                    }
                 }
-
-                const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.1);
-                this.emit(jobId, {
-                    jobId,
-                    status: 'EXTRACTING',
-                    scannedFiles: scannedCount,
-                    indexedFiles: indexedCount,
-                    extractedFiles: extractedCount,
-                    totalEstimated: pendingExtraction.length,
-                    currentDirectory: '',
-                    currentFile: chunk[chunk.length - 1]?.filename || '',
-                    filesPerSecond: Math.round(extractedCount / elapsedSec),
-                });
             } catch {
-                continue;
+                // Batch extraction failed (e.g. one bad file broke the batch reader)
+                // Fall back to processing each file in this chunk individually so good files succeed
+                for (const item of chunk) {
+                    if (signal?.aborted) break;
+                    try {
+                        const singleResults = await this.metadataReader.extractBatch([item.path]);
+                        const extraction = singleResults[0];
+                        if (!extraction) {
+                            await this.repository.recordScanFailure(item.id, 'Metadata extraction produced empty result');
+                            continue;
+                        }
+
+                        const { canonical } = normalizeAudioMetadata(item.id, extraction.rawExif, extraction.probeResult);
+                        if (canonical.hasCoverArt) {
+                            extractCoverArt(item.path, item.id).catch(() => null);
+                        }
+
+                        await this.repository.upsertTrackMetadata(item.id, canonical, extraction.rawExif, extraction.probeResult);
+                        extractedCount++;
+                    } catch (singleErr: unknown) {
+                        const msg = singleErr instanceof Error ? singleErr.message : String(singleErr);
+                        const isCorrupt = msg.toLowerCase().includes('corrupt') || msg.toLowerCase().includes('invalid');
+                        await this.repository.recordScanFailure(item.id, msg, { isCorrupt });
+                    }
+                }
             }
+
+            const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.1);
+            this.emit(jobId, {
+                jobId,
+                status: 'EXTRACTING',
+                scannedFiles: scannedCount,
+                indexedFiles: indexedCount,
+                extractedFiles: extractedCount,
+                totalEstimated: pendingExtraction.length,
+                currentDirectory: '',
+                currentFile: chunk[chunk.length - 1]?.filename || '',
+                filesPerSecond: Math.round(extractedCount / elapsedSec),
+            });
         }
 
         // 4. Completed Event

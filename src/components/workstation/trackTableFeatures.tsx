@@ -89,7 +89,7 @@ export const columns = col.columns([
             const isActive = meta.activeTrackId === row.original.id;
             const track = row.original;
             const isLrc = track.lyricsType === 'synced' || /\[\d{2}:\d{2}/.test(track.lyrics || '');
-            const hasLyrics = Boolean(track.lyrics || track.lyricsUnsynced || track.lyricsSyncedJson);
+            const hasLyrics = Boolean(track.lyrics);
 
             return (
                 <div className="flex min-w-37.5 flex-1 items-center gap-1.5 truncate px-2">
@@ -113,6 +113,62 @@ export const columns = col.columns([
                                       : 'bg-muted text-muted-foreground border-border border'
                             }`}>
                             {isLrc ? 'LRC' : 'TXT'}
+                        </span>
+                    )}
+
+                    {track.scanError && (
+                        <span
+                            title={`Scan Error: ${track.scanError}`}
+                            className="bg-destructive/15 text-destructive border-destructive/30 shrink-0 cursor-help rounded border px-1 py-0.5 font-mono text-[9px] font-semibold leading-none">
+                            ERR
+                        </span>
+                    )}
+
+                    {track.isCorrupt && (
+                        <span
+                            title="Corrupt or unreadable audio stream"
+                            className="bg-destructive text-destructive-foreground shrink-0 rounded px-1 py-0.5 font-mono text-[9px] font-semibold leading-none">
+                            CORRUPT
+                        </span>
+                    )}
+
+                    {track.isMissing && (
+                        <span
+                            title="File missing from filesystem"
+                            className="bg-destructive/20 text-destructive border-destructive/40 shrink-0 rounded border px-1 py-0.5 font-mono text-[9px] leading-none">
+                            MISSING
+                        </span>
+                    )}
+
+                    {track.isLocked && (
+                        <span
+                            title="File is currently locked or in use"
+                            className="bg-warning/20 text-warning border-warning/30 shrink-0 rounded border px-1 py-0.5 font-mono text-[9px] leading-none">
+                            LOCKED
+                        </span>
+                    )}
+
+                    {track.isReadOnly && (
+                        <span
+                            title="Read-only file permissions"
+                            className="bg-muted text-muted-foreground border-border shrink-0 rounded border px-1 py-0.5 font-mono text-[9px] leading-none">
+                            RO
+                        </span>
+                    )}
+
+                    {track.isSymlink && (
+                        <span
+                            title="Symbolic link"
+                            className="bg-primary/10 text-primary border-primary/20 shrink-0 rounded border px-1 py-0.5 font-mono text-[9px] leading-none">
+                            LINK
+                        </span>
+                    )}
+
+                    {(track.scanStatus === 'PENDING' || track.scanStatus === 'INCOMPLETE') && (
+                        <span
+                            title={`Scan Status: ${track.scanStatus}`}
+                            className="bg-secondary text-secondary-foreground border-border shrink-0 rounded border px-1 py-0.5 font-mono text-[9px] leading-none">
+                            SCAN
                         </span>
                     )}
 

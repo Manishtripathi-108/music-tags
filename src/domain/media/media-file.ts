@@ -33,4 +33,21 @@ export interface MediaFile {
     extension: string;
     sizeBytes?: number;
     mtimeMs?: number;
+    ctimeMs?: number | null;
+    birthtimeMs?: number | null;
+    fileHash?: string | null;
+    audioHash?: string | null;
+
+    isMissing?: boolean;
+    isReadOnly?: boolean;
+    isLocked?: boolean;
+    isCorrupt?: boolean;
+    isSymlink?: boolean;
+
+    scanStatus?: string | null;
+    scanError?: string | null;
+    lastScannedAt?: Date | null;
+    lastVerifiedAt?: Date | null;
+    createdAt?: Date | null;
+    updatedAt?: Date | null;
 }

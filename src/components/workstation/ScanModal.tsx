@@ -25,7 +25,7 @@ export function ScanModal() {
         setError,
         clearErrors,
         formState: { errors, isSubmitting },
-    } = useForm<ScanFolderRequest>({
+    } = useForm({
         resolver: zodResolver(ScanFolderRequestSchema),
         defaultValues: {
             folderPath: '',

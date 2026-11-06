@@ -5,10 +5,10 @@ import React, { useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { FieldInput } from '@/components/ui/Field';
 import Icon from '@/components/ui/Icon';
-import { type RawTagItem } from '@/domain/media/track';
+import { type RawTag } from '@/domain/media/track';
 
 export interface RawTagsTabProps {
-    rawTags: RawTagItem[];
+    rawTags: RawTag[];
     isLoading: boolean;
 }
 
@@ -23,13 +23,13 @@ export function RawTagsTab({ rawTags, isLoading }: RawTagsTabProps) {
     );
 
     return (
-        <div className="flex flex-1 flex-col space-y-2 overflow-hidden p-2 font-mono">
+        <div className="flex flex-1 flex-col space-y-2 overflow-hidden font-mono">
             <div className="relative">
                 <Icon icon="search" className="text-muted-foreground absolute top-2.5 left-2 size-3" />
                 <FieldInput
                     placeholder="Filter raw tags..."
                     value={rawSearch}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRawSearch(e.target.value)}
+                    onChange={(e) => setRawSearch(e.target.value)}
                     className="pl-6 text-xs"
                 />
                 {isLoading && <Icon icon="loading" className="text-primary absolute top-2.5 right-2.5 size-3 animate-spin" />}
@@ -39,9 +39,14 @@ export function RawTagsTab({ rawTags, isLoading }: RawTagsTabProps) {
                 <span>
                     {filteredRawTags.length} tags {rawSearch ? `(of ${rawTags.length})` : ''}
                 </span>
-                <div className="flex items-center gap-1 text-[9px]">
-                    <span className="bg-primary/10 text-primary rounded px-1 py-0.5 font-medium">Exif</span>
-                    <span className="bg-secondary/30 text-foreground rounded px-1 py-0.5 font-medium">FFmpeg</span>
+
+                <div className="flex items-center gap-1">
+                    <Badge variant="accent" size="xs">
+                        Exif
+                    </Badge>
+                    <Badge variant="outline" size="xs">
+                        FFmpeg
+                    </Badge>
                 </div>
             </div>
 
@@ -57,7 +62,7 @@ export function RawTagsTab({ rawTags, isLoading }: RawTagsTabProps) {
                         <div key={idx} className="hover:bg-muted/60 border-border/40 flex flex-col rounded border-b p-1.5 transition-colors">
                             <div className="flex items-center justify-between gap-1">
                                 <span className="text-primary truncate font-bold">{t.tag}</span>
-                                <Badge variant={isFfmpeg ? 'secondary' : 'outline'} size="xs" className="shrink-0 font-mono text-[9px]">
+                                <Badge variant={isFfmpeg ? 'outline' : 'accent'} size="xs">
                                     {t.group}
                                 </Badge>
                             </div>

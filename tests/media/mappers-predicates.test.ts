@@ -113,7 +113,7 @@ describe('predicates & filtering', () => {
             coverArtWidth: 500,
             coverArtHeight: 500,
             lyrics: null,
-            lyricsType: 'none',
+            lyricsType: null,
         },
     ];
 

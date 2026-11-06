@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import { normalizeLrc } from '@/domain/lyrics/lrc-parser';
-import { isLrcContent } from '@/domain/media/lyrics';
+import { hasLrcTimestamps } from '@/domain/media/lyrics';
 import { type Track } from '@/domain/media/track';
 
 export interface LyricsTabProps {
@@ -24,7 +24,7 @@ export function LyricsTab({ activeTrackId, metadata, lyricsText, setLyricsText, 
     const [isNormalizingLrc, setIsNormalizingLrc] = useState(false);
     const [normalizeStatus, setNormalizeStatus] = useState<{ success: boolean; message: string } | null>(null);
 
-    const isLrc = isLrcContent(lyricsText);
+    const isLrc = hasLrcTimestamps(lyricsText);
     const hasLyrics = Boolean(lyricsText.trim());
 
     const handleSaveLyrics = async () => {
@@ -84,7 +84,7 @@ export function LyricsTab({ activeTrackId, metadata, lyricsText, setLyricsText, 
     };
 
     return (
-        <div className="flex flex-1 flex-col space-y-2 overflow-hidden p-3 font-mono">
+        <div className="flex flex-1 flex-col space-y-2 overflow-hidden font-mono">
             <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-1.5">
                     <Icon icon="lyrics" className="text-primary size-3.5" />

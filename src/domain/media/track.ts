@@ -25,14 +25,6 @@ export interface RawTag {
     isWritable?: boolean;
 }
 
-export type RawTagItem = RawTag;
-
-export interface TrackPatchApiResponse {
-    success: boolean;
-    track?: Track;
-    error?: string;
-}
-
 /**
  * Details of the currently active track selected in the workstation inspector.
  */

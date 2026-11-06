@@ -1,10 +1,9 @@
 'use client';
 
-import React from 'react';
-
 import { Controller, useFormContext } from 'react-hook-form';
 
 import { Button } from '@/components/ui/Button';
+import { DateInputField } from '@/components/ui/DateInput';
 import { Field, FieldError, FieldInput, FieldLabel, FieldRequiredIndicator, FieldTextarea } from '@/components/ui/Field';
 import { Fieldset, FieldsetContent, FieldsetLegend } from '@/components/ui/Fieldset';
 import Icon from '@/components/ui/Icon';
@@ -21,11 +20,12 @@ export function TagFormTab({ onSubmit, isSaved }: TagFormTabProps) {
         register,
         handleSubmit,
         control,
+        setValue,
         formState: { errors, isDirty, isSubmitting },
     } = useFormContext<TagFormValues>();
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 space-y-3 overflow-auto p-3 font-mono">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 space-y-3 overflow-auto font-mono">
             <Fieldset className="border p-2.5">
                 <FieldsetLegend className="text-primary text-[10px]">
                     <Icon icon="audio" className="size-3" />
@@ -59,23 +59,79 @@ export function TagFormTab({ onSubmit, isSaved }: TagFormTabProps) {
                         <FieldError>{errors.album?.message}</FieldError>
                     </Field>
 
-                    <div className="grid grid-cols-3 gap-2">
-                        <Field invalid={!!errors.trackNumber}>
-                            <FieldLabel>Track #</FieldLabel>
-                            <FieldInput placeholder="1" {...register('trackNumber')} />
-                            <FieldError>{errors.trackNumber?.message}</FieldError>
-                        </Field>
-                        <Field invalid={!!errors.year}>
-                            <FieldLabel>Year</FieldLabel>
-                            <FieldInput placeholder="2024" {...register('year')} />
-                            <FieldError>{errors.year?.message}</FieldError>
-                        </Field>
-                        <Field invalid={!!errors.genre}>
-                            <FieldLabel>Genre</FieldLabel>
-                            <FieldInput placeholder="Genre..." {...register('genre')} />
-                            <FieldError>{errors.genre?.message}</FieldError>
-                        </Field>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Controller
+                            control={control}
+                            name="trackNumber"
+                            render={({ field }) => (
+                                <NumberInputField
+                                    label="Track #"
+                                    placeholder="1"
+                                    min={1}
+                                    max={999}
+                                    step={1}
+                                    value={field.value != null ? String(field.value) : ''}
+                                    onValueChange={(details) => field.onChange(details.value)}
+                                    error={errors.trackNumber?.message}
+                                />
+                            )}
+                        />
+                        <Controller
+                            control={control}
+                            name="discNumber"
+                            render={({ field }) => (
+                                <NumberInputField
+                                    label="Disc #"
+                                    placeholder="1"
+                                    min={1}
+                                    max={999}
+                                    step={1}
+                                    value={field.value != null ? String(field.value) : ''}
+                                    onValueChange={(details) => field.onChange(details.value)}
+                                    error={errors.discNumber?.message}
+                                />
+                            )}
+                        />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <Controller
+                            control={control}
+                            name="releaseDate"
+                            render={({ field }) => (
+                                <DateInputField
+                                    label="Release Date"
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    onBlur={field.onBlur}
+                                    error={errors.releaseDate?.message}
+                                    onYearDerive={(y) => setValue('year', y, { shouldDirty: true })}
+                                />
+                            )}
+                        />
+                        <Controller
+                            control={control}
+                            name="year"
+                            render={({ field }) => (
+                                <NumberInputField
+                                    label="Year"
+                                    placeholder="2024"
+                                    min={1000}
+                                    max={2099}
+                                    step={1}
+                                    value={field.value != null ? String(field.value) : ''}
+                                    onValueChange={(details) => field.onChange(details.value)}
+                                    error={errors.year?.message}
+                                />
+                            )}
+                        />
+                    </div>
+
+                    <Field invalid={!!errors.genre}>
+                        <FieldLabel>Genre</FieldLabel>
+                        <FieldInput placeholder="Genre..." {...register('genre')} />
+                        <FieldError>{errors.genre?.message}</FieldError>
+                    </Field>
                 </FieldsetContent>
             </Fieldset>
 
@@ -96,7 +152,7 @@ export function TagFormTab({ onSubmit, isSaved }: TagFormTabProps) {
                                     min={20}
                                     max={400}
                                     step={0.5}
-                                    value={field.value}
+                                    value={field.value != null ? String(field.value) : ''}
                                     onValueChange={(details) => field.onChange(details.value)}
                                     error={errors.bpm?.message}
                                 />

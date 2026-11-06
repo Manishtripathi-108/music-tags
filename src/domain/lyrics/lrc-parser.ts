@@ -1,4 +1,4 @@
-import { isLrcContent } from '../media/lyrics';
+import { hasLrcTimestamps } from '../media/lyrics';
 
 export interface LrcTrackMetadata {
     title?: string | null;
@@ -55,7 +55,7 @@ export function normalizeLrc(track: LrcTrackMetadata, lrcContent: string): Norma
     for (const line of lines) {
         const trimmed = line.trim();
 
-        if (isLrcContent(trimmed)) {
+        if (hasLrcTimestamps(trimmed)) {
             originalTimestampCount++;
             lyricLines.push(trimmed);
         } else if (METADATA_TAG_REGEX.test(trimmed)) {

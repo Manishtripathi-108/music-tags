@@ -46,9 +46,10 @@ export function FieldHelperText({ className, ...props }: React.ComponentProps<ty
     return <ArkField.HelperText {...props} className={cn('text-muted-foreground', 'text-[11px] leading-normal', className)} />;
 }
 
-export function FieldErrorText({ className, children, ...props }: React.ComponentProps<typeof ArkField.ErrorText>) {
+export function FieldErrorText({ className, children, title, ...props }: React.ComponentProps<typeof ArkField.ErrorText>) {
     return (
         <ArkField.ErrorText
+            title={title || (typeof children === 'string' ? children : undefined)}
             {...props}
             className={cn('text-destructive', 'flex items-center gap-1', 'text-[11px] leading-tight font-medium', className)}>
             {typeof children === 'string' ? (

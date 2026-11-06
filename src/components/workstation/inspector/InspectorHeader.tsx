@@ -59,9 +59,9 @@ export function InspectorHeader({ activeTrackId, metadata, displayTitle, display
                             variant={metadata.coverArtWidth < 600 || metadata.coverArtHeight < 600 ? 'destructive' : 'secondary'}
                             size="xs"
                             className="font-mono"
-                            title={`Cover Art: ${metadata.coverArtWidth}×${metadata.coverArtHeight} (${metadata.coverArtMime || 'image/jpeg'})`}>
+                            title={`Cover Art: ${metadata.coverArtWidth}x${metadata.coverArtHeight} (${metadata.coverArtMime || 'image/jpeg'})`}>
                             <Icon icon="gallery" className="mr-0.5 size-2.5" />
-                            {metadata.coverArtWidth}×{metadata.coverArtHeight}
+                            {metadata.coverArtWidth}x{metadata.coverArtHeight}
                         </Badge>
                     )}
                     {hasLyrics && (

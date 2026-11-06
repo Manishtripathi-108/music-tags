@@ -12,6 +12,7 @@ import {
     type TracksApiResponse,
 } from '@/domain/media/dto';
 import { type ActiveTrackDetail, type Track } from '@/domain/media/track';
+import { hydrateTrackDates } from '@/domain/media/mappers';
 import { type ScanJob, type ScanProgressEvent } from '@/domain/scanner/types';
 
 interface AudioStoreState {
@@ -80,7 +81,10 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     isDuplicateModalOpen: false,
     isLoadingDuplicates: false,
 
-    setTracks: (tracks) => set({ tracks, totalTracks: tracks.length }),
+    setTracks: (tracks) => {
+        const hydrated = tracks.map(hydrateTrackDates);
+        set({ tracks: hydrated, totalTracks: hydrated.length });
+    },
 
     selectTrack: (id: string, isMulti = false, isRange = false) => {
         const { tracks, selectedTrackIds, activeTrackId } = get();
@@ -147,7 +151,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             if (get().activeTrackId === id) {
                 set((state) => ({
                     activeTrackDetail: {
-                        metadata: data.metadata || state.activeTrackDetail.metadata,
+                        metadata: data.metadata ? hydrateTrackDates(data.metadata) : state.activeTrackDetail.metadata,
                         rawTags: data.rawTags && data.rawTags.length > 0 ? data.rawTags : state.activeTrackDetail.rawTags,
                         isLoading: false,
                     },
@@ -182,7 +186,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         set({ isLoadingTracks: true });
         try {
             const { data } = await axios.get<TracksApiResponse>('/api/tracks');
-            const fetchedTracks = data?.tracks || [];
+            const fetchedTracks = (data?.tracks || []).map(hydrateTrackDates);
             const { activeTrackId, selectTrack } = get();
 
             set({ tracks: fetchedTracks, totalTracks: fetchedTracks.length });
@@ -237,12 +241,15 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         const { tracks, activeTrackId, activeTrackDetail } = get();
         const updatedTracks = tracks.map((track) => {
             if (track.id === id) {
-                return { ...track, ...fields };
+                return hydrateTrackDates({ ...track, ...fields });
             }
             return track;
         });
 
-        const activeTrack = activeTrackId === id ? ({ ...(activeTrackDetail.metadata || {}), ...fields } as Track) : activeTrackDetail.metadata;
+        const activeTrack =
+            activeTrackId === id
+                ? hydrateTrackDates({ ...(activeTrackDetail.metadata || {}), ...fields } as Track)
+                : activeTrackDetail.metadata;
 
         set({
             tracks: updatedTracks,
@@ -279,7 +286,6 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             updateTrackInline(trackId, {
                 lyrics: data.normalizedLrc,
                 lyricsType: 'synced',
-                lyricsSyncedJson: JSON.stringify(data.normalizedLrc),
             });
             await fetchTracks();
         }
@@ -348,7 +354,14 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         set({ isLoadingDuplicates: true });
         try {
             const { data } = await axios.get<DuplicateFindApiResponse>(`/api/duplicates?mode=${mode}`);
-            set({ duplicateClusters: data.clusters || [] });
+            const clusters = (data.clusters || []).map((cluster) => ({
+                ...cluster,
+                tracks: (cluster.tracks || []).map((tComp) => ({
+                    ...tComp,
+                    track: hydrateTrackDates(tComp.track),
+                })),
+            }));
+            set({ duplicateClusters: clusters });
         } catch (err) {
             console.error('Failed to fetch duplicates:', err);
             set({ duplicateClusters: [] });

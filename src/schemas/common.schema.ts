@@ -1,62 +1,111 @@
 import { z } from 'zod';
 
-// --- Regex Constants ---
+/**
+ * Matches strings composed entirely of digits.
+ */
 export const REGEX_DIGITS = /^\d+$/;
+
+/**
+ * Matches exactly four digits representing a year.
+ */
 export const REGEX_YEAR = /^\d{4}$/;
-export const REGEX_CAMELOT_KEY = /^([1-9]|1[0-2])[a-b]$/i;
-export const REGEX_MUSICAL_KEY = /^[a-g][#b]?(m|min|maj|minor|major)?$/i;
-export const REGEX_COMBINED_KEY = /^[a-g][#b]?(m|min|maj)?\s*[/\\-]\s*([1-9]|1[0-2])[a-b]$/i;
+
+/**
+ * Matches DD/MM/YYYY or DD-MM-YYYY.
+ *
+ * This validates the numeric ranges for day, month, and year,
+ * but does not verify calendar validity such as 31/02/2024.
+ */
+export const REGEX_DD_MM_YYYY = /^(0[1-9]|[12]\d|3[01])[/\-](0[1-9]|1[0-2])[/\-](1\d{3}|20\d{2})$/;
+
+/**
+ * Matches Camelot Wheel notation such as 8A or 11B.
+ */
+export const REGEX_CAMELOT_KEY = /^(?:[1-9]|1[0-2])[AB]$/i;
+
+/**
+ * Matches standard musical key notation such as Am, C#min, or Gmaj.
+ */
+export const REGEX_MUSICAL_KEY = /^[A-G][#b]?(?:m|min|maj|minor|major)?$/i;
+
+/**
+ * Matches combined musical and Camelot notation such as Am / 8A.
+ */
+export const REGEX_COMBINED_KEY = /^[A-G][#b]?(?:m|min|maj)?\s*[/\\-]\s*(?:[1-9]|1[0-2])[AB]$/i;
+
+/**
+ * Matches an LRC timestamp tag such as [02:31.45] or [00:05.123].
+ */
 export const REGEX_LRC_TIMESTAMP = /\[\d{2}:\d{2}(?:\.\d{1,3})?\]/;
 
-// --- Reusable Schema Primitives ---
-
-/** Trims string and checks max length */
+/**
+ * Creates a trimmed string validator with a maximum length.
+ */
 export const trimmedString = (max: number, entity: string) => z.string().trim().max(max, `${entity} must be ${max} characters or less`);
 
-// --- DRY Core Field Validators ---
+/**
+ * Converts empty values to undefined before applying an optional schema.
+ */
+export const optionalCoercedNumber = <T extends z.ZodTypeAny>(schema: T) =>
+    z.preprocess((value) => (value === '' || value == null ? undefined : value), schema.optional());
+
+const boundedInteger = (entity: string, min: number, max: number, minMessage: string, maxMessage: string) =>
+    optionalCoercedNumber(z.coerce.number().int(`${entity} must be a whole number`).min(min, minMessage).max(max, maxMessage));
+
+const positiveIndex = (entity: string) => boundedInteger(entity, 1, 999, `${entity} must be at least 1`, `${entity} must be 999 or less`);
+
+const optionalText = (max: number, entity: string) => trimmedString(max, entity).optional();
+
 export const coreFieldValidators = {
-    title: z.string().trim().min(1, 'Title is required').max(255, 'Title must be 255 characters or less'),
+    title: trimmedString(255, 'Title').min(1, 'Title is required'),
 
     artist: trimmedString(255, 'Artist'),
     albumArtist: trimmedString(255, 'Album artist'),
     album: trimmedString(255, 'Album name'),
 
-    trackNumber: z.coerce
-        .number()
-        .int('Track number must be a whole number')
-        .min(1, 'Track number must be at least 1')
-        .max(999, 'Track number must be 999 or less'),
+    discNumber: positiveIndex('Disc number'),
 
-    year: z.coerce
-        .number()
-        .int('Year must be a whole number')
-        .refine((val) => val >= 1000 && val <= 2099, 'Year must be a 4-digit year (1000-2099)'),
+    trackNumber: positiveIndex('Track number'),
 
-    bpm: z.coerce.number().refine((val) => val >= 20 && val <= 400, 'BPM must be between 20 and 400'),
+    releaseDate: z
+        .date({
+            message: 'Release date must be a valid date',
+        })
+        .refine((d) => !isNaN(d.getTime()), 'Release date must be a valid date')
+        .nullish(),
+
+    year: optionalCoercedNumber(
+        z.coerce
+            .number()
+            .int('Year must be a whole number')
+            .refine((value) => value >= 1000 && value <= 2099, 'Year must be a 4-digit year (1000-2099)')
+    ),
+
+    bpm: optionalCoercedNumber(z.coerce.number().min(20, 'BPM must be at least 20').max(400, 'BPM must be 400 or less')),
 
     genre: trimmedString(100, 'Genre'),
 
-    initialKey: z
-        .string()
-        .trim()
-        .max(20, 'Key must be 20 characters or less')
-        .refine(
-            (val) => !val || REGEX_CAMELOT_KEY.test(val) || REGEX_MUSICAL_KEY.test(val) || REGEX_COMBINED_KEY.test(val),
-            'Key must be valid notation (e.g. 8A, Am, C#m)'
-        ),
+    initialKey: trimmedString(20, 'Key').refine(
+        (value) => value === '' || REGEX_CAMELOT_KEY.test(value) || REGEX_MUSICAL_KEY.test(value) || REGEX_COMBINED_KEY.test(value),
+        'Key must be valid notation (e.g. 8A, Am, C#m)'
+    ),
 
     comment: trimmedString(2000, 'Comment'),
 
-    composer: trimmedString(255, 'Composer').optional(),
-    conductor: trimmedString(255, 'Conductor').optional(),
-    lyricist: trimmedString(255, 'Lyricist').optional(),
-    publisher: trimmedString(255, 'Publisher').optional(),
-    label: trimmedString(255, 'Label').optional(),
-    copyright: trimmedString(255, 'Copyright').optional(),
-    isrc: trimmedString(50, 'ISRC').optional(),
-    barcode: trimmedString(50, 'Barcode').optional(),
-    catalogNumber: trimmedString(50, 'Catalog number').optional(),
-    mood: trimmedString(100, 'Mood').optional(),
+    composer: optionalText(255, 'Composer'),
+    conductor: optionalText(255, 'Conductor'),
+    lyricist: optionalText(255, 'Lyricist'),
+    publisher: optionalText(255, 'Publisher'),
+    label: optionalText(255, 'Label'),
+    copyright: optionalText(255, 'Copyright'),
+    isrc: optionalText(50, 'ISRC'),
+    barcode: optionalText(50, 'Barcode'),
+    catalogNumber: optionalText(50, 'Catalog number'),
+    mood: optionalText(100, 'Mood'),
 
-    lyrics: z.string().trim().max(50000, 'Lyrics must be 50000 characters or less').optional(),
+    rating: optionalCoercedNumber(
+        z.coerce.number().int('Rating must be a whole number').min(0, 'Rating must be at least 0').max(100, 'Rating must be 100 or less')
+    ),
+
+    lyrics: optionalText(50000, 'Lyrics'),
 } as const;
