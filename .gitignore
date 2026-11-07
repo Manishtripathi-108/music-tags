@@ -103,5 +103,7 @@ public/swe-worker*
 **/dev
 
 **.db
+**.db-shm
+**.db-wal
 
 **/.cache
