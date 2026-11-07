@@ -34,6 +34,14 @@ export interface EclipseState {
     manifest: EclipseManifest | null;
     settingsValues: Record<string, string | number | boolean>;
 
+    // Eclipse Auth & Token Management for Addon Access
+    eclipseAuthToken: string;
+    addonId: string;
+    addonAccessToken: string | null;
+    addonTokenExpiresAt: number | null;
+    isFetchingToken: boolean;
+    tokenError: string | null;
+
     // Custom HTTP Headers for Addon requests
     headerEntries: EclipseHeaderEntry[];
     isHeadersModalOpen: boolean;
@@ -73,12 +81,19 @@ export interface EclipseState {
     clearErrors: () => void;
     setIsHeadersModalOpen: (open: boolean) => void;
 
+    // Eclipse Auth & Token actions
+    setEclipseAuthToken: (token: string) => void;
+    setAddonId: (id: string) => void;
+    fetchAddonAccessToken: () => Promise<string | null>;
+    ensureValidAddonToken: () => Promise<string | null>;
+
     // Header actions
     getHeadersRecord: () => Record<string, string>;
     addHeaderEntry: (key?: string, value?: string) => void;
     updateHeaderEntry: (id: string, partial: Partial<EclipseHeaderEntry>) => void;
     removeHeaderEntry: (id: string) => void;
     clearHeaderEntries: () => void;
+    setOrUpdateHeader: (key: string, value: string) => void;
     setAuthBearerToken: (token: string) => void;
 
     connectAddon: (customUrl?: string) => Promise<boolean>;
@@ -133,6 +148,14 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     manifest: null,
     settingsValues: {},
 
+    // Eclipse Auth & Addon Access Token state
+    eclipseAuthToken: typeof window !== 'undefined' ? localStorage.getItem('eclipse_auth_token') || '' : '',
+    addonId: typeof window !== 'undefined' ? localStorage.getItem('eclipse_addon_id') || '' : '',
+    addonAccessToken: typeof window !== 'undefined' ? localStorage.getItem('eclipse_access_token') || null : null,
+    addonTokenExpiresAt: typeof window !== 'undefined' ? Number(localStorage.getItem('eclipse_access_expires_at')) || null : null,
+    isFetchingToken: false,
+    tokenError: null,
+
     headerEntries: loadStoredHeaders(),
     isHeadersModalOpen: false,
 
@@ -169,7 +192,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     setSearchFilter: (filter) => set({ searchFilter: filter }),
     setIsHeadersModalOpen: (open) => set({ isHeadersModalOpen: open }),
 
-    clearErrors: () => set({ connectionError: null, searchError: null, lastError: null }),
+    clearErrors: () => set({ connectionError: null, searchError: null, lastError: null, tokenError: null }),
 
     updateSetting: (key, value) => {
         set((s) => ({
@@ -183,15 +206,127 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
             notices: id ? s.notices.filter((n) => n.id !== id) : s.notices.slice(1),
         })),
 
+    // Eclipse Auth Token actions
+    setEclipseAuthToken: (token) => {
+        const clean = token.trim();
+        if (typeof window !== 'undefined') localStorage.setItem('eclipse_auth_token', clean);
+        set({ eclipseAuthToken: clean, tokenError: null });
+    },
+
+    setAddonId: (id) => {
+        const clean = id.trim();
+        if (typeof window !== 'undefined') localStorage.setItem('eclipse_addon_id', clean);
+        set({ addonId: clean, tokenError: null });
+    },
+
+    fetchAddonAccessToken: async () => {
+        const { eclipseAuthToken, addonId, manifest } = get();
+        const targetAddonId = addonId || manifest?.id;
+
+        if (!targetAddonId) {
+            set({ tokenError: 'Addon identifier is required to acquire an access token (e.g. com.yourname.tidal.hifi)' });
+            return null;
+        }
+        if (!eclipseAuthToken) {
+            set({ tokenError: 'Eclipse user Auth Token is required to acquire addon access token' });
+            return null;
+        }
+
+        set({ isFetchingToken: true, tokenError: null });
+
+        try {
+            const res = await axios.post('/api/eclipse', {
+                action: 'get-addon-token',
+                addonId: targetAddonId,
+                eclipseAuthToken,
+            });
+
+            const { token, expiresIn, expiresAt } = res.data;
+            if (!token) {
+                throw new Error('No access token returned by api.eclipsemusic.app');
+            }
+
+            const computedExpiresAt = expiresAt || (expiresIn ? Math.floor(Date.now() / 1000) + expiresIn : null);
+
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('eclipse_access_token', token);
+                if (computedExpiresAt) {
+                    localStorage.setItem('eclipse_access_expires_at', String(computedExpiresAt));
+                }
+            }
+
+            set({
+                addonAccessToken: token,
+                addonTokenExpiresAt: computedExpiresAt,
+                isFetchingToken: false,
+                tokenError: null,
+            });
+
+            // Automatically set/update the x-eclipse-access header
+            get().setOrUpdateHeader('x-eclipse-access', token);
+
+            return token;
+        } catch (err: unknown) {
+            const errInfo = extractErrorInfo(err, 'Failed to acquire Eclipse addon access token');
+            set({
+                isFetchingToken: false,
+                tokenError: errInfo.message,
+            });
+            return null;
+        }
+    },
+
+    ensureValidAddonToken: async () => {
+        const { eclipseAuthToken, addonId, manifest, addonAccessToken, addonTokenExpiresAt } = get();
+        const targetAddonId = addonId || manifest?.id;
+
+        if (!eclipseAuthToken || !targetAddonId) {
+            return addonAccessToken;
+        }
+
+        const nowSec = Math.floor(Date.now() / 1000);
+        // If token exists and has more than 20 seconds left, it's valid
+        if (addonAccessToken && addonTokenExpiresAt && addonTokenExpiresAt - nowSec > 20) {
+            get().setOrUpdateHeader('x-eclipse-access', addonAccessToken);
+            return addonAccessToken;
+        }
+
+        // Token is missing, expired, or expiring soon (< 20s) -> refresh automatically
+        return await get().fetchAddonAccessToken();
+    },
+
     getHeadersRecord: () => {
-        const { headerEntries } = get();
+        const { headerEntries, addonAccessToken } = get();
         const headers: Record<string, string> = {};
         for (const entry of headerEntries) {
             if (entry.enabled && entry.key.trim()) {
                 headers[entry.key.trim()] = entry.value;
             }
         }
+        // Ensure x-eclipse-access is injected if we have an active access token
+        if (addonAccessToken && !headers['x-eclipse-access']) {
+            headers['x-eclipse-access'] = addonAccessToken;
+        }
         return headers;
+    },
+
+    setOrUpdateHeader: (key, value) => {
+        const { headerEntries } = get();
+        const cleanKey = key.trim();
+        const existing = headerEntries.find((e) => e.key.toLowerCase() === cleanKey.toLowerCase());
+        let next: EclipseHeaderEntry[];
+        if (existing) {
+            next = headerEntries.map((e) =>
+                e.id === existing.id ? { ...e, key: cleanKey, value, enabled: true } : e
+            );
+        } else {
+            next = [
+                ...headerEntries,
+                { id: String(Date.now() + Math.random()), key: cleanKey, value, enabled: true },
+            ];
+        }
+        saveStoredHeaders(next);
+        set({ headerEntries: next });
     },
 
     addHeaderEntry: (key = '', value = '') => {
@@ -221,27 +356,16 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     },
 
     setAuthBearerToken: (token) => {
-        const { headerEntries } = get();
         const cleanToken = token.trim().startsWith('Bearer ') ? token.trim() : `Bearer ${token.trim()}`;
-        const existingAuth = headerEntries.find((e) => e.key.toLowerCase() === 'authorization');
-        let next: EclipseHeaderEntry[];
-        if (existingAuth) {
-            next = headerEntries.map((e) =>
-                e.id === existingAuth.id ? { ...e, value: cleanToken, enabled: true } : e
-            );
-        } else {
-            next = [
-                ...headerEntries,
-                { id: String(Date.now()), key: 'Authorization', value: cleanToken, enabled: true },
-            ];
-        }
-        saveStoredHeaders(next);
-        set({ headerEntries: next });
+        get().setOrUpdateHeader('Authorization', cleanToken);
     },
 
     connectAddon: async (customUrl) => {
         const targetUrl = customUrl || get().addonUrl;
         if (!targetUrl) return false;
+
+        // Ensure fresh token if eclipse auth is configured
+        await get().ensureValidAddonToken();
 
         set({ isConnecting: true, connectionError: null, lastError: null });
 
@@ -253,6 +377,11 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
             });
 
             const manifest = res.data.manifest;
+
+            // Auto-detect and save addonId if not set
+            if (manifest.id && !get().addonId) {
+                get().setAddonId(manifest.id);
+            }
 
             // Initialize default settings from manifest
             const initialSettings: Record<string, string | number | boolean> = {};
@@ -282,6 +411,29 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
 
             return true;
         } catch (err: unknown) {
+            // Check for 401: if auth token exists, attempt refresh once
+            if (axios.isAxiosError(err) && err.response?.status === 401 && get().eclipseAuthToken) {
+                const refreshed = await get().fetchAddonAccessToken();
+                if (refreshed) {
+                    try {
+                        const retryRes = await axios.post<{ manifest: EclipseManifest; notice?: EclipseNotice }>('/api/eclipse', {
+                            addonUrl: targetUrl,
+                            action: 'manifest',
+                            headers: get().getHeadersRecord(),
+                        });
+                        const manifest = retryRes.data.manifest;
+                        if (manifest.id && !get().addonId) get().setAddonId(manifest.id);
+                        set({
+                            manifest,
+                            isConnecting: false,
+                            connectionError: null,
+                            lastError: null,
+                        });
+                        return true;
+                    } catch {}
+                }
+            }
+
             const errInfo = extractErrorInfo(err, 'Failed to connect to Eclipse addon');
             const nextNotices = errInfo.notice ? [errInfo.notice, ...get().notices] : get().notices;
 
@@ -298,6 +450,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     searchAddon: async (customQuery) => {
         const { addonUrl, searchQuery, settingsValues } = get();
         if (!addonUrl) return;
+
+        await get().ensureValidAddonToken();
 
         const query = customQuery !== undefined ? customQuery : searchQuery;
         set({ isSearching: true, searchError: null, lastError: null });
@@ -325,6 +479,33 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 notices,
             });
         } catch (err: unknown) {
+            // Auto refresh token and retry on 401
+            if (axios.isAxiosError(err) && err.response?.status === 401 && get().eclipseAuthToken) {
+                const refreshed = await get().fetchAddonAccessToken();
+                if (refreshed) {
+                    try {
+                        const retryRes = await axios.post('/api/eclipse', {
+                            addonUrl,
+                            action: 'search',
+                            query,
+                            settings: settingsValues,
+                            headers: get().getHeadersRecord(),
+                        });
+                        set({
+                            searchResults: {
+                                tracks: retryRes.data.tracks || [],
+                                albums: retryRes.data.albums || [],
+                                artists: retryRes.data.artists || [],
+                                playlists: retryRes.data.playlists || [],
+                            },
+                            isSearching: false,
+                            searchError: null,
+                        });
+                        return;
+                    } catch {}
+                }
+            }
+
             const errInfo = extractErrorInfo(err, 'Search request failed');
             const nextNotices = errInfo.notice ? [...get().notices, errInfo.notice] : get().notices;
 
@@ -340,6 +521,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     loadCatalog: async (catalogId, skip = 0) => {
         const { addonUrl, settingsValues, catalogsData } = get();
         if (!addonUrl) return;
+
+        await get().ensureValidAddonToken();
 
         set((s) => ({
             catalogsData: {
@@ -404,6 +587,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
         const { addonUrl, settingsValues } = get();
         if (!addonUrl || !albumId) return;
 
+        await get().ensureValidAddonToken();
+
         try {
             const res = await axios.post('/api/eclipse', {
                 addonUrl,
@@ -428,6 +613,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
         const { addonUrl, settingsValues } = get();
         if (!addonUrl || !artistId) return;
 
+        await get().ensureValidAddonToken();
+
         try {
             const res = await axios.post('/api/eclipse', {
                 addonUrl,
@@ -451,6 +638,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     openPlaylist: async (playlistId) => {
         const { addonUrl, settingsValues } = get();
         if (!addonUrl || !playlistId) return;
+
+        await get().ensureValidAddonToken();
 
         try {
             const res = await axios.post('/api/eclipse', {
@@ -491,6 +680,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
             return;
         }
 
+        await get().ensureValidAddonToken();
         set({ currentTrack: track, isLoadingStream: true, isPlaying: false });
 
         try {
@@ -512,6 +702,28 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 notices,
             });
         } catch (err: unknown) {
+            // Check 401 retry
+            if (axios.isAxiosError(err) && err.response?.status === 401 && get().eclipseAuthToken) {
+                const refreshed = await get().fetchAddonAccessToken();
+                if (refreshed) {
+                    try {
+                        const retryRes = await axios.post<{ stream: EclipseStreamResponse; notice?: EclipseNotice }>('/api/eclipse', {
+                            addonUrl,
+                            action: 'stream',
+                            id: track.id,
+                            settings: settingsValues,
+                            headers: get().getHeadersRecord(),
+                        });
+                        set({
+                            currentStream: retryRes.data.stream,
+                            isPlaying: true,
+                            isLoadingStream: false,
+                        });
+                        return;
+                    } catch {}
+                }
+            }
+
             const errInfo = extractErrorInfo(err, 'Failed to resolve audio stream from addon');
             const nextNotices = errInfo.notice ? [...get().notices, errInfo.notice] : get().notices;
 
@@ -534,6 +746,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
             set({ lastError: { action: 'download', message: 'Please configure the destination Download Directory.' } });
             return;
         }
+
+        await get().ensureValidAddonToken();
 
         const nextDownloading = new Set(downloadingTrackIds);
         nextDownloading.add(track.id);
@@ -562,6 +776,36 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 }));
             }
         } catch (err: unknown) {
+            // Check 401 retry
+            if (axios.isAxiosError(err) && err.response?.status === 401 && get().eclipseAuthToken) {
+                const refreshed = await get().fetchAddonAccessToken();
+                if (refreshed) {
+                    try {
+                        const retryRes = await axios.post('/api/eclipse', {
+                            addonUrl,
+                            action: 'download',
+                            id: track.id,
+                            streamUrl: track.streamURL,
+                            isrc: track.isrc,
+                            trackFilename: `${track.artist} - ${track.title}`,
+                            format: track.format,
+                            downloadDirectory,
+                            settings: settingsValues,
+                            headers: get().getHeadersRecord(),
+                        });
+                        if (retryRes.data.success) {
+                            set((s) => ({
+                                downloadedTrackPaths: {
+                                    ...s.downloadedTrackPaths,
+                                    [track.id]: retryRes.data.filePath,
+                                },
+                            }));
+                            return;
+                        }
+                    } catch {}
+                }
+            }
+
             const errInfo = extractErrorInfo(err, 'Track download failed');
             const nextNotices = errInfo.notice ? [...get().notices, errInfo.notice] : get().notices;
 

@@ -188,6 +188,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             action,
             query,
             id,
+            addonId,
+            eclipseAuthToken,
             isrc,
             title,
             artist,
@@ -198,6 +200,48 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             downloadDirectory,
             trackFilename,
         } = body;
+
+        // 0. GET ECLIPSE ADDON ACCESS TOKEN: POST https://api.eclipsemusic.app/api/addon-access/token?addon=<addonId>
+        if (action === 'get-addon-token') {
+            const targetAddonId = addonId || id;
+            if (!targetAddonId) {
+                return NextResponse.json({ error: 'Missing required parameter: addonId' }, { status: 400 });
+            }
+            if (!eclipseAuthToken) {
+                return NextResponse.json({ error: 'Missing required parameter: eclipseAuthToken' }, { status: 400 });
+            }
+
+            const rawToken = String(eclipseAuthToken).trim();
+            const bearerToken = rawToken.toLowerCase().startsWith('bearer ') ? rawToken : `Bearer ${rawToken}`;
+            const tokenUrl = `https://api.eclipsemusic.app/api/addon-access/token?addon=${encodeURIComponent(targetAddonId)}`;
+
+            const res = await fetch(tokenUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: '*/*',
+                    Authorization: bearerToken,
+                    Origin: 'https://eclipsemusic.app',
+                    Referer: 'https://eclipsemusic.app/',
+                    'Content-Length': '0',
+                    'sec-ch-ua': '"Not-A.Brand";v="99", "Brave";v="157", "Chromium";v="157"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'sec-fetch-dest': 'empty',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-site': 'same-site',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                },
+                signal: AbortSignal.timeout(10000),
+            });
+
+            if (!res.ok) {
+                const err = await extractAddonErrorMessage(res, 'addon-access/token');
+                return NextResponse.json({ error: err.error, notice: err.notice }, { status: res.status });
+            }
+
+            const tokenData = await res.json();
+            return NextResponse.json(tokenData);
+        }
 
         if (!addonUrl) {
             return NextResponse.json({ error: 'Missing required parameter: addonUrl' }, { status: 400 });

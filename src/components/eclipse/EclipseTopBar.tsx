@@ -20,6 +20,8 @@ export function EclipseTopBar() {
         connectionError,
         headerEntries,
         setIsHeadersModalOpen,
+        addonAccessToken,
+        addonTokenExpiresAt,
     } = useEclipseStore();
 
     const [inputUrl, setInputUrl] = useState(addonUrl);
@@ -32,6 +34,7 @@ export function EclipseTopBar() {
         await connectAddon(inputUrl);
     };
 
+    const isTokenActive = Boolean(addonAccessToken && (!addonTokenExpiresAt || addonTokenExpiresAt > Math.floor(Date.now() / 1000)));
     const activeHeadersCount = headerEntries.filter((h) => h.enabled && h.key.trim()).length;
 
     return (
@@ -71,16 +74,22 @@ export function EclipseTopBar() {
                         variant="outline"
                         size="xs"
                         onClick={() => setIsHeadersModalOpen(true)}
-                        className="h-7 gap-1.5 text-xs font-mono"
-                        title="Configure custom HTTP headers (Authorization, X-API-Key, etc.)"
+                        className={`h-7 gap-1.5 text-xs font-mono transition-colors ${
+                            isTokenActive ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/5' : ''
+                        }`}
+                        title="Configure Eclipse Access Token & custom HTTP headers"
                     >
-                        <Icon icon="link" className="size-3 text-primary" />
+                        <span className={`size-1.5 rounded-full ${isTokenActive ? 'bg-emerald-400 animate-pulse' : 'bg-primary'}`} />
                         <span>Headers & Auth</span>
-                        {activeHeadersCount > 0 && (
+                        {isTokenActive ? (
+                            <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/20 px-1 rounded">
+                                Token Active
+                            </span>
+                        ) : activeHeadersCount > 0 ? (
                             <span className="ml-1 rounded-full bg-primary/20 text-primary px-1.5 py-0.2 text-[10px] font-bold">
                                 {activeHeadersCount}
                             </span>
-                        )}
+                        ) : null}
                     </Button>
 
                     <ThemeToggler />
