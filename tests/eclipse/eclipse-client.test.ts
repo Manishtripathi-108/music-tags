@@ -1,0 +1,189 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
+import { POST } from '@/app/api/eclipse/route';
+
+describe('Eclipse Music Addon Client Route', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    const createPostRequest = (body: Record<string, any>) => {
+        return new NextRequest('http://localhost:3000/api/eclipse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    };
+
+    it('returns error when addonUrl is missing', async () => {
+        const req = createPostRequest({ action: 'manifest' });
+        const res = await POST(req);
+        expect(res.status).toBe(400);
+        const data = await res.json();
+        expect(data.error).toContain('addonUrl');
+    });
+
+    it('fetches manifest from addon server', async () => {
+        const mockManifest = {
+            id: 'com.example.addon',
+            name: 'Example Addon',
+            version: '1.0.0',
+            resources: ['search', 'stream', 'catalog', 'settings'],
+            types: ['track'],
+            settings: [
+                { key: 'quality', type: 'select', label: 'Quality', default: 'high' },
+            ],
+            catalogs: [
+                { id: 'top', type: 'track', name: 'Top Songs' },
+            ],
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => mockManifest,
+        } as Response);
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com',
+            action: 'manifest',
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+
+        const data = await res.json();
+        expect(data.manifest.id).toBe('com.example.addon');
+        expect(data.manifest.name).toBe('Example Addon');
+        expect(global.fetch).toHaveBeenCalledWith(
+            'https://addon.example.com/manifest.json',
+            expect.objectContaining({ headers: { Accept: 'application/json' } })
+        );
+    });
+
+    it('executes search and appends settings query parameters', async () => {
+        const mockSearch = {
+            tracks: [
+                { id: '101', title: 'Song 1', artist: 'Artist 1', duration: 200, format: 'flac' },
+            ],
+            albums: [],
+            artists: [],
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => mockSearch,
+        } as Response);
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com',
+            action: 'search',
+            query: 'Kalyani',
+            settings: { quality: 'lossless', region: 'US' },
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+
+        const data = await res.json();
+        expect(data.tracks).toHaveLength(1);
+        expect(data.tracks[0].title).toBe('Song 1');
+
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.stringContaining('https://addon.example.com/search?quality=lossless&region=US&q=Kalyani'),
+            expect.any(Object)
+        );
+    });
+
+    it('resolves stream URL with settings query parameters', async () => {
+        const mockStream = {
+            url: 'https://cdn.example.com/101.flac',
+            format: 'flac',
+            codec: 'flac',
+            quality: '24-bit / 96 kHz',
+            sampleRate: 96000,
+            bitDepth: 24,
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => mockStream,
+        } as Response);
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com',
+            action: 'stream',
+            id: '101',
+            settings: { quality: 'lossless' },
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+
+        const data = await res.json();
+        expect(data.stream.url).toBe('https://cdn.example.com/101.flac');
+        expect(data.stream.codec).toBe('flac');
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.stringContaining('https://addon.example.com/stream/101?quality=lossless'),
+            expect.any(Object)
+        );
+    });
+
+    it('resolves ISRC via resolve-isrc according to Eclipse section 7', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ trackId: 'track_999' }),
+        } as Response);
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com',
+            action: 'resolve-isrc',
+            isrc: 'USRC12345678',
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+
+        const data = await res.json();
+        expect(data.trackId).toBe('track_999');
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.stringContaining('https://addon.example.com/resolve-isrc?isrc=USRC12345678'),
+            expect.any(Object)
+        );
+    });
+
+    it('fetches catalog shelves with skip parameter', async () => {
+        const mockCatalog = {
+            items: [
+                { id: '1', title: 'Catalog Item 1', artist: 'Artist 1', type: 'track' },
+            ],
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => mockCatalog,
+        } as Response);
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com',
+            action: 'catalog',
+            id: 'top-songs',
+            skip: 100,
+            settings: { quality: 'high' },
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+
+        const data = await res.json();
+        expect(data.items).toHaveLength(1);
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.stringContaining('https://addon.example.com/catalog/top-songs?quality=high&skip=100'),
+            expect.any(Object)
+        );
+    });
+});

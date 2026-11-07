@@ -28,6 +28,15 @@ export function CompareTopBar() {
 
                 <div className="bg-border h-4 w-px" />
 
+                <Link href="/eclipse" className="hover:opacity-80 transition-opacity">
+                    <Button variant="ghost" size="xs" className="gap-1.5 font-mono text-xs text-purple-400 hover:text-purple-300">
+                        <Icon icon="musicConvert" className="size-3.5 text-purple-400" />
+                        <span>Eclipse Addon</span>
+                    </Button>
+                </Link>
+
+                <div className="bg-border h-4 w-px" />
+
                 <div className="flex items-center gap-2">
                     <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
                         <Icon icon="audio" className="text-primary size-4" />

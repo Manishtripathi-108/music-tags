@@ -148,6 +148,13 @@ export function WorkstationTopBar() {
                     </Button>
                 </Link>
 
+                <Link href="/eclipse">
+                    <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs text-purple-400 border-purple-500/40 hover:bg-purple-500/10">
+                        <Icon icon="musicConvert" className="text-purple-400 size-3.5" />
+                        <span>Eclipse Addon</span>
+                    </Button>
+                </Link>
+
                 <Button variant="primary" size="sm" onClick={() => setIsScanModalOpen(true)}>
                     <Icon icon="open" className="size-3.5" />
                     <span>Scan Music Folder</span>
