@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const rows = await db
             .select()
             .from(audioFiles)
-            .leftJoin(canonicalAudioMetadata, eq(audioFiles.id, trackId))
+            .leftJoin(canonicalAudioMetadata, eq(audioFiles.id, canonicalAudioMetadata.fileId))
             .where(eq(audioFiles.id, trackId))
             .limit(1);
 
@@ -216,27 +216,59 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 throw new Error(`Downloaded file is corrupted or too small (${stats.size} bytes)`);
             }
 
-            // 1. If remote track ID was changed, remove the previous file from disk
-            if (cachedMatch?.previousDownloadPath && fs.existsSync(/*turbopackIgnore: true*/ cachedMatch.previousDownloadPath)) {
-                console.log(`[API:DOWNLOAD:CLEANUP] Track ID was updated. Removing previous downloaded file: "${cachedMatch.previousDownloadPath}"`);
-                try {
-                    fs.unlinkSync(cachedMatch.previousDownloadPath);
-                } catch (cleanupErr) {
-                    console.warn(`[API:DOWNLOAD:CLEANUP] Could not remove previous file:`, cleanupErr);
+            // Safe path validation helpers to protect unrelated files
+            const isInsideTargetDir = (filePath: string) => {
+                const resolvedPath = path.resolve(filePath);
+                const resolvedTarget = path.resolve(targetDir);
+                return resolvedPath.startsWith(resolvedTarget) && resolvedPath !== resolvedTarget;
+            };
+
+            const isOtherTrackFile = async (filePath: string): Promise<boolean> => {
+                const fileBase = path.basename(filePath, path.extname(filePath));
+                if (fileBase === baseName) return false;
+                // Check if this filename matches the ISRC of another track in the database
+                const conflicting = await db
+                    .select({ id: canonicalAudioMetadata.fileId })
+                    .from(canonicalAudioMetadata)
+                    .where(and(eq(canonicalAudioMetadata.isrc, fileBase), ne(canonicalAudioMetadata.fileId, trackId)))
+                    .limit(1);
+                return conflicting.length > 0;
+            };
+
+            // 1. If remote track ID was changed, remove the previous file from disk (isolated to this track)
+            if (
+                cachedMatch?.previousDownloadPath &&
+                isInsideTargetDir(cachedMatch.previousDownloadPath) &&
+                fs.existsSync(/*turbopackIgnore: true*/ cachedMatch.previousDownloadPath)
+            ) {
+                if (await isOtherTrackFile(cachedMatch.previousDownloadPath)) {
+                    console.warn(`[API:DOWNLOAD:CLEANUP] Safety guard: Skipping deletion of "${cachedMatch.previousDownloadPath}" because it belongs to another track.`);
+                } else {
+                    console.log(`[API:DOWNLOAD:CLEANUP] Track ID was updated. Removing previous downloaded file: "${cachedMatch.previousDownloadPath}"`);
+                    try {
+                        fs.unlinkSync(cachedMatch.previousDownloadPath);
+                    } catch (cleanupErr) {
+                        console.warn(`[API:DOWNLOAD:CLEANUP] Could not remove previous file:`, cleanupErr);
+                    }
                 }
             }
 
-            // 2. If cached downloadPath exists and differs from destinationPath, remove old file
+            // 2. If cached downloadPath exists and differs from destinationPath, remove old file (isolated to this track)
             if (
                 cachedMatch?.downloadPath &&
                 cachedMatch.downloadPath !== destinationPath &&
+                isInsideTargetDir(cachedMatch.downloadPath) &&
                 fs.existsSync(/*turbopackIgnore: true*/ cachedMatch.downloadPath)
             ) {
-                console.log(`[API:DOWNLOAD:CLEANUP] Removing stale downloaded file: "${cachedMatch.downloadPath}"`);
-                try {
-                    fs.unlinkSync(cachedMatch.downloadPath);
-                } catch (cleanupErr) {
-                    console.warn(`[API:DOWNLOAD:CLEANUP] Could not remove stale file:`, cleanupErr);
+                if (await isOtherTrackFile(cachedMatch.downloadPath)) {
+                    console.warn(`[API:DOWNLOAD:CLEANUP] Safety guard: Skipping deletion of "${cachedMatch.downloadPath}" because it belongs to another track.`);
+                } else {
+                    console.log(`[API:DOWNLOAD:CLEANUP] Removing stale downloaded file: "${cachedMatch.downloadPath}"`);
+                    try {
+                        fs.unlinkSync(cachedMatch.downloadPath);
+                    } catch (cleanupErr) {
+                        console.warn(`[API:DOWNLOAD:CLEANUP] Could not remove stale file:`, cleanupErr);
+                    }
                 }
             }
 

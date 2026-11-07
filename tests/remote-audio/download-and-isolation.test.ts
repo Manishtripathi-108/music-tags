@@ -138,4 +138,49 @@ describe('Dolby and Lossless Isolation Constraints', () => {
         expect(isDownloaded(downloadedItem)).toBe(true);
         expect(isDownloaded(notDownloadedItem)).toBe(false);
     });
+
+    it('ensures different tracks resolve distinct ISRC filenames to prevent overwriting existing tracks', () => {
+        const trackA = {
+            id: '12dcef87-03a1-488a-87a2-cbdb7921b27b',
+            title: 'Sway',
+            isrc: 'USRE10201551',
+        };
+        const trackB = {
+            id: 'a77e5b56-0035-444f-a4a0-c4a1a4544147',
+            title: 'Apocalypse',
+            isrc: 'USBQU1700034',
+        };
+
+        const filenameA = `${trackA.isrc}.flac`;
+        const filenameB = `${trackB.isrc}.flac`;
+
+        expect(filenameA).not.toBe(filenameB);
+        expect(filenameA).toBe('USRE10201551.flac');
+        expect(filenameB).toBe('USBQU1700034.flac');
+    });
+
+    it('guards against unlinking a file that belongs to another track during cleanup', () => {
+        const currentTrack = {
+            id: 'a77e5b56-0035-444f-a4a0-c4a1a4544147',
+            isrc: 'USBQU1700034',
+        };
+        const allKnownTracks = [
+            { id: '04729d2a-0fd1-48ae-a7d1-eebc87b47fe8', isrc: 'QZK6Q2049800' },
+            { id: '12dcef87-03a1-488a-87a2-cbdb7921b27b', isrc: 'USRE10201551' },
+            { id: 'a77e5b56-0035-444f-a4a0-c4a1a4544147', isrc: 'USBQU1700034' },
+        ];
+
+        const isOtherTrackFile = (filePath: string, currentTrackId: string, currentBaseName: string) => {
+            const fileNameWithExt = filePath.split(/[/\\]/).pop() || '';
+            const fileBase = fileNameWithExt.replace(/\.[^/.]+$/, '');
+            if (fileBase === currentBaseName) return false;
+            return allKnownTracks.some((t) => t.isrc === fileBase && t.id !== currentTrackId);
+        };
+
+        // If stale db path was QZK6Q2049800.flac, current track Apocalypse must NOT delete it
+        expect(isOtherTrackFile('E:/Media/Music/QZK6Q2049800.flac', currentTrack.id, currentTrack.isrc)).toBe(true);
+
+        // If previous path was an old extension of itself (e.g. USBQU1700034.mp3), it is safe to remove
+        expect(isOtherTrackFile('E:/Media/Music/USBQU1700034.mp3', currentTrack.id, currentTrack.isrc)).toBe(false);
+    });
 });

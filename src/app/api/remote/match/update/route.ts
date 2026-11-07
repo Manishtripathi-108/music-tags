@@ -34,7 +34,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const rows = await db
             .select()
             .from(audioFiles)
-            .leftJoin(canonicalAudioMetadata, eq(audioFiles.id, localTrackId))
+            .leftJoin(canonicalAudioMetadata, eq(audioFiles.id, canonicalAudioMetadata.fileId))
             .where(eq(audioFiles.id, localTrackId))
             .limit(1);
 
