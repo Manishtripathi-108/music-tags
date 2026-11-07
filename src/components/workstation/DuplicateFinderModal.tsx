@@ -19,6 +19,7 @@ export function DuplicateFinderModal() {
     const [activeMode, setActiveMode] = useState<DuplicateMatchMode>('all');
     const [searchFilter, setSearchFilter] = useState('');
     const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
+    const [lastSelectedTrackId, setLastSelectedTrackId] = useState<string | null>(null);
     const [deleteLocalFiles, setDeleteLocalFiles] = useState(false);
     const [isResolving, setIsResolving] = useState(false);
     const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -50,6 +51,10 @@ export function DuplicateFinderModal() {
         return list;
     }, [duplicateClusters, searchFilter]);
 
+    const allVisibleTrackIds = useMemo(() => {
+        return filteredClusters.flatMap((c) => c.tracks.map((t) => t.track.id));
+    }, [filteredClusters]);
+
     const totalRedundantTracks = useMemo(() => {
         return duplicateClusters.reduce((acc, c) => acc + Math.max(0, c.tracks.length - 1), 0);
     }, [duplicateClusters]);
@@ -64,16 +69,42 @@ export function DuplicateFinderModal() {
             }
         }
         setSelectedTrackIds(redundant);
+        setLastSelectedTrackId(null);
     };
 
-    const handleToggleTrack = (trackId: string) => {
+    const handleToggleTrack = (trackId: string, isShift = false) => {
         const next = new Set(selectedTrackIds);
+
+        if (isShift && lastSelectedTrackId && allVisibleTrackIds.length > 0) {
+            const fromIndex = allVisibleTrackIds.indexOf(lastSelectedTrackId);
+            const toIndex = allVisibleTrackIds.indexOf(trackId);
+
+            if (fromIndex !== -1 && toIndex !== -1) {
+                const start = Math.min(fromIndex, toIndex);
+                const end = Math.max(fromIndex, toIndex);
+                const rangeIds = allVisibleTrackIds.slice(start, end + 1);
+                const shouldSelect = selectedTrackIds.has(lastSelectedTrackId) || !selectedTrackIds.has(trackId);
+
+                for (const rangeId of rangeIds) {
+                    if (shouldSelect) {
+                        next.add(rangeId);
+                    } else {
+                        next.delete(rangeId);
+                    }
+                }
+                setSelectedTrackIds(next);
+                setLastSelectedTrackId(trackId);
+                return;
+            }
+        }
+
         if (next.has(trackId)) {
             next.delete(trackId);
         } else {
             next.add(trackId);
         }
         setSelectedTrackIds(next);
+        setLastSelectedTrackId(trackId);
     };
 
     const handleQuickKeepBest = async (cluster: DuplicateCluster) => {
@@ -250,19 +281,29 @@ export function DuplicateFinderModal() {
                                         return (
                                             <div
                                                 key={track.id}
-                                                className={`flex items-center gap-3 p-3 transition-colors ${
+                                                onClick={(e) => {
+                                                    const target = e.target as HTMLElement;
+                                                    if (target.closest('button, a, [role="button"]')) return;
+                                                    handleToggleTrack(track.id, e.shiftKey);
+                                                }}
+                                                className={`flex items-center gap-3 p-3 transition-colors cursor-pointer select-none ${
                                                     isRecommendedKeeper
                                                         ? 'bg-success/5 hover:bg-success/10'
                                                         : isSelected
                                                           ? 'bg-destructive/10'
                                                           : 'hover:bg-muted/30'
                                                 }`}>
-                                                <Checkbox
-                                                    checked={isSelected}
-                                                    onCheckedChange={() => handleToggleTrack(track.id)}
-                                                    className="size-4"
-                                                    title="Select this file to remove"
-                                                />
+                                                <div onClick={(e) => e.stopPropagation()}>
+                                                    <Checkbox
+                                                        checked={isSelected}
+                                                        onClick={(e) => {
+                                                            handleToggleTrack(track.id, e.shiftKey);
+                                                        }}
+                                                        onCheckedChange={() => {}}
+                                                        className="size-4"
+                                                        title="Select this file to remove (Hold Shift for range)"
+                                                    />
+                                                </div>
 
                                                 <div className="min-w-0 flex-1 space-y-1">
                                                     <div className="flex items-center gap-2">

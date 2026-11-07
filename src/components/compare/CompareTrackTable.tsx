@@ -107,6 +107,7 @@ export function CompareTrackTable() {
     ).length;
 
     const allFilteredSelected = filteredItems.length > 0 && filteredItems.every((i) => selectedIds.has(i.localTrack.id));
+    const visibleIds = useMemo(() => filteredItems.map((i) => i.localTrack.id), [filteredItems]);
 
     const handleToggleSelectAllFiltered = () => {
         if (allFilteredSelected) {
@@ -307,16 +308,26 @@ export function CompareTrackTable() {
                                 return (
                                     <tr
                                         key={item.localTrack.id}
-                                        className={`transition-colors hover:bg-muted/30 ${
+                                        onClick={(e) => {
+                                            const target = e.target as HTMLElement;
+                                            if (target.closest('button, a, input, [role="button"]')) {
+                                                return;
+                                            }
+                                            toggleSelect(item.localTrack.id, e.shiftKey, visibleIds);
+                                        }}
+                                        className={`transition-colors cursor-pointer hover:bg-muted/30 select-none ${
                                             isSelected ? 'bg-primary/5' : ''
                                         } ${activeError || downloadFailure ? 'bg-rose-500/5 border-l-2 border-l-rose-500' : ''}`}
                                     >
                                         {/* Checkbox */}
-                                        <td className="p-2.5 text-center">
+                                        <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
-                                                onChange={() => toggleSelect(item.localTrack.id)}
+                                                onClick={(e) => {
+                                                    toggleSelect(item.localTrack.id, e.shiftKey, visibleIds);
+                                                }}
+                                                onChange={() => {}}
                                                 className="cursor-pointer rounded"
                                             />
                                         </td>

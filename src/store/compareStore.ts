@@ -21,6 +21,7 @@ export interface CompareState {
     activeFilter: CompareFilter;
     searchQuery: string;
     selectedIds: Set<string>;
+    lastSelectedId: string | null;
 
     // Sorting
     sortBy: 'confidence' | 'title' | 'artist' | 'status' | 'none';
@@ -91,7 +92,7 @@ export interface CompareState {
     setCustomParams: (params: Record<string, string>) => void;
     setActiveFilter: (filter: CompareFilter) => void;
     setSearchQuery: (query: string) => void;
-    toggleSelect: (id: string) => void;
+    toggleSelect: (id: string, isShift?: boolean, visibleIds?: string[]) => void;
     selectAll: (ids?: string[]) => void;
     clearSelection: () => void;
 
@@ -114,6 +115,7 @@ export const useCompareStore = create<CompareState>((set, get) => ({
     activeFilter: 'all',
     searchQuery: '',
     selectedIds: new Set<string>(),
+    lastSelectedId: null,
 
     sortBy: 'none',
     sortOrder: 'desc',
@@ -271,23 +273,54 @@ export const useCompareStore = create<CompareState>((set, get) => ({
     setActiveFilter: (filter) => set({ activeFilter: filter }),
     setSearchQuery: (query) => set({ searchQuery: query }),
 
-    toggleSelect: (id: string) => {
-        const next = new Set(get().selectedIds);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        set({ selectedIds: next });
+    toggleSelect: (id: string, isShift = false, visibleIds: string[] = []) => {
+        const { selectedIds, lastSelectedId } = get();
+        const next = new Set(selectedIds);
+
+        // Range selection with Shift held
+        if (isShift && lastSelectedId && visibleIds.length > 0) {
+            const fromIndex = visibleIds.indexOf(lastSelectedId);
+            const toIndex = visibleIds.indexOf(id);
+
+            if (fromIndex !== -1 && toIndex !== -1) {
+                const start = Math.min(fromIndex, toIndex);
+                const end = Math.max(fromIndex, toIndex);
+                const rangeIds = visibleIds.slice(start, end + 1);
+
+                // If anchor was selected, select all in range; otherwise deselect all in range
+                const shouldSelect = selectedIds.has(lastSelectedId) || !selectedIds.has(id);
+                for (const rangeId of rangeIds) {
+                    if (shouldSelect) {
+                        next.add(rangeId);
+                    } else {
+                        next.delete(rangeId);
+                    }
+                }
+
+                set({ selectedIds: next, lastSelectedId: id });
+                return;
+            }
+        }
+
+        // Single toggle
+        if (next.has(id)) {
+            next.delete(id);
+        } else {
+            next.add(id);
+        }
+        set({ selectedIds: next, lastSelectedId: id });
     },
 
     selectAll: (ids?: string[]) => {
         if (ids) {
-            set({ selectedIds: new Set(ids) });
+            set({ selectedIds: new Set(ids), lastSelectedId: null });
         } else {
             const allIds = get().items.map((i) => i.localTrack.id);
-            set({ selectedIds: new Set(allIds) });
+            set({ selectedIds: new Set(allIds), lastSelectedId: null });
         }
     },
 
-    clearSelection: () => set({ selectedIds: new Set<string>() }),
+    clearSelection: () => set({ selectedIds: new Set<string>(), lastSelectedId: null }),
 
     testConnection: async () => {
         const { apiUrl, downloadDirectory } = get();
