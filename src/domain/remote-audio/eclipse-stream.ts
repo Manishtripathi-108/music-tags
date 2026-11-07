@@ -27,8 +27,13 @@ export function isDashManifestUrl(url?: string, contentType?: string): boolean {
 /**
  * Generates the local API stream proxy URL for an external audio stream or DASH manifest.
  * Ensures bypass of CORS restrictions, allows Range requests, and preserves playback reliability.
+ * Supports mode='stream' for progressive native FLAC playback in browsers without MSE FLAC support.
  */
-export function getAudioProxyUrl(streamUrl: string, headers?: Record<string, string>): string {
+export function getAudioProxyUrl(
+    streamUrl: string,
+    headers?: Record<string, string>,
+    mode?: 'manifest' | 'stream'
+): string {
     if (!streamUrl) return '';
     // If it's already a relative / local URL, return as-is
     if (streamUrl.startsWith('/api/') || streamUrl.startsWith('/')) {
@@ -37,6 +42,10 @@ export function getAudioProxyUrl(streamUrl: string, headers?: Record<string, str
 
     const params = new URLSearchParams();
     params.set('url', streamUrl);
+
+    if (mode) {
+        params.set('mode', mode);
+    }
 
     if (headers && Object.keys(headers).length > 0) {
         // Forward essential token / auth headers if present

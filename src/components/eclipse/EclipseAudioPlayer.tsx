@@ -50,6 +50,7 @@ export function EclipseAudioPlayer() {
             const isDash = isDashManifestUrl(rawUrl, currentStream.format);
             const headers = getHeadersRecord();
             const proxyUrl = getAudioProxyUrl(rawUrl, headers);
+            const streamProxyUrl = getAudioProxyUrl(rawUrl, headers, 'stream');
 
             // Clean up existing dashjs player instance if active
             if (dashPlayerRef.current) {
@@ -60,6 +61,27 @@ export function EclipseAudioPlayer() {
             }
 
             if (isDash) {
+                // Check if browser MSE supports FLAC in MP4 container
+                const canMsePlayFlac =
+                    typeof window !== 'undefined' &&
+                    typeof window.MediaSource !== 'undefined' &&
+                    typeof window.MediaSource.isTypeSupported === 'function' &&
+                    window.MediaSource.isTypeSupported('audio/mp4; codecs="flac"');
+
+                // If browser MSE does not support FLAC in MP4 (Chrome, Brave, Firefox, Edge standard behavior),
+                // route directly through lossless progressive FLAC streaming proxy mode to avoid "DASH error: No streams to play"
+                if (!canMsePlayFlac) {
+                    console.log(`[ECLIPSE:PLAYER] Browser MSE does not support FLAC inside MP4. Streaming progressive native FLAC: ${streamProxyUrl}`);
+                    audio.src = streamProxyUrl;
+                    if (isPlaying) {
+                        audio.play().catch((playErr) => {
+                            console.warn('[ECLIPSE:PLAYER] Progressive playback error:', playErr);
+                        });
+                    }
+                    return;
+                }
+
+                // If MSE supports FLAC in MP4, initialize Dash.js with graceful fallback
                 try {
                     console.log(`[ECLIPSE:PLAYER] Initializing Dash.js for stream: ${rawUrl}`);
                     const dashjs = await import('dashjs');
@@ -89,16 +111,31 @@ export function EclipseAudioPlayer() {
 
                     const errorEvent = (dashjs.MediaPlayer as any)?.events?.ERROR || 'error';
                     player.on(errorEvent, (e: any) => {
-                        console.error('[ECLIPSE:DASH:ERROR]', e);
-                        const msg = e?.error?.message || e?.event?.message || 'Playback stream error';
-                        setPlaybackError(`DASH error: ${msg}`);
+                        const msg = e?.error?.message || e?.event?.message || '';
+                        console.warn('[ECLIPSE:DASH:ERROR]', msg, e);
+
+                        // Seamless fallback if Dash.js encounters capability/stream errors
+                        if (msg.includes('No streams to play') || msg.includes('capability') || msg.includes('codec')) {
+                            console.log(`[ECLIPSE:PLAYER] Falling back to progressive FLAC stream: ${streamProxyUrl}`);
+                            try {
+                                player.destroy();
+                            } catch {}
+                            dashPlayerRef.current = null;
+                            audio.src = streamProxyUrl;
+                            if (isPlaying) {
+                                audio.play().catch(() => {});
+                            }
+                            return;
+                        }
+
+                        setPlaybackError(`DASH error: ${msg || 'Playback stream error'}`);
                     });
 
                     dashPlayerRef.current = player;
                 } catch (err: unknown) {
                     console.error('[ECLIPSE:PLAYER:DASH_FAILED]', err);
-                    // Fallback to native audio proxy stream
-                    audio.src = proxyUrl;
+                    // Fallback to native progressive FLAC stream
+                    audio.src = streamProxyUrl;
                     if (isPlaying) {
                         audio.play().catch((playErr) => {
                             console.warn('Native playback error:', playErr);

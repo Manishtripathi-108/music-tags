@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isDashManifestUrl } from '@/domain/remote-audio/eclipse-stream';
+import {
+    parseDashMpd,
+    buildSegmentUrl,
+    verifyFlacInitSegment,
+    verifyFlacMediaSegment,
+} from '@/services/eclipse/dashDownloader';
 
 /**
- * Rewrites URLs inside an MPEG-DASH MPD XML document to route segments through this proxy.
+ * Rewrites URLs inside an MPEG-DASH MPD XML document to route segments through this proxy,
+ * preserving template variables ($Number$, $Time$, $RepresentationID$) and auth query parameters.
  */
-function rewriteDashManifest(xml: string, manifestBaseUrl: string): string {
+function rewriteDashManifest(xml: string, manifestBaseUrl: string, searchParams?: URLSearchParams): string {
+    const authParams = new URLSearchParams();
+    const eclipseAccess = searchParams?.get('x-eclipse-access');
+    if (eclipseAccess) authParams.set('x-eclipse-access', eclipseAccess);
+    const auth = searchParams?.get('authorization');
+    if (auth) authParams.set('authorization', auth);
+    const authQuery = authParams.toString() ? `&${authParams.toString()}` : '';
+
     return xml.replace(
         /(initialization|media)="([^"]+)"/gi,
         (_match, attr: string, rawVal: string) => {
@@ -29,7 +43,7 @@ function rewriteDashManifest(xml: string, manifestBaseUrl: string): string {
                 (_m, name, width) => `$${name}${width || ''}$`
             );
 
-            const proxiedUrl = `/api/eclipse/stream-proxy?url=${encodedParam}`;
+            const proxiedUrl = `/api/eclipse/stream-proxy?url=${encodedParam}${authQuery}`;
             // Re-escape XML attribute values
             const xmlSafeProxied = proxiedUrl.replace(/&/g, '&amp;');
             return `${attr}="${xmlSafeProxied}"`;
@@ -40,6 +54,7 @@ function rewriteDashManifest(xml: string, manifestBaseUrl: string): string {
 export async function GET(request: NextRequest): Promise<Response> {
     const searchParams = request.nextUrl.searchParams;
     const targetUrl = searchParams.get('url');
+    const mode = searchParams.get('mode') || 'manifest';
 
     if (!targetUrl) {
         return NextResponse.json({ error: 'Missing target url parameter' }, { status: 400 });
@@ -110,10 +125,106 @@ export async function GET(request: NextRequest): Promise<Response> {
     const contentType = remoteRes.headers.get('content-type') || '';
     const isDash = isDashManifestUrl(targetUrl, contentType);
 
-    // If it's a DASH MPD manifest, rewrite URLs and return modified XML
+    // MODE = STREAM: Progressive lossless native FLAC streaming for browsers lacking MSE FLAC in MP4
+    if (mode === 'stream') {
+        if (!isDash) {
+            // Already direct audio stream, pipe directly
+            const responseHeaders = new Headers();
+            responseHeaders.set('Access-Control-Allow-Origin', '*');
+            responseHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+            responseHeaders.set('Access-Control-Allow-Headers', '*');
+            if (contentType) responseHeaders.set('Content-Type', contentType);
+            return new Response(remoteRes.body, { status: remoteRes.status, headers: responseHeaders });
+        }
+
+        try {
+            const manifestXml = await remoteRes.text();
+            const info = parseDashMpd(manifestXml, targetUrl);
+
+            // Fetch init segment 0.mp4
+            const initRes = await fetch(info.initUrl, {
+                headers: forwardHeaders,
+                signal: AbortSignal.timeout(20000),
+            });
+            if (!initRes.ok) {
+                throw new Error(`Failed to fetch DASH init segment: HTTP ${initRes.status}`);
+            }
+
+            const initBuffer = Buffer.from(await initRes.arrayBuffer());
+            const verified = verifyFlacInitSegment(initBuffer, info.selectedRepresentation);
+
+            let isAborted = false;
+            const stream = new ReadableStream<Uint8Array>({
+                async start(controller) {
+                    try {
+                        // 1. Enqueue verified genuine FLAC header
+                        controller.enqueue(new Uint8Array(verified.flacHeader));
+
+                        // 2. Sequentially stream verified FLAC audio frames from media segments
+                        for (const segNum of info.segmentNumbers) {
+                            if (isAborted) break;
+
+                            const segUrl = buildSegmentUrl(info.mediaUrlTemplate, segNum, targetUrl);
+                            let segRes: Response | null = null;
+                            for (let retry = 0; retry < 2; retry++) {
+                                try {
+                                    segRes = await fetch(segUrl, {
+                                        headers: forwardHeaders,
+                                        signal: AbortSignal.timeout(15000),
+                                    });
+                                    if (segRes.ok) break;
+                                } catch {}
+                            }
+
+                            if (!segRes || !segRes.ok) {
+                                console.warn(`[ECLIPSE:STREAM_PROXY] Skipping segment ${segNum} due to fetch error`);
+                                continue;
+                            }
+
+                            const segBuf = Buffer.from(await segRes.arrayBuffer());
+                            try {
+                                const audioFrames = verifyFlacMediaSegment(segBuf, segNum);
+                                controller.enqueue(new Uint8Array(audioFrames));
+                            } catch (vErr) {
+                                console.warn(`[ECLIPSE:STREAM_PROXY] Frame sync warning on segment ${segNum}:`, vErr);
+                            }
+                        }
+
+                        controller.close();
+                    } catch (streamErr) {
+                        console.error('[ECLIPSE:STREAM_PROXY:STREAM_ERROR]', streamErr);
+                        try {
+                            controller.error(streamErr);
+                        } catch {}
+                    }
+                },
+                cancel() {
+                    isAborted = true;
+                },
+            });
+
+            return new Response(stream, {
+                status: 200,
+                headers: {
+                    'Content-Type': 'audio/flac',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                    'Access-Control-Allow-Headers': '*',
+                    'Cache-Control': 'no-cache, no-store',
+                    'Accept-Ranges': 'none',
+                },
+            });
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Failed to stream audio';
+            console.error('[ECLIPSE:STREAM_PROXY:ERROR]', msg);
+            return NextResponse.json({ error: msg }, { status: 500 });
+        }
+    }
+
+    // MODE = MANIFEST: Standard DASH MPD manifest rewrite for Dash.js MSE
     if (isDash) {
         const xmlText = await remoteRes.text();
-        const rewritten = rewriteDashManifest(xmlText, targetUrl);
+        const rewritten = rewriteDashManifest(xmlText, targetUrl, searchParams);
 
         return new Response(rewritten, {
             status: remoteRes.status,
@@ -127,7 +238,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         });
     }
 
-    // Direct media stream / segment streaming
+    // Direct media segment or single-file streaming
     const responseHeaders = new Headers();
     responseHeaders.set('Access-Control-Allow-Origin', '*');
     responseHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');

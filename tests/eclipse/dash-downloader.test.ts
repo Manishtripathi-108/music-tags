@@ -3,10 +3,14 @@ import {
     isDashManifest,
     unescapeXml,
     parseDashMpd,
+    parseRepresentations,
     buildSegmentUrl,
     extractFlacHeaderFromInitSegment,
     extractMdatPayload,
     extractFlacFromDashSegments,
+    verifyFlacInitSegment,
+    verifyFlacMediaSegment,
+    createMockStreamInfo,
 } from '@/services/eclipse/dashDownloader';
 
 describe('Eclipse DASH Audio Downloader', () => {
@@ -24,6 +28,22 @@ describe('Eclipse DASH Audio Downloader', () => {
           </SegmentTimeline>
         </SegmentTemplate>
       </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const multiRepMpdXml = `<?xml version='1.0' encoding='UTF-8'?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet id="0" contentType="audio" mimeType="audio/mp4">
+      <SegmentTemplate timescale="48000" initialization="https://audio.tidal.com/$RepresentationID$/0.mp4?token=abc" media="https://audio.tidal.com/$RepresentationID$/$Number$.mp4?token=abc" startNumber="1">
+        <SegmentTimeline>
+          <S d="192000" r="5"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="AAC_320" codecs="mp4a.40.2" bandwidth="320000" audioSamplingRate="44100" />
+      <Representation id="FLAC_LOSSLESS,44100,16" codecs="flac" bandwidth="900000" audioSamplingRate="44100" />
+      <Representation id="FLAC_HIRES,48000,24" codecs="flac" bandwidth="1792546" audioSamplingRate="48000" />
     </AdaptationSet>
   </Period>
 </MPD>`;
@@ -65,17 +85,123 @@ describe('Eclipse DASH Audio Downloader', () => {
         expect(seg40Url).toContain('/40.mp4?');
     });
 
+    it('selects highest quality FLAC Hi-Res representation and resolves $RepresentationID$', () => {
+        const baseUrl = 'https://audio.tidal.com/master.mpd';
+        const parsed = parseDashMpd(multiRepMpdXml, baseUrl);
+
+        // Should select the 24-bit Hi-Res representation over AAC and 16-bit FLAC
+        expect(parsed.selectedRepresentation.id).toBe('FLAC_HIRES,48000,24');
+        expect(parsed.selectedRepresentation.bitDepth).toBe(24);
+        expect(parsed.selectedRepresentation.audioSamplingRate).toBe(48000);
+
+        // Should replace $RepresentationID$ in URLs
+        expect(parsed.initUrl).toBe('https://audio.tidal.com/FLAC_HIRES,48000,24/0.mp4?token=abc');
+        expect(parsed.mediaUrlTemplate).toBe('https://audio.tidal.com/FLAC_HIRES,48000,24/$Number$.mp4?token=abc');
+        expect(parsed.segmentNumbers.length).toBe(6);
+    });
+
+    it('verifies genuine 24-bit / 48kHz and 96kHz FLAC STREAMINFO in init segment', () => {
+        // Construct mock MP4 container with dfLa box carrying authentic STREAMINFO
+        const streamInfoData = createMockStreamInfo({
+            sampleRate: 48000,
+            channels: 2,
+            bitsPerSample: 24,
+            totalSamples: BigInt(5000000),
+        });
+
+        // dfLa box: 4B size, 4B 'dfLa', 4B version/flags, 4B meta header (0x00 blockType=STREAMINFO, 34B len), 34B data
+        const metaBlockHeader = Buffer.from([0x00, 0x00, 0x00, 34]);
+        const dfLaPayload = Buffer.concat([metaBlockHeader, streamInfoData]);
+        const dfLaBox = Buffer.concat([
+            Buffer.from([0, 0, 0, 4 + 4 + 4 + dfLaPayload.length]),
+            Buffer.from('dfLa', 'ascii'),
+            Buffer.from([0, 0, 0, 0]),
+            dfLaPayload,
+        ]);
+        const initSegment = Buffer.concat([Buffer.alloc(16), dfLaBox]);
+
+        const verified = verifyFlacInitSegment(initSegment, {
+            id: 'FLAC_HIRES,48000,24',
+            codecs: 'flac',
+            mimeType: 'audio/mp4',
+            bandwidth: 1792546,
+            audioSamplingRate: 48000,
+            bitDepth: 24,
+        });
+
+        expect(verified.sampleRate).toBe(48000);
+        expect(verified.channels).toBe(2);
+        expect(verified.bitsPerSample).toBe(24);
+        expect(verified.isHiRes).toBe(true);
+        expect(verified.flacHeader.subarray(0, 4).toString('ascii')).toBe('fLaC');
+        // Last metadata block flag should be set
+        expect(verified.flacHeader[4] & 0x80).toBe(0x80);
+    });
+
+    it('throws error when STREAMINFO does not match expected representation', () => {
+        const streamInfoData = createMockStreamInfo({
+            sampleRate: 44100,
+            channels: 2,
+            bitsPerSample: 16,
+        });
+
+        const metaBlockHeader = Buffer.from([0x00, 0x00, 0x00, 34]);
+        const dfLaPayload = Buffer.concat([metaBlockHeader, streamInfoData]);
+        const dfLaBox = Buffer.concat([
+            Buffer.from([0, 0, 0, 4 + 4 + 4 + dfLaPayload.length]),
+            Buffer.from('dfLa', 'ascii'),
+            Buffer.from([0, 0, 0, 0]),
+            dfLaPayload,
+        ]);
+        const initSegment = Buffer.concat([Buffer.alloc(16), dfLaBox]);
+
+        expect(() => {
+            verifyFlacInitSegment(initSegment, {
+                id: 'FLAC_HIRES,48000,24',
+                codecs: 'flac',
+                mimeType: 'audio/mp4',
+                bandwidth: 1792546,
+                audioSamplingRate: 48000,
+                bitDepth: 24,
+            });
+        }).toThrow(/sample rate/i);
+    });
+
+    it('verifies media segments contain genuine FLAC frame sync codes (0xFFF8/0xFFF9)', () => {
+        // Valid FLAC frame sync code 0xFFF8
+        const validFlacFrame = Buffer.from([0xff, 0xf8, 0x12, 0x34, 0x56, 0x78]);
+        const validMdat = Buffer.concat([
+            Buffer.from([0, 0, 0, 8 + validFlacFrame.length]),
+            Buffer.from('mdat', 'ascii'),
+            validFlacFrame,
+        ]);
+
+        const verified = verifyFlacMediaSegment(validMdat, 1);
+        expect(verified).toEqual(validFlacFrame);
+
+        // Corrupted media data without FLAC sync code
+        const fakeAudioData = Buffer.from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55]);
+        const fakeMdat = Buffer.concat([
+            Buffer.from([0, 0, 0, 8 + fakeAudioData.length]),
+            Buffer.from('mdat', 'ascii'),
+            fakeAudioData,
+        ]);
+
+        expect(() => {
+            verifyFlacMediaSegment(fakeMdat, 1);
+        }).toThrow(/does not correspond to genuine FLAC frame/i);
+    });
+
     it('extracts lossless FLAC header from MP4 dfLa box without FFmpeg', () => {
-        // Construct mock MP4 container with dfLa box
         const ftyp = Buffer.from([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x36, 0, 0, 0, 0]);
         const flacMetadataPayload = Buffer.concat([
             Buffer.from('fLaC', 'ascii'),
-            Buffer.alloc(38, 0x42), // Mock 38-byte STREAMINFO block
+            Buffer.alloc(38, 0x42),
         ]);
         const dfLaBox = Buffer.concat([
             Buffer.from([0, 0, 0, 4 + 4 + 4 + flacMetadataPayload.length]),
             Buffer.from('dfLa', 'ascii'),
-            Buffer.from([0, 0, 0, 0]), // version + flags (4 bytes)
+            Buffer.from([0, 0, 0, 0]),
             flacMetadataPayload,
         ]);
         const initSegment = Buffer.concat([ftyp, dfLaBox]);

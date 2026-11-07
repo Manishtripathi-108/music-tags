@@ -9,6 +9,16 @@ export interface DashSegmentTimelineItem {
     timeOffset?: number;
 }
 
+export interface DashRepresentationInfo {
+    id: string;
+    codecs: string;
+    mimeType: string;
+    bandwidth: number;
+    audioSamplingRate?: number;
+    channels?: number;
+    bitDepth?: number;
+}
+
 export interface DashManifestInfo {
     timescale: number;
     startNumber: number;
@@ -17,6 +27,18 @@ export interface DashManifestInfo {
     initUrl: string;
     mediaUrlTemplate: string;
     segmentNumbers: number[];
+    selectedRepresentation: DashRepresentationInfo;
+    allRepresentations: DashRepresentationInfo[];
+}
+
+export interface VerifiedFlacInfo {
+    flacHeader: Buffer;
+    sampleRate: number;
+    channels: number;
+    bitsPerSample: number;
+    totalSamples: bigint;
+    md5: string;
+    isHiRes: boolean;
 }
 
 /**
@@ -53,46 +75,154 @@ export function isDashManifest(urlOrContent: string, contentType?: string): bool
 }
 
 /**
- * Parses an MPEG-DASH MPD XML document and extracts audio initialization & media segment URLs.
+ * Scores a DASH representation to prioritize genuine TIDAL Hi-Res FLAC streams.
+ */
+function scoreRepresentation(rep: DashRepresentationInfo): number {
+    let score = 0;
+    const codecs = rep.codecs.toLowerCase();
+    const id = rep.id.toUpperCase();
+    const isFlac = codecs.includes('flac') || rep.mimeType.toLowerCase().includes('flac') || id.includes('FLAC');
+
+    if (isFlac) {
+        score += 100000000;
+        if (id.includes('HIRES') || (rep.bitDepth && rep.bitDepth > 16) || (rep.audioSamplingRate && rep.audioSamplingRate > 44100)) {
+            score += 50000000;
+        }
+    }
+    if (rep.bitDepth) {
+        score += rep.bitDepth * 100000;
+    }
+    if (rep.audioSamplingRate) {
+        score += rep.audioSamplingRate;
+    }
+    if (rep.bandwidth) {
+        score += rep.bandwidth;
+    }
+    return score;
+}
+
+/**
+ * Parses all representations in an MPEG-DASH MPD XML document and returns details for each.
+ */
+export function parseRepresentations(manifestXml: string): DashRepresentationInfo[] {
+    const reps: DashRepresentationInfo[] = [];
+    const repRegex = /<Representation\b([^>]*?)(\/>|>([\s\S]*?)<\/Representation>)/gi;
+    let match: RegExpExecArray | null;
+
+    // Detect parent AdaptationSet mimeType or codecs as fallbacks
+    const adaptMatch = manifestXml.match(/<AdaptationSet\b([^>]+)>/i);
+    const adaptAttrs = adaptMatch ? adaptMatch[1] : '';
+    const adaptMime = (adaptAttrs.match(/mimeType="([^"]+)"/i)?.[1] || 'audio/mp4').toLowerCase();
+    const adaptCodecs = (adaptAttrs.match(/codecs="([^"]+)"/i)?.[1] || '').toLowerCase();
+
+    while ((match = repRegex.exec(manifestXml)) !== null) {
+        const attrs = match[1];
+        const idMatch = attrs.match(/id="([^"]+)"/i);
+        const id = idMatch ? idMatch[1] : 'default';
+
+        const codecsMatch = attrs.match(/codecs="([^"]+)"/i);
+        const codecs = (codecsMatch ? codecsMatch[1] : adaptCodecs || 'flac').toLowerCase();
+
+        const mimeMatch = attrs.match(/mimeType="([^"]+)"/i);
+        const mimeType = (mimeMatch ? mimeMatch[1] : adaptMime).toLowerCase();
+
+        const bwMatch = attrs.match(/bandwidth="([^"]+)"/i);
+        const bandwidth = bwMatch ? parseInt(bwMatch[1], 10) : 0;
+
+        const rateMatch = attrs.match(/audioSamplingRate="([^"]+)"/i);
+        const audioSamplingRate = rateMatch ? parseInt(rateMatch[1], 10) : undefined;
+
+        // Determine bit depth from id pattern (e.g. FLAC_HIRES,48000,24) or bitDepth attribute
+        let bitDepth: number | undefined;
+        const bitDepthAttr = attrs.match(/bitDepth="([^"]+)"/i);
+        if (bitDepthAttr) {
+            bitDepth = parseInt(bitDepthAttr[1], 10);
+        } else {
+            const idPartsMatch = id.match(/,(\d{2})$/);
+            if (idPartsMatch) {
+                bitDepth = parseInt(idPartsMatch[1], 10);
+            }
+        }
+
+        reps.push({
+            id,
+            codecs,
+            mimeType,
+            bandwidth,
+            audioSamplingRate,
+            bitDepth,
+        });
+    }
+
+    return reps;
+}
+
+/**
+ * Parses an MPEG-DASH MPD XML document, verifies and selects the genuine FLAC representation,
+ * and extracts initialization & media segment URLs with $RepresentationID$ replacement.
  */
 export function parseDashMpd(manifestXml: string, manifestBaseUrl: string): DashManifestInfo {
-    // 1. Locate Representation tag
-    const repMatch = manifestXml.match(/<Representation\b([^>]+)>/i);
-    const repAttrs = repMatch ? repMatch[1] : '';
+    const allRepresentations = parseRepresentations(manifestXml);
 
-    const codecsMatch = repAttrs.match(/codecs="([^"]+)"/i);
-    const codecs = codecsMatch ? codecsMatch[1].toLowerCase() : 'flac';
+    if (allRepresentations.length === 0) {
+        // Fallback for minimalist manifests without full <Representation> tags
+        const repMatch = manifestXml.match(/<Representation\b([^>]+)>/i);
+        const repAttrs = repMatch ? repMatch[1] : '';
+        const codecsMatch = repAttrs.match(/codecs="([^"]+)"/i);
+        const codecs = codecsMatch ? codecsMatch[1].toLowerCase() : 'flac';
+        const mimeMatch = manifestXml.match(/mimeType="([^"]+)"/i);
+        const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : 'audio/mp4';
 
-    const mimeMatch = manifestXml.match(/mimeType="([^"]+)"/i);
-    const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : 'audio/mp4';
-
-    // 2. Locate SegmentTemplate
-    const templateMatch = manifestXml.match(/<SegmentTemplate\b([^>]+)>/i);
-    if (!templateMatch) {
-        throw new Error('MPEG-DASH manifest is missing <SegmentTemplate>');
+        allRepresentations.push({
+            id: '1',
+            codecs,
+            mimeType,
+            bandwidth: 1411200,
+        });
     }
-    const templateAttrs = templateMatch[1];
+
+    // Select the highest-priority genuine FLAC representation
+    const sortedReps = [...allRepresentations].sort((a, b) => scoreRepresentation(b) - scoreRepresentation(a));
+    const selectedRepresentation = sortedReps[0];
+
+    // Locate SegmentTemplate (check representation-specific or adaptation-set level)
+    let templateAttrs = '';
+    const repSpecificMatch = new RegExp(
+        `<Representation\\b[^>]*id="${selectedRepresentation.id}"[^>]*>[\\s\\S]*?<SegmentTemplate\\b([^>]+)>`,
+        'i'
+    ).exec(manifestXml);
+
+    if (repSpecificMatch) {
+        templateAttrs = repSpecificMatch[1];
+    } else {
+        const generalTemplateMatch = manifestXml.match(/<SegmentTemplate\b([^>]+)>/i);
+        if (generalTemplateMatch) {
+            templateAttrs = generalTemplateMatch[1];
+        } else {
+            throw new Error('MPEG-DASH manifest is missing <SegmentTemplate>');
+        }
+    }
 
     const initMatch = templateAttrs.match(/initialization="([^"]+)"/i);
     if (!initMatch) {
         throw new Error('MPEG-DASH <SegmentTemplate> missing initialization attribute');
     }
-    const rawInit = unescapeXml(initMatch[1]);
+    const rawInit = unescapeXml(initMatch[1]).replace(/\$RepresentationID\$/g, selectedRepresentation.id);
     const initUrl = new URL(rawInit, manifestBaseUrl).toString();
 
     const mediaMatch = templateAttrs.match(/media="([^"]+)"/i);
     if (!mediaMatch) {
         throw new Error('MPEG-DASH <SegmentTemplate> missing media attribute');
     }
-    const rawMedia = unescapeXml(mediaMatch[1]);
+    const rawMedia = unescapeXml(mediaMatch[1]).replace(/\$RepresentationID\$/g, selectedRepresentation.id);
 
     const startNumMatch = templateAttrs.match(/startNumber="([^"]+)"/i);
     const startNumber = startNumMatch ? parseInt(startNumMatch[1], 10) : 1;
 
     const timescaleMatch = templateAttrs.match(/timescale="([^"]+)"/i);
-    const timescale = timescaleMatch ? parseInt(timescaleMatch[1], 10) : 48000;
+    const timescale = timescaleMatch ? parseInt(timescaleMatch[1], 10) : (selectedRepresentation.audioSamplingRate || 48000);
 
-    // 3. Parse SegmentTimeline
+    // Parse SegmentTimeline
     const timelineMatch = manifestXml.match(/<SegmentTimeline\b[^>]*>([\s\S]*?)<\/SegmentTimeline>/i);
     const segmentNumbers: number[] = [];
 
@@ -103,9 +233,7 @@ export function parseDashMpd(manifestXml: string, manifestBaseUrl: string): Dash
 
         while ((sMatch = sRegex.exec(timelineMatch[1])) !== null) {
             const attrs = sMatch[1];
-            const dMatch = attrs.match(/d="([^"]+)"/i);
             const rMatch = attrs.match(/r="([^"]+)"/i);
-            const duration = dMatch ? parseInt(dMatch[1], 10) : 0;
             const repeat = rMatch ? parseInt(rMatch[1], 10) : 0;
 
             const count = 1 + repeat;
@@ -137,11 +265,13 @@ export function parseDashMpd(manifestXml: string, manifestBaseUrl: string): Dash
     return {
         timescale,
         startNumber,
-        codecs,
-        mimeType,
+        codecs: selectedRepresentation.codecs,
+        mimeType: selectedRepresentation.mimeType,
         initUrl,
         mediaUrlTemplate: rawMedia,
         segmentNumbers,
+        selectedRepresentation,
+        allRepresentations,
     };
 }
 
@@ -153,62 +283,6 @@ export function buildSegmentUrl(mediaTemplate: string, num: number, baseUrl: str
         .replace(/\$Number%0(\d+)d\$/g, (_, width) => String(num).padStart(parseInt(width, 10), '0'))
         .replace(/\$Number\$/g, String(num));
     return new URL(formatted, baseUrl).toString();
-}
-
-/**
- * Executes FFmpeg to remux or copy audio from temporary container into destination audio file.
- */
-export async function remuxWithFfmpeg(inputPath: string, outputPath: string, codec = 'flac'): Promise<void> {
-    const isFlac = codec.toLowerCase().includes('flac');
-
-    // 1. First attempt bitstream copy (-c:a copy)
-    const copyArgs = ['-v', 'error', '-y', '-i', inputPath, '-c:a', 'copy', outputPath];
-    const copySuccess = await new Promise<boolean>((resolve) => {
-        const child = spawn('ffmpeg', copyArgs, { shell: false, windowsHide: true });
-        const timer = setTimeout(() => {
-            child.kill();
-            resolve(false);
-        }, 30000);
-
-        child.on('close', (code) => {
-            clearTimeout(timer);
-            resolve(code === 0 && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1024);
-        });
-        child.on('error', () => {
-            clearTimeout(timer);
-            resolve(false);
-        });
-    });
-
-    if (copySuccess) {
-        return;
-    }
-
-    // 2. Fallback: Remux/re-encode to target container/codec
-    const fallbackArgs = isFlac
-        ? ['-v', 'error', '-y', '-i', inputPath, '-c:a', 'flac', outputPath]
-        : ['-v', 'error', '-y', '-i', inputPath, outputPath];
-
-    const fallbackSuccess = await new Promise<boolean>((resolve) => {
-        const child = spawn('ffmpeg', fallbackArgs, { shell: false, windowsHide: true });
-        const timer = setTimeout(() => {
-            child.kill();
-            resolve(false);
-        }, 60000);
-
-        child.on('close', (code) => {
-            clearTimeout(timer);
-            resolve(code === 0 && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1024);
-        });
-        child.on('error', () => {
-            clearTimeout(timer);
-            resolve(false);
-        });
-    });
-
-    if (!fallbackSuccess) {
-        throw new Error('FFmpeg failed to remux downloaded MPEG-DASH audio stream into final audio file');
-    }
 }
 
 /**
@@ -229,6 +303,119 @@ export function extractFlacHeaderFromInitSegment(initSegment: Buffer): Buffer | 
         }
     }
     return null;
+}
+
+/**
+ * Verifies that the downloaded initialization segment corresponds to the genuine FLAC representation.
+ * Unpacks and verifies STREAMINFO parameters (sample rate, bit depth, channels) against expected specs.
+ */
+export function verifyFlacInitSegment(
+    initSegment: Buffer,
+    expectedRep?: DashRepresentationInfo
+): VerifiedFlacInfo {
+    const dflaIndex = initSegment.indexOf(Buffer.from('dfLa', 'ascii'));
+    if (dflaIndex === -1 || dflaIndex < 4) {
+        throw new Error('Downloaded initialization segment does not contain a valid dfLa (FLAC) box. Not a genuine FLAC stream.');
+    }
+
+    let boxSize = initSegment.readUInt32BE(dflaIndex - 4);
+    let contentStart = dflaIndex + 8; // skip 'dfLa' (4B), version (1B), flags (3B)
+    let contentEnd = dflaIndex - 4 + boxSize;
+    if (boxSize === 0) {
+        contentEnd = initSegment.length;
+    } else if (boxSize === 1 && dflaIndex + 12 <= initSegment.length) {
+        boxSize = Number(initSegment.readBigUInt64BE(dflaIndex + 4));
+        contentStart = dflaIndex + 16;
+        contentEnd = dflaIndex - 4 + boxSize;
+    }
+    contentEnd = Math.min(contentEnd, initSegment.length);
+    if (contentStart >= contentEnd) {
+        throw new Error('Malformed dfLa box boundary in initialization segment.');
+    }
+
+    const dflaPayload = initSegment.subarray(contentStart, contentEnd);
+    let metaOffset = 0;
+    if (dflaPayload.subarray(0, 4).toString('ascii') === 'fLaC') {
+        metaOffset = 4;
+    }
+
+    if (dflaPayload.length < metaOffset + 4) {
+        throw new Error('Missing FLAC metadata block header in initialization segment.');
+    }
+
+    // Inspect first metadata block: must be STREAMINFO (blockType 0)
+    const blockHeader = dflaPayload[metaOffset];
+    const blockType = blockHeader & 0x7f;
+    const blockLen =
+        (dflaPayload[metaOffset + 1] << 16) |
+        (dflaPayload[metaOffset + 2] << 8) |
+        dflaPayload[metaOffset + 3];
+
+    if (blockType !== 0 || blockLen < 34 || dflaPayload.length < metaOffset + 4 + blockLen) {
+        throw new Error('Corrupted or missing FLAC STREAMINFO metadata block in initialization segment.');
+    }
+
+    const streamInfoData = dflaPayload.subarray(metaOffset + 4, metaOffset + 4 + blockLen);
+
+    // Unpack STREAMINFO fields according to FLAC specification:
+    // bytes 10-17: 20-bit sample rate, 3-bit channels-1, 5-bit bits_per_sample-1, 36-bit total samples
+    const b10 = streamInfoData[10];
+    const b11 = streamInfoData[11];
+    const b12 = streamInfoData[12];
+    const b13 = streamInfoData[13];
+
+    const sampleRate = (b10 << 12) | (b11 << 4) | (b12 >> 4);
+    const channels = ((b12 >> 1) & 0x07) + 1;
+    const bitsPerSample = (((b12 & 0x01) << 4) | (b13 >> 4)) + 1;
+    const totalSamples =
+        (BigInt(b13 & 0x0f) << BigInt(32)) |
+        (BigInt(streamInfoData[14]) << BigInt(24)) |
+        (BigInt(streamInfoData[15]) << BigInt(16)) |
+        (BigInt(streamInfoData[16]) << BigInt(8)) |
+        BigInt(streamInfoData[17]);
+    const md5 = streamInfoData.subarray(18, 34).toString('hex');
+
+    // Basic validity checks
+    if (sampleRate < 8000 || sampleRate > 384000) {
+        throw new Error(`Invalid FLAC sample rate: ${sampleRate} Hz`);
+    }
+    if (channels < 1 || channels > 8) {
+        throw new Error(`Invalid FLAC channel count: ${channels}`);
+    }
+    if (bitsPerSample < 8 || bitsPerSample > 32) {
+        throw new Error(`Invalid FLAC bit depth: ${bitsPerSample}-bit`);
+    }
+
+    // Verify against expected representation from DASH MPD
+    if (expectedRep) {
+        if (expectedRep.audioSamplingRate && expectedRep.audioSamplingRate !== sampleRate) {
+            throw new Error(
+                `Initialization segment sample rate (${sampleRate} Hz) does not match MPD representation (${expectedRep.audioSamplingRate} Hz)`
+            );
+        }
+        if (expectedRep.bitDepth && expectedRep.bitDepth !== bitsPerSample) {
+            throw new Error(
+                `Initialization segment bit depth (${bitsPerSample}-bit) does not match MPD representation (${expectedRep.bitDepth}-bit)`
+            );
+        }
+    }
+
+    // Ensure the last-metadata-block flag (0x80) is set so audio players know frames begin next
+    const headerCopy = Buffer.from(dflaPayload.subarray(metaOffset));
+    headerCopy[0] |= 0x80;
+
+    const flacHeader = Buffer.concat([Buffer.from('fLaC', 'ascii'), headerCopy]);
+    const isHiRes = bitsPerSample > 16 || sampleRate > 44100;
+
+    return {
+        flacHeader,
+        sampleRate,
+        channels,
+        bitsPerSample,
+        totalSamples,
+        md5,
+        isHiRes,
+    };
 }
 
 /**
@@ -261,21 +448,86 @@ export function extractMdatPayload(segment: Buffer): Buffer {
 }
 
 /**
+ * Verifies that a downloaded media segment contains genuine FLAC frame data (sync code 0xFFF8 / 0xFFF9).
+ * Returns the raw verified FLAC audio frames buffer.
+ */
+export function verifyFlacMediaSegment(segment: Buffer, segNum = 1): Buffer {
+    const rawFrames = extractMdatPayload(segment);
+    if (!rawFrames || rawFrames.length === 0) {
+        throw new Error(`Media segment ${segNum} contains no audio data (mdat box is empty)`);
+    }
+
+    // Verify FLAC frame sync code: 14 bits 11111111 111110 (0xFF followed by 0xF8 or 0xF9)
+    let syncFound = false;
+    const searchLimit = Math.min(rawFrames.length - 1, 64);
+    for (let i = 0; i < searchLimit; i++) {
+        if (rawFrames[i] === 0xff && (rawFrames[i + 1] & 0xfe) === 0xf8) {
+            syncFound = true;
+            break;
+        }
+    }
+
+    if (!syncFound) {
+        throw new Error(
+            `Media segment ${segNum} data does not correspond to genuine FLAC frame (missing 0xFFF8/0xFFF9 sync word)`
+        );
+    }
+
+    return rawFrames;
+}
+
+/**
  * Extracts pure FLAC stream from DASH segments without FFmpeg or re-encoding.
  */
 export function extractFlacFromDashSegments(initSegment: Buffer, mediaSegments: Buffer[]): Buffer {
     const header = extractFlacHeaderFromInitSegment(initSegment);
     if (!header) {
-        // Fallback: concatenate container segments as-is
         return Buffer.concat([initSegment, ...mediaSegments]);
     }
-    const frames = mediaSegments.map((seg) => extractMdatPayload(seg));
+    const frames = mediaSegments.map((seg, idx) => {
+        try {
+            return verifyFlacMediaSegment(seg, idx + 1);
+        } catch {
+            return extractMdatPayload(seg);
+        }
+    });
     return Buffer.concat([header, ...frames]);
 }
 
 /**
- * Downloads all segments of an MPEG-DASH audio stream and losslessly writes the final audio file
- * without using FFmpeg and without re-encoding the stream.
+ * Helper to generate mock STREAMINFO payload for testing purposes.
+ */
+export function createMockStreamInfo({
+    sampleRate = 48000,
+    channels = 2,
+    bitsPerSample = 24,
+    totalSamples = BigInt(7400000),
+}: {
+    sampleRate?: number;
+    channels?: number;
+    bitsPerSample?: number;
+    totalSamples?: bigint;
+} = {}): Buffer {
+    const data = Buffer.alloc(34, 0);
+    data.writeUInt16BE(4096, 0);
+    data.writeUInt16BE(4096, 2);
+    data.writeUIntBE(14, 4, 3);
+    data.writeUIntBE(14000, 7, 3);
+
+    const chVal = (channels - 1) & 0x07;
+    const bpsVal = (bitsPerSample - 1) & 0x1f;
+    data[10] = (sampleRate >> 12) & 0xff;
+    data[11] = (sampleRate >> 4) & 0xff;
+    data[12] = ((sampleRate & 0x0f) << 4) | (chVal << 1) | ((bpsVal >> 4) & 0x01);
+    data[13] = ((bpsVal & 0x0f) << 4) | Number((totalSamples >> BigInt(32)) & BigInt(0x0f));
+    data.writeUInt32BE(Number(totalSamples & BigInt(0xffffffff)), 14);
+    Buffer.from('0123456789abcdef0123456789abcdef', 'hex').copy(data, 18);
+    return data;
+}
+
+/**
+ * Downloads all segments of an MPEG-DASH audio stream and losslessly writes the final genuine FLAC file
+ * verifying representation authenticity, with zero FFmpeg re-encoding.
  */
 export async function downloadDashAudioStream({
     manifestXml,
@@ -310,7 +562,7 @@ export async function downloadDashAudioStream({
 
     try {
         // 1. Download Initialization Segment (0.mp4)
-        console.log(`[DASH:DOWNLOAD] Fetching init segment: ${info.initUrl}`);
+        console.log(`[DASH:DOWNLOAD] Fetching init segment: ${info.initUrl} (Selected Representation: ${info.selectedRepresentation.id})`);
         const initRes = await loggedFetch(
             info.initUrl,
             {
@@ -332,14 +584,14 @@ export async function downloadDashAudioStream({
 
         let extractAsFlac = false;
         if (isFlac) {
-            const flacHeader = extractFlacHeaderFromInitSegment(initBuffer);
-            if (flacHeader) {
-                console.log(`[DASH:DOWNLOAD] Direct lossless FLAC extraction enabled (no FFmpeg re-encoding)`);
-                writeStream.write(flacHeader);
-                extractAsFlac = true;
-            } else {
-                writeStream.write(initBuffer);
-            }
+            // Verify init segment against MPD representation
+            const verified = verifyFlacInitSegment(initBuffer, info.selectedRepresentation);
+            console.log(
+                `[DASH:VERIFY] Verified genuine TIDAL ${verified.isHiRes ? 'Hi-Res ' : ''}FLAC representation: ` +
+                `${verified.bitsPerSample}-bit / ${verified.sampleRate} Hz, ${verified.channels} ch (Representation ID: ${info.selectedRepresentation.id})`
+            );
+            writeStream.write(verified.flacHeader);
+            extractAsFlac = true;
         } else {
             writeStream.write(initBuffer);
         }
@@ -398,8 +650,9 @@ export async function downloadDashAudioStream({
 
             for (const res of results) {
                 if (extractAsFlac) {
-                    const rawFrames = extractMdatPayload(res.buf);
-                    writeStream.write(rawFrames);
+                    // Verify FLAC frame sync code in media segment
+                    const verifiedFrames = verifyFlacMediaSegment(res.buf, res.num);
+                    writeStream.write(verifiedFrames);
                 } else {
                     writeStream.write(res.buf);
                 }
@@ -414,7 +667,7 @@ export async function downloadDashAudioStream({
             writeStream.on('error', reject);
         });
 
-        // Rename temp file to destination path directly (zero FFmpeg, bit-perfect lossless stream)
+        // Rename temp file to destination path directly (zero FFmpeg, verified bit-perfect lossless stream)
         if (fs.existsSync(destinationPath)) {
             try {
                 fs.unlinkSync(destinationPath);
