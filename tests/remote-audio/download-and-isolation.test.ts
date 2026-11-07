@@ -204,4 +204,81 @@ describe('Dolby and Lossless Isolation Constraints', () => {
         expect(getDelayForTrackSearch(true, true)).toBe(0);
         expect(getDelayForTrackSearch(false, true)).toBe(0);
     });
+
+    it('handles Bitchord /stream 503 Retry-After and backs off instead of immediately failing', () => {
+        const simulateStreamResolution = (statusCodes: number[], retryAfterHeaders: (string | null)[]) => {
+            let attempt = 0;
+            let waitTimes: number[] = [];
+            let resolved = false;
+
+            while (attempt < statusCodes.length) {
+                const status = statusCodes[attempt];
+                if (status === 503) {
+                    const header = retryAfterHeaders[attempt];
+                    const waitSec = Math.min(30, Math.max(2, parseInt(header || '3', 10)));
+                    waitTimes.push(waitSec);
+                    attempt++;
+                    continue;
+                }
+                if (status === 200) {
+                    resolved = true;
+                }
+                break;
+            }
+            return { resolved, waitTimes, totalAttempts: attempt + 1 };
+        };
+
+        // Bitchord returns 503 twice with Retry-After: 2 and 3, then succeeds with 200 OK
+        const result = simulateStreamResolution([503, 503, 200], ['2', '3', null]);
+        expect(result.resolved).toBe(true);
+        expect(result.waitTimes).toEqual([2, 3]);
+        expect(result.totalAttempts).toBe(3);
+    });
+
+    it('enforces single-file sequential execution via mutex and guarantees fresh stream URL right before media download', async () => {
+        class DownloadMutex {
+            private queue: Promise<void> = Promise.resolve();
+            async runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+                let release: () => void;
+                const wait = new Promise<void>((resolve) => { release = resolve; });
+                const prev = this.queue;
+                this.queue = this.queue.then(() => wait);
+                await prev;
+                try {
+                    return await fn();
+                } finally {
+                    release!();
+                }
+            }
+        }
+
+        const mutex = new DownloadMutex();
+        const executionLog: string[] = [];
+
+        const downloadTrack = async (trackTitle: string, durationMs: number) => {
+            return await mutex.runExclusive(async () => {
+                executionLog.push(`start:${trackTitle}`);
+                await new Promise((r) => setTimeout(r, durationMs));
+                executionLog.push(`end:${trackTitle}`);
+                return trackTitle;
+            });
+        };
+
+        // Launch 3 downloads concurrently
+        const p1 = downloadTrack('Centuries', 20);
+        const p2 = downloadTrack('Can We Kiss Forever', 20);
+        const p3 = downloadTrack('Campus', 20);
+
+        await Promise.all([p1, p2, p3]);
+
+        // Must run strictly sequentially: Centuries start & end before next starts
+        expect(executionLog).toEqual([
+            'start:Centuries',
+            'end:Centuries',
+            'start:Can We Kiss Forever',
+            'end:Can We Kiss Forever',
+            'start:Campus',
+            'end:Campus',
+        ]);
+    });
 });

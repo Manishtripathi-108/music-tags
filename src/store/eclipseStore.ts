@@ -758,7 +758,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 addonUrl,
                 action: 'download',
                 id: track.id,
-                streamUrl: track.streamURL,
+                // Do not pass stale streamUrl because download links expire; always resolve fresh just before downloading
                 isrc: track.isrc,
                 trackFilename: `${track.artist} - ${track.title}`,
                 format: track.format,
@@ -785,7 +785,6 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                             addonUrl,
                             action: 'download',
                             id: track.id,
-                            streamUrl: track.streamURL,
                             isrc: track.isrc,
                             trackFilename: `${track.artist} - ${track.title}`,
                             format: track.format,

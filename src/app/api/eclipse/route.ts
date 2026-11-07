@@ -117,6 +117,26 @@ function sanitizeFilename(name: string): string {
     return name.replace(/[/\\?%*:|"<>]/g, '_').trim();
 }
 
+class EclipseDownloadMutex {
+    private queue: Promise<void> = Promise.resolve();
+
+    async runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+        let release: () => void;
+        const wait = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const prev = this.queue;
+        this.queue = this.queue.then(() => wait);
+        await prev;
+        try {
+            return await fn();
+        } finally {
+            release!();
+        }
+    }
+}
+const eclipseDownloadMutex = new EclipseDownloadMutex();
+
 function getFetchHeaders(customHeaders?: Record<string, string>, extraAccept = 'application/json'): Record<string, string> {
     const headers: Record<string, string> = {
         Accept: extraAccept,
@@ -481,75 +501,115 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 return NextResponse.json({ error: 'Missing destination downloadDirectory' }, { status: 400 });
             }
 
-            // Either streamUrl was directly provided (Eclipse direct URL bypass) or resolve it from /stream/:id
-            let finalMediaUrl: string | undefined = body.streamUrl;
-            let format: string = body.format || 'flac';
+            return await eclipseDownloadMutex.runExclusive(async () => {
+                let finalMediaUrl: string | undefined;
+                let format: string = body.format || 'flac';
 
-            if (!finalMediaUrl) {
-                if (!id) {
-                    return NextResponse.json({ error: 'Missing track id or streamUrl for download' }, { status: 400 });
+                // "download link expires so only fetch just before downloading"
+                // Always resolve fresh stream URL from addon right before downloading
+                const resolveStream = async (): Promise<EclipseStreamResponse> => {
+                    if (body.streamUrl && !id) {
+                        return { url: body.streamUrl, format };
+                    }
+                    if (!id) {
+                        throw new Error('Missing track id for stream resolution');
+                    }
+                    const streamUrl = buildUrlWithSettings(normalizedAddonUrl, `stream/${encodeURIComponent(id)}`, settings);
+                    let maxRetries = 5;
+                    let lastRes: Response | null = null;
+                    while (maxRetries > 0) {
+                        lastRes = await fetch(streamUrl.toString(), {
+                            headers: fetchHeaders,
+                            signal: AbortSignal.timeout(25000),
+                        });
+                        if (lastRes.status === 503) {
+                            const retryAfterHeader = lastRes.headers.get('Retry-After');
+                            const waitSec = Math.min(30, Math.max(2, parseInt(retryAfterHeader || '3', 10)));
+                            console.log(`[ECLIPSE:DOWNLOAD] 503 Retry-After: waiting ${waitSec}s (attempt ${6 - maxRetries}/5)...`);
+                            await new Promise((r) => setTimeout(r, waitSec * 1000));
+                            maxRetries--;
+                            continue;
+                        }
+                        break;
+                    }
+                    if (!lastRes || !lastRes.ok) {
+                        const err = lastRes
+                            ? await extractAddonErrorMessage(lastRes, `stream/${id}`)
+                            : { error: 'Stream request timed out', notice: null };
+                        throw new Error(err.error);
+                    }
+                    return await lastRes.json();
+                };
+
+                let streamInfo: EclipseStreamResponse;
+                try {
+                    streamInfo = await resolveStream();
+                    finalMediaUrl = streamInfo.url;
+                    format = streamInfo.container || streamInfo.format || streamInfo.codec || format;
+                } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : 'Failed to resolve stream';
+                    return NextResponse.json({ error: msg }, { status: 502 });
                 }
-                const streamUrl = buildUrlWithSettings(normalizedAddonUrl, `stream/${encodeURIComponent(id)}`, settings);
-                const streamRes = await fetch(streamUrl.toString(), {
-                    headers: fetchHeaders,
-                    signal: AbortSignal.timeout(15000),
+
+                if (!finalMediaUrl) {
+                    return NextResponse.json({ error: 'Addon provided no playable audio URL' }, { status: 404 });
+                }
+
+                // Target directory
+                const targetDir = path.resolve(downloadDirectory);
+                if (!fs.existsSync(targetDir)) {
+                    fs.mkdirSync(targetDir, { recursive: true });
+                }
+
+                // File naming: strictly isrc or id and extension ("dont add metadata just name the file with its isrc and extension")
+                const baseName = sanitizeFilename(isrc || trackFilename || id || 'track');
+                const cleanExt = (format || 'flac').replace(/^\./, '').toLowerCase();
+                const fileName = `${baseName}.${cleanExt}`;
+                const destinationPath = path.join(targetDir, fileName);
+                const tempPath = path.join(targetDir, `${fileName}.part`);
+
+                // Download media stream immediately before link expires
+                let mediaRes = await fetch(finalMediaUrl, {
+                    headers: getFetchHeaders(customHeaders, '*/*'),
                 });
-                if (!streamRes.ok) {
-                    const err = await extractAddonErrorMessage(streamRes, `stream/${id}`);
-                    return NextResponse.json({ error: err.error, notice: err.notice }, { status: streamRes.status });
+
+                // If link expired or failed, immediately re-resolve fresh stream URL and retry once
+                if (!mediaRes.ok || !mediaRes.body) {
+                    console.warn(`[ECLIPSE:DOWNLOAD] Media download returned HTTP ${mediaRes.status}. Link may have expired. Re-fetching fresh stream URL...`);
+                    try {
+                        streamInfo = await resolveStream();
+                        finalMediaUrl = streamInfo.url;
+                        mediaRes = await fetch(finalMediaUrl, {
+                            headers: getFetchHeaders(customHeaders, '*/*'),
+                        });
+                    } catch {}
+                    if (!mediaRes.ok || !mediaRes.body) {
+                        const err = await extractAddonErrorMessage(mediaRes, 'audio stream download');
+                        return NextResponse.json({ error: err.error }, { status: mediaRes.status });
+                    }
                 }
-                const streamInfo: EclipseStreamResponse = await streamRes.json();
-                finalMediaUrl = streamInfo.url;
-                format = streamInfo.container || streamInfo.format || streamInfo.codec || format;
-            }
 
-            if (!finalMediaUrl) {
-                return NextResponse.json({ error: 'Addon provided no playable audio URL' }, { status: 404 });
-            }
+                const nodeStream = Readable.fromWeb(mediaRes.body as import('stream/web').ReadableStream);
+                const fileStream = fs.createWriteStream(tempPath);
+                await pipeline(nodeStream, fileStream);
 
-            // Target directory
-            const targetDir = path.resolve(downloadDirectory);
-            if (!fs.existsSync(targetDir)) {
-                fs.mkdirSync(targetDir, { recursive: true });
-            }
+                const stats = fs.statSync(tempPath);
+                if (stats.size < 1024) {
+                    try { fs.unlinkSync(tempPath); } catch {}
+                    return NextResponse.json({ error: 'Downloaded file corrupted or smaller than 1KB' }, { status: 502 });
+                }
 
-            // File naming: strictly isrc or id and extension ("dont add metadata just name the file with its isrc and extension")
-            const baseName = sanitizeFilename(isrc || trackFilename || id || 'track');
-            const cleanExt = (format || 'flac').replace(/^\./, '').toLowerCase();
-            const fileName = `${baseName}.${cleanExt}`;
-            const destinationPath = path.join(targetDir, fileName);
-            const tempPath = path.join(targetDir, `${fileName}.part`);
+                if (fs.existsSync(destinationPath)) {
+                    fs.unlinkSync(destinationPath);
+                }
+                fs.renameSync(tempPath, destinationPath);
 
-            // Download media stream
-            const mediaRes = await fetch(finalMediaUrl, {
-                headers: getFetchHeaders(customHeaders, '*/*'),
-            });
-
-            if (!mediaRes.ok || !mediaRes.body) {
-                const err = await extractAddonErrorMessage(mediaRes, 'audio stream download');
-                return NextResponse.json({ error: err.error }, { status: mediaRes.status });
-            }
-
-            const nodeStream = Readable.fromWeb(mediaRes.body as import('stream/web').ReadableStream);
-            const fileStream = fs.createWriteStream(tempPath);
-            await pipeline(nodeStream, fileStream);
-
-            const stats = fs.statSync(tempPath);
-            if (stats.size < 1024) {
-                try { fs.unlinkSync(tempPath); } catch {}
-                return NextResponse.json({ error: 'Downloaded file corrupted or smaller than 1KB' }, { status: 502 });
-            }
-
-            if (fs.existsSync(destinationPath)) {
-                fs.unlinkSync(destinationPath);
-            }
-            fs.renameSync(tempPath, destinationPath);
-
-            return NextResponse.json({
-                success: true,
-                filePath: destinationPath,
-                fileName,
-                fileSize: stats.size,
+                return NextResponse.json({
+                    success: true,
+                    filePath: destinationPath,
+                    fileName,
+                    fileSize: stats.size,
+                });
             });
         }
 

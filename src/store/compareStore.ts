@@ -108,6 +108,27 @@ let activeDownloadAbort: AbortController | null = null;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const getStoredHeaders = (): Record<string, string> => {
+    if (typeof window === 'undefined') return {};
+    const headers: Record<string, string> = {};
+    try {
+        const raw = localStorage.getItem('eclipse_custom_headers');
+        if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+                for (const h of list) {
+                    if (h.enabled && h.key) headers[h.key.trim()] = h.value;
+                }
+            }
+        }
+        const token = localStorage.getItem('eclipse_access_token');
+        if (token && !headers['x-eclipse-access']) {
+            headers['x-eclipse-access'] = token;
+        }
+    } catch {}
+    return headers;
+};
+
 export const useCompareStore = create<CompareState>((set, get) => ({
     items: [],
     isLoading: false,
@@ -448,6 +469,11 @@ export const useCompareStore = create<CompareState>((set, get) => ({
     },
 
     startSequentialDownload: async (customList, options) => {
+        if (get().isDownloading) {
+            alert('A download is already in progress. Please wait for it to complete or stop it first.');
+            return;
+        }
+
         const { apiUrl, downloadDirectory, downloadMode, qualityPreference, atmosPreference, items, selectedIds } = get();
         if (!apiUrl) {
             alert('Please provide the API URL.');
@@ -546,6 +572,7 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                         quality: qualityPreference,
                         atmos: atmosPreference,
                         removeExisting: true,
+                        headers: getStoredHeaders(),
                     },
                     { signal: activeDownloadAbort.signal }
                 );
@@ -620,8 +647,9 @@ export const useCompareStore = create<CompareState>((set, get) => ({
             }
 
             // Polite delay between sequential downloads (only when more downloads remain)
+            // Allows bitchord addon sufficient time to release previous stream resources
             if (i < finalTargets.length - 1) {
-                await sleep(500);
+                await sleep(1500);
             }
         }
 
