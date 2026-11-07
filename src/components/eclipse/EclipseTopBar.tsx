@@ -18,11 +18,12 @@ export function EclipseTopBar() {
         connectAddon,
         manifest,
         connectionError,
+        headerEntries,
+        setIsHeadersModalOpen,
     } = useEclipseStore();
 
     const [inputUrl, setInputUrl] = useState(addonUrl);
     const [inputDir, setInputDir] = useState(downloadDirectory);
-    const [isConfigOpen, setIsConfigOpen] = useState(false);
 
     const handleConnect = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -30,6 +31,8 @@ export function EclipseTopBar() {
         setAddonUrl(inputUrl);
         await connectAddon(inputUrl);
     };
+
+    const activeHeadersCount = headerEntries.filter((h) => h.enabled && h.key.trim()).length;
 
     return (
         <header className="bg-background text-foreground flex flex-col border-b select-none">
@@ -63,14 +66,21 @@ export function EclipseTopBar() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/* Headers & Authentication Button */}
                     <Button
                         variant="outline"
                         size="xs"
-                        onClick={() => setIsConfigOpen(!isConfigOpen)}
-                        className={`h-7 gap-1 text-xs ${isConfigOpen ? 'border-primary text-primary' : ''}`}
+                        onClick={() => setIsHeadersModalOpen(true)}
+                        className="h-7 gap-1.5 text-xs font-mono"
+                        title="Configure custom HTTP headers (Authorization, X-API-Key, etc.)"
                     >
-                        <Icon icon="settings" className="size-3" />
-                        <span>Addon Config</span>
+                        <Icon icon="link" className="size-3 text-primary" />
+                        <span>Headers & Auth</span>
+                        {activeHeadersCount > 0 && (
+                            <span className="ml-1 rounded-full bg-primary/20 text-primary px-1.5 py-0.2 text-[10px] font-bold">
+                                {activeHeadersCount}
+                            </span>
+                        )}
                     </Button>
 
                     <ThemeToggler />
@@ -119,10 +129,30 @@ export function EclipseTopBar() {
                 </div>
             </div>
 
+            {/* Detailed Connection Error Notification */}
             {connectionError && (
-                <div className="bg-rose-500/10 border-t border-rose-500/30 px-3 py-1.5 text-xs text-rose-400 flex items-center gap-2 font-mono">
-                    <Icon icon="warning" className="size-3.5 text-rose-400 shrink-0" />
-                    <span>Connection failed: {connectionError}</span>
+                <div className="bg-rose-500/10 border-t border-rose-500/30 px-3 py-2 text-xs text-rose-300 flex items-start justify-between gap-3 font-mono">
+                    <div className="flex items-start gap-2">
+                        <Icon icon="warning" className="size-4 text-rose-400 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                            <span className="font-bold text-rose-200">Connection Failed:</span>
+                            <p className="text-foreground/90">{connectionError}</p>
+                            {(connectionError.includes('401') || connectionError.includes('403') || connectionError.toLowerCase().includes('token')) && (
+                                <p className="text-[11px] text-amber-300">
+                                    Tip: This addon may require authorization. Click &quot;Headers & Auth&quot; to configure your Bearer token or API key.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setIsHeadersModalOpen(true)}
+                        className="h-6 text-[11px] border-rose-500/40 text-rose-200 hover:bg-rose-500/20 shrink-0"
+                    >
+                        Headers & Auth
+                    </Button>
                 </div>
             )}
         </header>

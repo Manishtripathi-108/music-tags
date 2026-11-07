@@ -73,7 +73,22 @@ export function EclipseCatalogsView() {
                             )}
                         </div>
 
-                        {isLoading && items.length === 0 ? (
+                        {data?.error ? (
+                            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs font-mono text-rose-300 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                    <Icon icon="warning" className="size-4 text-rose-400 shrink-0" />
+                                    <span>Addon Error: {data.error}</span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="xs"
+                                    onClick={() => loadCatalog(cat.id, 0)}
+                                    className="h-6 text-[11px] border-rose-500/30 text-rose-200 hover:bg-rose-500/20"
+                                >
+                                    Retry
+                                </Button>
+                            </div>
+                        ) : isLoading && items.length === 0 ? (
                             <div className="p-6 text-center text-muted-foreground font-mono text-xs flex items-center justify-center gap-2">
                                 <Icon icon="loading" className="size-4 animate-spin text-primary" />
                                 <span>Loading shelf items...</span>

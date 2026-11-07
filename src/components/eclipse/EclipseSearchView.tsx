@@ -19,6 +19,7 @@ export function EclipseSearchView() {
         setSearchQuery,
         searchAddon,
         isSearching,
+        searchError,
         searchResults,
         searchFilter,
         setSearchFilter,
@@ -32,6 +33,7 @@ export function EclipseSearchView() {
         openArtist,
         openPlaylist,
         manifest,
+        setIsHeadersModalOpen,
     } = useEclipseStore();
 
     const [input, setInput] = useState(searchQuery);
@@ -119,6 +121,43 @@ export function EclipseSearchView() {
 
             {/* Results Content */}
             <div className="flex-1 overflow-auto p-4 space-y-6">
+                {searchError && (
+                    <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-lg p-3.5 flex flex-wrap items-start justify-between gap-3 text-xs font-mono">
+                        <div className="flex items-start gap-2.5">
+                            <Icon icon="warning" className="size-4 text-rose-400 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <span className="font-bold text-rose-200">Search Error Returned by Addon:</span>
+                                <div className="text-foreground/90">{searchError}</div>
+                                {(searchError.includes('401') || searchError.includes('403') || searchError.toLowerCase().includes('token') || searchError.toLowerCase().includes('auth')) && (
+                                    <p className="text-[11px] text-amber-300 pt-0.5">
+                                        This addon may require authorization headers. Click &quot;Configure Headers&quot; to provide your Bearer token or API key.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="xs"
+                                onClick={() => setIsHeadersModalOpen(true)}
+                                className="h-6 text-[11px] border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                            >
+                                <Icon icon="settings" className="size-3" />
+                                <span>Configure Headers</span>
+                            </Button>
+                            <Button
+                                variant="primary"
+                                size="xs"
+                                onClick={() => searchAddon()}
+                                className="h-6 text-[11px]"
+                            >
+                                Retry
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
                 {isSearching ? (
                     <div className="p-12 text-center text-muted-foreground font-mono text-xs flex flex-col items-center justify-center">
                         <Icon icon="loading" className="size-6 animate-spin text-primary mb-2" />

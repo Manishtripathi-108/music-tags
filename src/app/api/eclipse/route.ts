@@ -117,6 +117,54 @@ function sanitizeFilename(name: string): string {
     return name.replace(/[/\\?%*:|"<>]/g, '_').trim();
 }
 
+function getFetchHeaders(customHeaders?: Record<string, string>, extraAccept = 'application/json'): Record<string, string> {
+    const headers: Record<string, string> = {
+        Accept: extraAccept,
+        'User-Agent': 'Eclipse-Addon-Client/1.0',
+    };
+
+    if (customHeaders && typeof customHeaders === 'object') {
+        for (const [k, v] of Object.entries(customHeaders)) {
+            if (k && v && typeof v === 'string') {
+                headers[k.trim()] = v.trim();
+            }
+        }
+    }
+    return headers;
+}
+
+async function extractAddonErrorMessage(res: Response, defaultAction: string): Promise<{ error: string; notice?: EclipseNotice | null; details?: any }> {
+    let errorDetail = '';
+    let notice: EclipseNotice | null = null;
+    let rawParsed: any = null;
+
+    try {
+        const text = await res.text();
+        if (text) {
+            try {
+                rawParsed = JSON.parse(text);
+                if (rawParsed.error) {
+                    errorDetail = typeof rawParsed.error === 'string' ? rawParsed.error : JSON.stringify(rawParsed.error);
+                } else if (rawParsed.message) {
+                    errorDetail = rawParsed.message;
+                } else if (rawParsed.title) {
+                    errorDetail = rawParsed.title;
+                }
+                if (rawParsed.notice) notice = rawParsed.notice;
+            } catch {
+                errorDetail = text.slice(0, 400).trim();
+            }
+        }
+    } catch {}
+
+    const statusText = res.statusText || 'Error';
+    const finalMsg = errorDetail
+        ? `Addon Error (${res.status} ${statusText}): ${errorDetail}`
+        : `Addon returned HTTP ${res.status}: ${statusText} on ${defaultAction}`;
+
+    return { error: finalMsg, notice, details: rawParsed };
+}
+
 function buildUrlWithSettings(baseUrl: string, endpointPath: string, settings?: Record<string, string | number | boolean>): URL {
     const normalizedBase = baseUrl.replace(/\/+$/, '');
     const cleanEndpoint = endpointPath.replace(/^\/+/, '');
@@ -146,6 +194,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             durationMs,
             skip = 0,
             settings,
+            headers: customHeaders,
             downloadDirectory,
             trackFilename,
         } = body;
@@ -155,18 +204,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         const normalizedAddonUrl = addonUrl.replace(/\/+$/, '');
+        const fetchHeaders = getFetchHeaders(customHeaders);
 
         // 1. MANIFEST: GET /manifest.json
         if (action === 'manifest') {
             const manifestUrl = `${normalizedAddonUrl}/manifest.json`;
             const res = await fetch(manifestUrl, {
-                headers: { Accept: 'application/json' },
+                headers: fetchHeaders,
                 signal: AbortSignal.timeout(10000),
             });
 
             if (!res.ok) {
+                const err = await extractAddonErrorMessage(res, 'manifest.json');
                 return NextResponse.json(
-                    { error: `Addon returned HTTP ${res.status}: ${res.statusText} for manifest.json` },
+                    { error: err.error, notice: err.notice },
                     { status: res.status }
                 );
             }
@@ -181,13 +232,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             searchUrl.searchParams.set('q', query || '');
 
             const res = await fetch(searchUrl.toString(), {
-                headers: { Accept: 'application/json' },
+                headers: fetchHeaders,
                 signal: AbortSignal.timeout(15000),
             });
 
             if (!res.ok) {
+                const err = await extractAddonErrorMessage(res, 'search');
                 return NextResponse.json(
-                    { error: `Search request failed with HTTP ${res.status}: ${res.statusText}` },
+                    { error: err.error, notice: err.notice },
                     { status: res.status }
                 );
             }
@@ -216,15 +268,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             while (maxRetries > 0) {
                 currentRes = await fetch(streamUrl.toString(), {
-                    headers: { Accept: 'application/json' },
+                    headers: fetchHeaders,
                     signal: AbortSignal.timeout(15000),
                 });
 
                 if (currentRes.status === 503) {
-                    try {
-                        const errJson = await currentRes.clone().json();
-                        if (errJson?.notice) lastNotice = errJson.notice;
-                    } catch {}
+                    const err = await extractAddonErrorMessage(currentRes.clone(), 'stream');
+                    if (err.notice) lastNotice = err.notice;
 
                     const retryAfterHeader = currentRes.headers.get('Retry-After');
                     const waitSec = Math.min(30, Math.max(1, parseInt(retryAfterHeader || '2', 10)));
@@ -238,10 +288,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             if (!currentRes || !currentRes.ok) {
                 const status = currentRes ? currentRes.status : 504;
+                const err = currentRes
+                    ? await extractAddonErrorMessage(currentRes, 'stream')
+                    : { error: 'Stream request timed out', notice: lastNotice };
                 return NextResponse.json(
                     {
-                        error: `Stream resolution failed with HTTP ${status}`,
-                        notice: lastNotice,
+                        error: err.error,
+                        notice: err.notice || lastNotice,
                     },
                     { status }
                 );
@@ -264,12 +317,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             isrcUrl.searchParams.set('isrc', isrc);
 
             const res = await fetch(isrcUrl.toString(), {
-                headers: { Accept: 'application/json' },
+                headers: fetchHeaders,
                 signal: AbortSignal.timeout(10000),
             });
 
             if (!res.ok) {
-                return NextResponse.json({ trackId: null, id: null });
+                const err = await extractAddonErrorMessage(res, 'resolve-isrc');
+                return NextResponse.json({ trackId: null, id: null, error: err.error, notice: err.notice });
             }
 
             const data = await res.json();
@@ -286,12 +340,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             if (durationMs) resolveUrl.searchParams.set('durationMs', String(durationMs));
 
             const res = await fetch(resolveUrl.toString(), {
-                headers: { Accept: 'application/json' },
+                headers: fetchHeaders,
                 signal: AbortSignal.timeout(10000),
             });
 
             if (!res.ok) {
-                return NextResponse.json({ item: null });
+                const err = await extractAddonErrorMessage(res, 'resolve');
+                return NextResponse.json({ item: null, error: err.error, notice: err.notice });
             }
 
             const data = await res.json();
@@ -304,12 +359,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             const albumUrl = buildUrlWithSettings(normalizedAddonUrl, `album/${encodeURIComponent(id)}`, settings);
             const res = await fetch(albumUrl.toString(), {
-                headers: { Accept: 'application/json' },
+                headers: fetchHeaders,
                 signal: AbortSignal.timeout(15000),
             });
 
             if (!res.ok) {
-                return NextResponse.json({ error: `Album fetch failed with HTTP ${res.status}` }, { status: res.status });
+                const err = await extractAddonErrorMessage(res, `album/${id}`);
+                return NextResponse.json({ error: err.error, notice: err.notice }, { status: res.status });
             }
 
             const album: EclipseAlbum = await res.json();
@@ -322,12 +378,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             const artistUrl = buildUrlWithSettings(normalizedAddonUrl, `artist/${encodeURIComponent(id)}`, settings);
             const res = await fetch(artistUrl.toString(), {
-                headers: { Accept: 'application/json' },
+                headers: fetchHeaders,
                 signal: AbortSignal.timeout(15000),
             });
 
             if (!res.ok) {
-                return NextResponse.json({ error: `Artist fetch failed with HTTP ${res.status}` }, { status: res.status });
+                const err = await extractAddonErrorMessage(res, `artist/${id}`);
+                return NextResponse.json({ error: err.error, notice: err.notice }, { status: res.status });
             }
 
             const artistData: EclipseArtist = await res.json();
@@ -340,12 +397,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             const playlistUrl = buildUrlWithSettings(normalizedAddonUrl, `playlist/${encodeURIComponent(id)}`, settings);
             const res = await fetch(playlistUrl.toString(), {
-                headers: { Accept: 'application/json' },
+                headers: fetchHeaders,
                 signal: AbortSignal.timeout(15000),
             });
 
             if (!res.ok) {
-                return NextResponse.json({ error: `Playlist fetch failed with HTTP ${res.status}` }, { status: res.status });
+                const err = await extractAddonErrorMessage(res, `playlist/${id}`);
+                return NextResponse.json({ error: err.error, notice: err.notice }, { status: res.status });
             }
 
             const playlist: EclipsePlaylist = await res.json();
@@ -360,12 +418,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             catalogUrl.searchParams.set('skip', String(skip || 0));
 
             const res = await fetch(catalogUrl.toString(), {
-                headers: { Accept: 'application/json' },
+                headers: fetchHeaders,
                 signal: AbortSignal.timeout(15000),
             });
 
             if (!res.ok) {
-                return NextResponse.json({ error: `Catalog fetch failed with HTTP ${res.status}` }, { status: res.status });
+                const err = await extractAddonErrorMessage(res, `catalog/${id}`);
+                return NextResponse.json({ error: err.error, notice: err.notice }, { status: res.status });
             }
 
             const data = await res.json();
@@ -388,11 +447,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 }
                 const streamUrl = buildUrlWithSettings(normalizedAddonUrl, `stream/${encodeURIComponent(id)}`, settings);
                 const streamRes = await fetch(streamUrl.toString(), {
-                    headers: { Accept: 'application/json' },
+                    headers: fetchHeaders,
                     signal: AbortSignal.timeout(15000),
                 });
                 if (!streamRes.ok) {
-                    return NextResponse.json({ error: `Stream resolution failed: HTTP ${streamRes.status}` }, { status: streamRes.status });
+                    const err = await extractAddonErrorMessage(streamRes, `stream/${id}`);
+                    return NextResponse.json({ error: err.error, notice: err.notice }, { status: streamRes.status });
                 }
                 const streamInfo: EclipseStreamResponse = await streamRes.json();
                 finalMediaUrl = streamInfo.url;
@@ -418,11 +478,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             // Download media stream
             const mediaRes = await fetch(finalMediaUrl, {
-                headers: { 'User-Agent': 'Eclipse-Addon-Client/1.0' },
+                headers: getFetchHeaders(customHeaders, '*/*'),
             });
 
             if (!mediaRes.ok || !mediaRes.body) {
-                return NextResponse.json({ error: `Audio file download failed with HTTP ${mediaRes.status}: ${mediaRes.statusText}` }, { status: 502 });
+                const err = await extractAddonErrorMessage(mediaRes, 'audio stream download');
+                return NextResponse.json({ error: err.error }, { status: mediaRes.status });
             }
 
             const nodeStream = Readable.fromWeb(mediaRes.body as import('stream/web').ReadableStream);

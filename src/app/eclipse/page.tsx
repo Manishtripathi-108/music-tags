@@ -3,6 +3,8 @@
 import React, { useEffect } from 'react';
 import { EclipseTopBar } from '@/components/eclipse/EclipseTopBar';
 import { EclipseManifestBanner } from '@/components/eclipse/EclipseManifestBanner';
+import { EclipseErrorNoticeBanner } from '@/components/eclipse/EclipseErrorNoticeBanner';
+import { EclipseHeadersModal } from '@/components/eclipse/EclipseHeadersModal';
 import { EclipseSearchView } from '@/components/eclipse/EclipseSearchView';
 import { EclipseCatalogsView } from '@/components/eclipse/EclipseCatalogsView';
 import { EclipseDetailModals } from '@/components/eclipse/EclipseDetailModals';
@@ -25,6 +27,7 @@ export default function EclipsePage() {
         <div className="flex flex-col h-screen overflow-hidden bg-background">
             <EclipseTopBar />
             <EclipseManifestBanner />
+            <EclipseErrorNoticeBanner />
 
             {/* View Selector Tabs (when connected) */}
             {manifest && (
@@ -58,6 +61,7 @@ export default function EclipsePage() {
 
             {/* Modals & Bottom Audio Player */}
             <EclipseDetailModals />
+            <EclipseHeadersModal />
             <EclipseAudioPlayer />
         </div>
     );

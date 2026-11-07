@@ -10,13 +10,33 @@ import {
     type EclipseStreamResponse,
 } from '@/app/api/eclipse/route';
 
+export interface EclipseHeaderEntry {
+    id: string;
+    key: string;
+    value: string;
+    enabled: boolean;
+}
+
+export interface EclipseErrorState {
+    action: string;
+    message: string;
+    status?: number;
+    notice?: EclipseNotice | null;
+}
+
 export interface EclipseState {
     addonUrl: string;
     downloadDirectory: string;
     isConnecting: boolean;
     connectionError: string | null;
+    searchError: string | null;
+    lastError: EclipseErrorState | null;
     manifest: EclipseManifest | null;
     settingsValues: Record<string, string | number | boolean>;
+
+    // Custom HTTP Headers for Addon requests
+    headerEntries: EclipseHeaderEntry[];
+    isHeadersModalOpen: boolean;
 
     activeTab: 'search' | 'catalogs' | 'library';
     searchQuery: string;
@@ -29,7 +49,7 @@ export interface EclipseState {
         playlists: EclipsePlaylist[];
     };
 
-    catalogsData: Record<string, { items: any[]; hasMore: boolean; skip: number; isLoading: boolean }>;
+    catalogsData: Record<string, { items: any[]; hasMore: boolean; skip: number; isLoading: boolean; error?: string | null }>;
     activeModal: { type: 'album' | 'artist' | 'playlist'; data: any } | null;
 
     currentTrack: EclipseTrack | null;
@@ -50,6 +70,16 @@ export interface EclipseState {
     updateSetting: (key: string, value: string | number | boolean) => void;
     closeModal: () => void;
     dismissNotice: (id?: string) => void;
+    clearErrors: () => void;
+    setIsHeadersModalOpen: (open: boolean) => void;
+
+    // Header actions
+    getHeadersRecord: () => Record<string, string>;
+    addHeaderEntry: (key?: string, value?: string) => void;
+    updateHeaderEntry: (id: string, partial: Partial<EclipseHeaderEntry>) => void;
+    removeHeaderEntry: (id: string) => void;
+    clearHeaderEntries: () => void;
+    setAuthBearerToken: (token: string) => void;
 
     connectAddon: (customUrl?: string) => Promise<boolean>;
     searchAddon: (customQuery?: string) => Promise<void>;
@@ -61,13 +91,50 @@ export interface EclipseState {
     downloadTrack: (track: EclipseTrack) => Promise<void>;
 }
 
+const loadStoredHeaders = (): EclipseHeaderEntry[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+        const raw = localStorage.getItem('eclipse_custom_headers');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+        }
+    } catch {}
+    return [];
+};
+
+const saveStoredHeaders = (headers: EclipseHeaderEntry[]) => {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('eclipse_custom_headers', JSON.stringify(headers));
+    }
+};
+
+const extractErrorInfo = (err: unknown, defaultMsg: string): { message: string; notice: EclipseNotice | null; status?: number } => {
+    if (axios.isAxiosError(err)) {
+        const data = err.response?.data;
+        const message = data?.error || (err.response?.status ? `Addon Error (${err.response.status} ${err.response.statusText})` : err.message) || defaultMsg;
+        const notice = data?.notice || null;
+        return { message, notice, status: err.response?.status };
+    }
+    return {
+        message: err instanceof Error ? err.message : defaultMsg,
+        notice: null,
+        status: undefined,
+    };
+};
+
 export const useEclipseStore = create<EclipseState>((set, get) => ({
     addonUrl: typeof window !== 'undefined' ? localStorage.getItem('eclipse_addon_url') || '' : '',
     downloadDirectory: typeof window !== 'undefined' ? localStorage.getItem('remote_download_dir') || '' : '',
     isConnecting: false,
     connectionError: null,
+    searchError: null,
+    lastError: null,
     manifest: null,
     settingsValues: {},
+
+    headerEntries: loadStoredHeaders(),
+    isHeadersModalOpen: false,
 
     activeTab: 'search',
     searchQuery: '',
@@ -89,7 +156,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
 
     setAddonUrl: (url) => {
         if (typeof window !== 'undefined') localStorage.setItem('eclipse_addon_url', url);
-        set({ addonUrl: url, connectionError: null });
+        set({ addonUrl: url, connectionError: null, lastError: null });
     },
 
     setDownloadDirectory: (dir) => {
@@ -100,6 +167,9 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     setActiveTab: (tab) => set({ activeTab: tab }),
     setSearchQuery: (query) => set({ searchQuery: query }),
     setSearchFilter: (filter) => set({ searchFilter: filter }),
+    setIsHeadersModalOpen: (open) => set({ isHeadersModalOpen: open }),
+
+    clearErrors: () => set({ connectionError: null, searchError: null, lastError: null }),
 
     updateSetting: (key, value) => {
         set((s) => ({
@@ -113,15 +183,73 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
             notices: id ? s.notices.filter((n) => n.id !== id) : s.notices.slice(1),
         })),
 
+    getHeadersRecord: () => {
+        const { headerEntries } = get();
+        const headers: Record<string, string> = {};
+        for (const entry of headerEntries) {
+            if (entry.enabled && entry.key.trim()) {
+                headers[entry.key.trim()] = entry.value;
+            }
+        }
+        return headers;
+    },
+
+    addHeaderEntry: (key = '', value = '') => {
+        const next: EclipseHeaderEntry[] = [
+            ...get().headerEntries,
+            { id: String(Date.now() + Math.random()), key, value, enabled: true },
+        ];
+        saveStoredHeaders(next);
+        set({ headerEntries: next });
+    },
+
+    updateHeaderEntry: (id, partial) => {
+        const next = get().headerEntries.map((e) => (e.id === id ? { ...e, ...partial } : e));
+        saveStoredHeaders(next);
+        set({ headerEntries: next });
+    },
+
+    removeHeaderEntry: (id) => {
+        const next = get().headerEntries.filter((e) => e.id !== id);
+        saveStoredHeaders(next);
+        set({ headerEntries: next });
+    },
+
+    clearHeaderEntries: () => {
+        saveStoredHeaders([]);
+        set({ headerEntries: [] });
+    },
+
+    setAuthBearerToken: (token) => {
+        const { headerEntries } = get();
+        const cleanToken = token.trim().startsWith('Bearer ') ? token.trim() : `Bearer ${token.trim()}`;
+        const existingAuth = headerEntries.find((e) => e.key.toLowerCase() === 'authorization');
+        let next: EclipseHeaderEntry[];
+        if (existingAuth) {
+            next = headerEntries.map((e) =>
+                e.id === existingAuth.id ? { ...e, value: cleanToken, enabled: true } : e
+            );
+        } else {
+            next = [
+                ...headerEntries,
+                { id: String(Date.now()), key: 'Authorization', value: cleanToken, enabled: true },
+            ];
+        }
+        saveStoredHeaders(next);
+        set({ headerEntries: next });
+    },
+
     connectAddon: async (customUrl) => {
         const targetUrl = customUrl || get().addonUrl;
         if (!targetUrl) return false;
 
-        set({ isConnecting: true, connectionError: null });
+        set({ isConnecting: true, connectionError: null, lastError: null });
+
         try {
             const res = await axios.post<{ manifest: EclipseManifest; notice?: EclipseNotice }>('/api/eclipse', {
                 addonUrl: targetUrl,
                 action: 'manifest',
+                headers: get().getHeadersRecord(),
             });
 
             const manifest = res.data.manifest;
@@ -143,6 +271,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 settingsValues: initialSettings,
                 isConnecting: false,
                 connectionError: null,
+                lastError: null,
                 notices,
             });
 
@@ -153,13 +282,15 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
 
             return true;
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) && err.response?.data?.error
-                ? err.response.data.error
-                : err instanceof Error
-                ? err.message
-                : 'Failed to connect to Eclipse addon';
+            const errInfo = extractErrorInfo(err, 'Failed to connect to Eclipse addon');
+            const nextNotices = errInfo.notice ? [errInfo.notice, ...get().notices] : get().notices;
 
-            set({ isConnecting: false, connectionError: msg });
+            set({
+                isConnecting: false,
+                connectionError: errInfo.message,
+                lastError: { action: 'manifest', ...errInfo },
+                notices: nextNotices,
+            });
             return false;
         }
     },
@@ -169,7 +300,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
         if (!addonUrl) return;
 
         const query = customQuery !== undefined ? customQuery : searchQuery;
-        set({ isSearching: true });
+        set({ isSearching: true, searchError: null, lastError: null });
 
         try {
             const res = await axios.post('/api/eclipse', {
@@ -177,6 +308,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 action: 'search',
                 query,
                 settings: settingsValues,
+                headers: get().getHeadersRecord(),
             });
 
             const notices = res.data.notice ? [...get().notices, res.data.notice] : get().notices;
@@ -189,11 +321,19 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                     playlists: res.data.playlists || [],
                 },
                 isSearching: false,
+                searchError: null,
                 notices,
             });
         } catch (err: unknown) {
-            console.error('Eclipse search failed:', err);
-            set({ isSearching: false });
+            const errInfo = extractErrorInfo(err, 'Search request failed');
+            const nextNotices = errInfo.notice ? [...get().notices, errInfo.notice] : get().notices;
+
+            set({
+                isSearching: false,
+                searchError: errInfo.message,
+                lastError: { action: 'search', ...errInfo },
+                notices: nextNotices,
+            });
         }
     },
 
@@ -209,6 +349,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                     hasMore: true,
                     skip,
                     isLoading: true,
+                    error: null,
                 },
             },
         }));
@@ -220,10 +361,12 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 id: catalogId,
                 skip,
                 settings: settingsValues,
+                headers: get().getHeadersRecord(),
             });
 
             const newItems = res.data.items || [];
             const prevItems = skip === 0 ? [] : catalogsData[catalogId]?.items || [];
+            const notices = res.data.notice ? [...get().notices, res.data.notice] : get().notices;
 
             set((s) => ({
                 catalogsData: {
@@ -233,19 +376,26 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                         hasMore: newItems.length >= 100,
                         skip: skip + newItems.length,
                         isLoading: false,
+                        error: null,
                     },
                 },
+                notices,
             }));
         } catch (err) {
-            console.error('Catalog load failed:', err);
+            const errInfo = extractErrorInfo(err, `Failed to load catalog ${catalogId}`);
+            const nextNotices = errInfo.notice ? [...get().notices, errInfo.notice] : get().notices;
+
             set((s) => ({
                 catalogsData: {
                     ...s.catalogsData,
                     [catalogId]: {
                         ...s.catalogsData[catalogId],
                         isLoading: false,
+                        error: errInfo.message,
                     },
                 },
+                lastError: { action: `catalog/${catalogId}`, ...errInfo },
+                notices: nextNotices,
             }));
         }
     },
@@ -260,12 +410,17 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 action: 'album',
                 id: albumId,
                 settings: settingsValues,
+                headers: get().getHeadersRecord(),
             });
             if (res.data.album) {
                 set({ activeModal: { type: 'album', data: res.data.album } });
             }
+            if (res.data.notice) {
+                set((s) => ({ notices: [...s.notices, res.data.notice] }));
+            }
         } catch (err) {
-            console.error('Failed to open album:', err);
+            const errInfo = extractErrorInfo(err, 'Failed to open album');
+            set({ lastError: { action: `album/${albumId}`, ...errInfo } });
         }
     },
 
@@ -279,12 +434,17 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 action: 'artist',
                 id: artistId,
                 settings: settingsValues,
+                headers: get().getHeadersRecord(),
             });
             if (res.data.artist) {
                 set({ activeModal: { type: 'artist', data: res.data.artist } });
             }
+            if (res.data.notice) {
+                set((s) => ({ notices: [...s.notices, res.data.notice] }));
+            }
         } catch (err) {
-            console.error('Failed to open artist:', err);
+            const errInfo = extractErrorInfo(err, 'Failed to open artist');
+            set({ lastError: { action: `artist/${artistId}`, ...errInfo } });
         }
     },
 
@@ -298,12 +458,17 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 action: 'playlist',
                 id: playlistId,
                 settings: settingsValues,
+                headers: get().getHeadersRecord(),
             });
             if (res.data.playlist) {
                 set({ activeModal: { type: 'playlist', data: res.data.playlist } });
             }
+            if (res.data.notice) {
+                set((s) => ({ notices: [...s.notices, res.data.notice] }));
+            }
         } catch (err) {
-            console.error('Failed to open playlist:', err);
+            const errInfo = extractErrorInfo(err, 'Failed to open playlist');
+            set({ lastError: { action: `playlist/${playlistId}`, ...errInfo } });
         }
     },
 
@@ -334,6 +499,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 action: 'stream',
                 id: track.id,
                 settings: settingsValues,
+                headers: get().getHeadersRecord(),
             });
 
             const stream = res.data.stream;
@@ -346,26 +512,32 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 notices,
             });
         } catch (err: unknown) {
-            console.error('Stream playback failed:', err);
-            set({ isLoadingStream: false, isPlaying: false });
-            alert('Failed to resolve audio stream from addon');
+            const errInfo = extractErrorInfo(err, 'Failed to resolve audio stream from addon');
+            const nextNotices = errInfo.notice ? [...get().notices, errInfo.notice] : get().notices;
+
+            set({
+                isLoadingStream: false,
+                isPlaying: false,
+                lastError: { action: `stream/${track.id}`, ...errInfo },
+                notices: nextNotices,
+            });
         }
     },
 
     downloadTrack: async (track) => {
         const { addonUrl, downloadDirectory, settingsValues, downloadingTrackIds } = get();
         if (!addonUrl) {
-            alert('Please connect to an Eclipse addon first.');
+            set({ lastError: { action: 'download', message: 'Please connect to an Eclipse addon first.' } });
             return;
         }
         if (!downloadDirectory) {
-            alert('Please configure the destination Download Directory.');
+            set({ lastError: { action: 'download', message: 'Please configure the destination Download Directory.' } });
             return;
         }
 
         const nextDownloading = new Set(downloadingTrackIds);
         nextDownloading.add(track.id);
-        set({ downloadingTrackIds: nextDownloading });
+        set({ downloadingTrackIds: nextDownloading, lastError: null });
 
         try {
             const res = await axios.post('/api/eclipse', {
@@ -378,6 +550,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 format: track.format,
                 downloadDirectory,
                 settings: settingsValues,
+                headers: get().getHeadersRecord(),
             });
 
             if (res.data.success) {
@@ -389,8 +562,13 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 }));
             }
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Download failed';
-            alert(`Download failed: ${msg}`);
+            const errInfo = extractErrorInfo(err, 'Track download failed');
+            const nextNotices = errInfo.notice ? [...get().notices, errInfo.notice] : get().notices;
+
+            set({
+                lastError: { action: `download/${track.id}`, ...errInfo },
+                notices: nextNotices,
+            });
         } finally {
             const current = new Set(get().downloadingTrackIds);
             current.delete(track.id);

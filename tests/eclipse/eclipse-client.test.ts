@@ -57,8 +57,83 @@ describe('Eclipse Music Addon Client Route', () => {
         expect(data.manifest.name).toBe('Example Addon');
         expect(global.fetch).toHaveBeenCalledWith(
             'https://addon.example.com/manifest.json',
-            expect.objectContaining({ headers: { Accept: 'application/json' } })
+            expect.objectContaining({
+                headers: expect.objectContaining({ Accept: 'application/json' }),
+            })
         );
+    });
+
+    it('forwards custom HTTP headers (e.g. Authorization, X-API-Key) in outbound addon requests', async () => {
+        const mockManifest = {
+            id: 'com.private.addon',
+            name: 'Private Addon',
+            version: '1.0.0',
+            resources: ['search', 'stream'],
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => mockManifest,
+        } as Response);
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com',
+            action: 'manifest',
+            headers: {
+                Authorization: 'Bearer test-token-12345',
+                'X-Custom-Client': 'MusicTagsClient',
+            },
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+
+        expect(global.fetch).toHaveBeenCalledWith(
+            'https://addon.example.com/manifest.json',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    Authorization: 'Bearer test-token-12345',
+                    'X-Custom-Client': 'MusicTagsClient',
+                    Accept: 'application/json',
+                }),
+            })
+        );
+    });
+
+    it('extracts and surfaces detailed addon error responses and notice objects', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 401,
+            statusText: 'Unauthorized',
+            text: async () =>
+                JSON.stringify({
+                    error: 'Invalid or expired API token',
+                    notice: {
+                        level: 'error',
+                        title: 'Auth Rejected',
+                        message: 'Please re-authenticate with a valid Bearer token',
+                    },
+                }),
+        } as Response);
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com',
+            action: 'search',
+            query: 'test query',
+            headers: { Authorization: 'Bearer invalid-token' },
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(401);
+
+        const data = await res.json();
+        expect(data.error).toContain('Addon Error (401 Unauthorized): Invalid or expired API token');
+        expect(data.notice).toEqual({
+            level: 'error',
+            title: 'Auth Rejected',
+            message: 'Please re-authenticate with a valid Bearer token',
+        });
     });
 
     it('executes search and appends settings query parameters', async () => {
@@ -98,12 +173,9 @@ describe('Eclipse Music Addon Client Route', () => {
 
     it('resolves stream URL with settings query parameters', async () => {
         const mockStream = {
-            url: 'https://cdn.example.com/101.flac',
+            url: 'https://cdn.example.com/stream/track_101.flac',
             format: 'flac',
-            codec: 'flac',
-            quality: '24-bit / 96 kHz',
-            sampleRate: 96000,
-            bitDepth: 24,
+            quality: 'lossless',
         };
 
         global.fetch = vi.fn().mockResolvedValue({
@@ -115,27 +187,28 @@ describe('Eclipse Music Addon Client Route', () => {
         const req = createPostRequest({
             addonUrl: 'https://addon.example.com',
             action: 'stream',
-            id: '101',
-            settings: { quality: 'lossless' },
+            id: 'track_101',
+            settings: { bitrate: '320' },
         });
 
         const res = await POST(req);
         expect(res.status).toBe(200);
 
         const data = await res.json();
-        expect(data.stream.url).toBe('https://cdn.example.com/101.flac');
-        expect(data.stream.codec).toBe('flac');
+        expect(data.stream.url).toBe('https://cdn.example.com/stream/track_101.flac');
         expect(global.fetch).toHaveBeenCalledWith(
-            expect.stringContaining('https://addon.example.com/stream/101?quality=lossless'),
+            expect.stringContaining('https://addon.example.com/stream/track_101?bitrate=320'),
             expect.any(Object)
         );
     });
 
     it('resolves ISRC via resolve-isrc according to Eclipse section 7', async () => {
+        const mockResolve = { trackId: 'track_999' };
+
         global.fetch = vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
-            json: async () => ({ trackId: 'track_999' }),
+            json: async () => mockResolve,
         } as Response);
 
         const req = createPostRequest({
