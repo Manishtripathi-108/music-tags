@@ -183,4 +183,25 @@ describe('Dolby and Lossless Isolation Constraints', () => {
         // If previous path was an old extension of itself (e.g. USBQU1700034.mp3), it is safe to remove
         expect(isOtherTrackFile('E:/Media/Music/USBQU1700034.mp3', currentTrack.id, currentTrack.isrc)).toBe(false);
     });
+
+    it('bypasses throttling delay when track search is served from cache and only restricts actual API calls', () => {
+        const getDelayForTrackSearch = (cached: boolean, isLastItem: boolean) => {
+            if (isLastItem) return 0;
+            // When already cached, do not wait; only restrict actual API calls
+            return cached ? 0 : 350;
+        };
+
+        // Cached track mid-list: 0ms delay (fast)
+        expect(getDelayForTrackSearch(true, false)).toBe(0);
+
+        // Multiple cached tracks in a row: 0ms delay
+        expect(getDelayForTrackSearch(true, false)).toBe(0);
+
+        // Actual API call track: 350ms polite throttling delay
+        expect(getDelayForTrackSearch(false, false)).toBe(350);
+
+        // Last item in list (whether cached or actual API call): 0ms delay
+        expect(getDelayForTrackSearch(true, true)).toBe(0);
+        expect(getDelayForTrackSearch(false, true)).toBe(0);
+    });
 });

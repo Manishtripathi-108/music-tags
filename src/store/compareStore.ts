@@ -333,8 +333,9 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                 searchProgress: { ...s.searchProgress, current: i + 1, currentTitle: titleDisplay },
             }));
 
+            let wasCached = false;
             try {
-                const res = await axios.post<{ item: AudioComparisonItem }>(
+                const res = await axios.post<{ item: AudioComparisonItem; cached?: boolean }>(
                     '/api/remote/search-track',
                     {
                         trackId: target.localTrack.id,
@@ -348,6 +349,8 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                     { signal: activeSearchAbort.signal }
                 );
 
+                wasCached = Boolean(res.data?.cached);
+
                 if (res.data.item) {
                     const updatedItem = res.data.item;
                     set((s) => ({
@@ -360,6 +363,7 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                 }
             } catch (err: unknown) {
                 if (axios.isCancel(err)) break;
+                wasCached = false;
                 const errorMsg =
                     axios.isAxiosError(err) && err.response?.data?.error
                         ? err.response.data.error
@@ -391,7 +395,11 @@ export const useCompareStore = create<CompareState>((set, get) => ({
             }
 
             // Polite delay to avoid API throttling ("dont do batch request do sequence requests not to overwhelm the api")
-            await sleep(350);
+            // When a song is already cached in the database, don't wait — process calls fast.
+            // Only restrict calling / throttle when an actual external API call was made.
+            if (!wasCached && i < list.length - 1) {
+                await sleep(350);
+            }
         }
 
         set({ isSearching: false });
@@ -578,8 +586,10 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                 }));
             }
 
-            // Polite delay between sequential downloads
-            await sleep(500);
+            // Polite delay between sequential downloads (only when more downloads remain)
+            if (i < finalTargets.length - 1) {
+                await sleep(500);
+            }
         }
 
         set({ isDownloading: false });
