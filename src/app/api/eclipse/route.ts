@@ -4,6 +4,8 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { loggedFetch } from '@/services/logger/apiLogger';
+import { isDashManifest, downloadDashAudioStream } from '@/services/eclipse/dashDownloader';
+import { checkLibraryQualityForTrack } from '@/services/eclipse/qualityChecker';
 
 export interface EclipseManifestSetting {
     key: string;
@@ -97,10 +99,12 @@ export interface EclipseStreamResponse {
     format?: string;
     quality?: string;
     codec?: string;
+    tier?: string;
     container?: string;
     manifest?: string;
     sampleRate?: number;
     bitDepth?: number;
+    isrc?: string;
     expiresAt?: number;
     chapters?: { title: string; startTime: number }[];
     video?: {
@@ -600,6 +604,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     return NextResponse.json({ error: 'Addon provided no playable audio URL' }, { status: 404 });
                 }
 
+                // "before starting download check if already have same or higher quality in our list if yes then dont if not then show and download"
+                const qualityCheck = await checkLibraryQualityForTrack({
+                    isrc: streamInfo.isrc || isrc,
+                    title: body.title || trackFilename || id,
+                    artist: body.artist,
+                    streamInfo,
+                    downloadDirectory,
+                    forceRedownload: Boolean(body.forceRedownload),
+                });
+
+                if (qualityCheck.skipped) {
+                    console.log(`[ECLIPSE:DOWNLOAD] Skipped: ${qualityCheck.message}`);
+                    return NextResponse.json({
+                        success: false,
+                        skipped: true,
+                        reason: qualityCheck.reason,
+                        message: qualityCheck.message,
+                        localTrack: qualityCheck.localTrack,
+                        remoteQuality: qualityCheck.remoteQuality,
+                    });
+                }
+
                 // Target directory
                 const targetDir = path.resolve(downloadDirectory);
                 if (!fs.existsSync(targetDir)) {
@@ -608,12 +634,50 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
                 // File naming: strictly isrc or id and extension ("dont add metadata just name the file with its isrc and extension")
                 const baseName = sanitizeFilename(isrc || trackFilename || id || 'track');
-                const cleanExt = (format || 'flac').replace(/^\./, '').toLowerCase();
+                const isDash = isDashManifest(finalMediaUrl);
+                const cleanExt = (isDash ? 'flac' : (format || 'flac')).replace(/^\./, '').toLowerCase();
                 const fileName = `${baseName}.${cleanExt}`;
-                const destinationPath = path.join(targetDir, fileName);
-                const tempPath = path.join(targetDir, `${fileName}.part`);
+                const destinationPath = path.join(/*turbopackIgnore: true*/ targetDir, fileName);
 
-                // Download media stream immediately before link expires
+                // Handle MPEG-DASH MPD manifest downloading
+                if (isDash) {
+                    console.log(`[ECLIPSE:DOWNLOAD] Detected MPEG-DASH MPD manifest at ${finalMediaUrl}. Fetching manifest and downloading segments...`);
+                    const manifestRes = await loggedFetch(
+                        finalMediaUrl,
+                        {
+                            headers: getFetchHeaders(customHeaders, '*/*'),
+                            signal: AbortSignal.timeout(20000),
+                        },
+                        { action: 'dash-manifest-fetch', targetAddon: normalizedAddonUrl }
+                    );
+
+                    if (!manifestRes.ok) {
+                        const err = await extractAddonErrorMessage(manifestRes, 'dash manifest fetch');
+                        return NextResponse.json({ error: `Failed to fetch DASH manifest: ${err.error}` }, { status: manifestRes.status });
+                    }
+
+                    const manifestXml = typeof manifestRes.text === 'function' ? await manifestRes.text() : '';
+                    const dashResult = await downloadDashAudioStream({
+                        manifestXml,
+                        manifestUrl: finalMediaUrl,
+                        destinationPath,
+                        customHeaders: getFetchHeaders(customHeaders, '*/*'),
+                        addonUrl: normalizedAddonUrl,
+                    });
+
+                    return NextResponse.json({
+                        success: true,
+                        filePath: dashResult.destinationPath,
+                        fileName,
+                        fileSize: dashResult.sizeBytes,
+                        isUpgrade: Boolean(qualityCheck.localTrack),
+                        quality: qualityCheck.remoteQuality.qualityLabel,
+                        message: qualityCheck.message,
+                    });
+                }
+
+                // Direct media stream download
+                const tempPath = path.join(targetDir, `${fileName}.part`);
                 let mediaRes = await loggedFetch(
                     finalMediaUrl,
                     {
@@ -642,6 +706,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     }
                 }
 
+                // Check if fetched content is unexpectedly DASH MPD XML
+                const contentType = mediaRes.headers?.get ? mediaRes.headers.get('content-type') || '' : '';
+                if (isDashManifest(finalMediaUrl, contentType)) {
+                    const manifestXml = typeof mediaRes.text === 'function' ? await mediaRes.text() : '';
+                    const dashResult = await downloadDashAudioStream({
+                        manifestXml,
+                        manifestUrl: finalMediaUrl,
+                        destinationPath,
+                        customHeaders: getFetchHeaders(customHeaders, '*/*'),
+                        addonUrl: normalizedAddonUrl,
+                    });
+
+                    return NextResponse.json({
+                        success: true,
+                        filePath: dashResult.destinationPath,
+                        fileName,
+                        fileSize: dashResult.sizeBytes,
+                        isUpgrade: Boolean(qualityCheck.localTrack),
+                        quality: qualityCheck.remoteQuality.qualityLabel,
+                        message: qualityCheck.message,
+                    });
+                }
+
                 const nodeStream = Readable.fromWeb(mediaRes.body as import('stream/web').ReadableStream);
                 const fileStream = fs.createWriteStream(tempPath);
                 await pipeline(nodeStream, fileStream);
@@ -662,6 +749,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     filePath: destinationPath,
                     fileName,
                     fileSize: stats.size,
+                    isUpgrade: Boolean(qualityCheck.localTrack),
+                    quality: qualityCheck.remoteQuality.qualityLabel,
+                    message: qualityCheck.message,
                 });
             });
         }

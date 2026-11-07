@@ -67,6 +67,15 @@ export interface EclipseState {
 
     downloadingTrackIds: Set<string>;
     downloadedTrackPaths: Record<string, string>;
+    trackQualityStatus: Record<
+        string,
+        {
+            status: 'skipped' | 'upgrade' | 'downloaded';
+            message: string;
+            localQuality?: string;
+            remoteQuality?: string;
+        }
+    >;
     notices: EclipseNotice[];
 
     // Actions
@@ -103,7 +112,7 @@ export interface EclipseState {
     openArtist: (artistId: string) => Promise<void>;
     openPlaylist: (playlistId: string) => Promise<void>;
     playTrack: (track: EclipseTrack) => Promise<void>;
-    downloadTrack: (track: EclipseTrack) => Promise<void>;
+    downloadTrack: (track: EclipseTrack, forceRedownload?: boolean) => Promise<void>;
 }
 
 const loadStoredHeaders = (): EclipseHeaderEntry[] => {
@@ -175,6 +184,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
 
     downloadingTrackIds: new Set<string>(),
     downloadedTrackPaths: {},
+    trackQualityStatus: {},
     notices: [],
 
     setAddonUrl: (url) => {
@@ -736,7 +746,7 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
         }
     },
 
-    downloadTrack: async (track) => {
+    downloadTrack: async (track, forceRedownload = false) => {
         const { addonUrl, downloadDirectory, settingsValues, downloadingTrackIds } = get();
         if (!addonUrl) {
             set({ lastError: { action: 'download', message: 'Please connect to an Eclipse addon first.' } });
@@ -760,18 +770,61 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 id: track.id,
                 // Do not pass stale streamUrl because download links expire; always resolve fresh just before downloading
                 isrc: track.isrc,
+                title: track.title,
+                artist: track.artist,
                 trackFilename: `${track.artist} - ${track.title}`,
                 format: track.format,
                 downloadDirectory,
                 settings: settingsValues,
                 headers: get().getHeadersRecord(),
+                forceRedownload: Boolean(forceRedownload),
             });
 
+            // Handle skipped download because library already has same or higher quality
+            if (res.data.skipped) {
+                const notice: EclipseNotice = {
+                    level: 'warning',
+                    title: 'Download Skipped (Quality Match)',
+                    message: res.data.message || 'Already have same or higher quality in your library',
+                };
+                set((s) => ({
+                    notices: [notice, ...s.notices],
+                    trackQualityStatus: {
+                        ...s.trackQualityStatus,
+                        [track.id]: {
+                            status: 'skipped',
+                            message: res.data.message,
+                            localQuality: res.data.localTrack?.qualityLabel,
+                            remoteQuality: res.data.remoteQuality?.qualityLabel,
+                        },
+                    },
+                }));
+                return;
+            }
+
             if (res.data.success) {
+                const isUpgrade = Boolean(res.data.isUpgrade);
+                const notice: EclipseNotice | null = isUpgrade
+                    ? {
+                          level: 'info',
+                          title: 'Quality Upgrade Downloaded',
+                          message: res.data.message || `Upgraded ${track.title} to ${res.data.quality}`,
+                      }
+                    : null;
+
                 set((s) => ({
                     downloadedTrackPaths: {
                         ...s.downloadedTrackPaths,
                         [track.id]: res.data.filePath,
+                    },
+                    notices: notice ? [notice, ...s.notices] : s.notices,
+                    trackQualityStatus: {
+                        ...s.trackQualityStatus,
+                        [track.id]: {
+                            status: isUpgrade ? 'upgrade' : 'downloaded',
+                            message: res.data.message,
+                            remoteQuality: res.data.quality,
+                        },
                     },
                 }));
             }
@@ -786,17 +839,48 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                             action: 'download',
                             id: track.id,
                             isrc: track.isrc,
+                            title: track.title,
+                            artist: track.artist,
                             trackFilename: `${track.artist} - ${track.title}`,
                             format: track.format,
                             downloadDirectory,
                             settings: settingsValues,
                             headers: get().getHeadersRecord(),
+                            forceRedownload: Boolean(forceRedownload),
                         });
+                        if (retryRes.data.skipped) {
+                            const notice: EclipseNotice = {
+                                level: 'warning',
+                                title: 'Download Skipped (Quality Match)',
+                                message: retryRes.data.message,
+                            };
+                            set((s) => ({
+                                notices: [notice, ...s.notices],
+                                trackQualityStatus: {
+                                    ...s.trackQualityStatus,
+                                    [track.id]: {
+                                        status: 'skipped',
+                                        message: retryRes.data.message,
+                                        localQuality: retryRes.data.localTrack?.qualityLabel,
+                                        remoteQuality: retryRes.data.remoteQuality?.qualityLabel,
+                                    },
+                                },
+                            }));
+                            return;
+                        }
                         if (retryRes.data.success) {
                             set((s) => ({
                                 downloadedTrackPaths: {
                                     ...s.downloadedTrackPaths,
                                     [track.id]: retryRes.data.filePath,
+                                },
+                                trackQualityStatus: {
+                                    ...s.trackQualityStatus,
+                                    [track.id]: {
+                                        status: retryRes.data.isUpgrade ? 'upgrade' : 'downloaded',
+                                        message: retryRes.data.message,
+                                        remoteQuality: retryRes.data.quality,
+                                    },
                                 },
                             }));
                             return;

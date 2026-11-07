@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/eclipse/route';
+import * as qualityChecker from '@/services/eclipse/qualityChecker';
 
 describe('Eclipse Music Addon Client Route', () => {
     beforeEach(() => {
@@ -355,5 +356,65 @@ describe('Eclipse Music Addon Client Route', () => {
                 }),
             })
         );
+    });
+
+    it('skips download when library already contains same or higher quality track', async () => {
+        const mockStreamResponse = {
+            url: 'https://im-cf.manifest.tidal.com/1/manifests/test.mpd',
+            format: 'FLAC 24-bit/48kHz',
+            quality: '24-bit / 48kHz FLAC (1647kbps)',
+            codec: 'flac',
+            tier: 'FLAC_HIRES',
+            sampleRate: 48000,
+            bitDepth: 24,
+            isrc: 'QT6672603052',
+        };
+
+        // Mock stream resolve fetch
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => mockStreamResponse,
+            text: async () => '',
+            headers: new Headers({ 'content-type': 'application/json' }),
+        } as Response);
+
+        vi.spyOn(qualityChecker, 'checkLibraryQualityForTrack').mockResolvedValueOnce({
+            canDownload: false,
+            skipped: true,
+            hasSameOrHigher: true,
+            reason: 'same_or_higher_quality',
+            message: 'Already have same or higher quality in your library: "Centuries" (24-bit / 48 kHz FLAC >= Remote 24-bit / 48 kHz FLAC). Download skipped.',
+            localTrack: {
+                title: 'Centuries',
+                artist: 'Fall Out Boy',
+                qualityLabel: '24-bit / 48 kHz FLAC',
+                score: 1650,
+                isLossless: true,
+            },
+            remoteQuality: {
+                qualityLabel: '24-bit / 48 kHz FLAC',
+                score: 1650,
+                isLossless: true,
+            },
+        });
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com',
+            action: 'download',
+            id: '541029107',
+            isrc: 'QT6672603052',
+            title: 'Centuries',
+            artist: 'Fall Out Boy',
+            downloadDirectory: 'C:/temp/downloads',
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data.skipped).toBe(true);
+        expect(data.success).toBe(false);
+        expect(data.reason).toBe('same_or_higher_quality');
+        expect(data.message).toContain('Already have same or higher quality');
     });
 });

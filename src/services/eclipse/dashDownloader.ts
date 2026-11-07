@@ -1,0 +1,361 @@
+import fs from 'fs';
+import path from 'path';
+import { spawn } from 'child_process';
+import { loggedFetch } from '@/services/logger/apiLogger';
+
+export interface DashSegmentTimelineItem {
+    duration: number;
+    repeat: number; // 0 means 1 segment, 38 means 39 segments (1 + 38)
+    timeOffset?: number;
+}
+
+export interface DashManifestInfo {
+    timescale: number;
+    startNumber: number;
+    codecs: string;
+    mimeType: string;
+    initUrl: string;
+    mediaUrlTemplate: string;
+    segmentNumbers: number[];
+}
+
+/**
+ * Decodes XML entities such as &amp;, &lt;, &gt;, &quot;, &apos;
+ */
+export function unescapeXml(str: string): string {
+    return str
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'");
+}
+
+/**
+ * Tests whether content or URL indicates an MPEG-DASH MPD manifest.
+ */
+export function isDashManifest(urlOrContent: string, contentType?: string): boolean {
+    if (!urlOrContent) return false;
+    if (contentType && (contentType.includes('dash+xml') || contentType.includes('application/xml') || contentType.includes('text/xml'))) {
+        return true;
+    }
+    const clean = urlOrContent.trim();
+    if (clean.startsWith('<?xml') || clean.startsWith('<MPD') || clean.includes('<MPD xmlns=')) {
+        return true;
+    }
+    try {
+        const parsed = new URL(urlOrContent);
+        if (parsed.pathname.toLowerCase().endsWith('.mpd')) {
+            return true;
+        }
+    } catch {}
+    return false;
+}
+
+/**
+ * Parses an MPEG-DASH MPD XML document and extracts audio initialization & media segment URLs.
+ */
+export function parseDashMpd(manifestXml: string, manifestBaseUrl: string): DashManifestInfo {
+    // 1. Locate Representation tag
+    const repMatch = manifestXml.match(/<Representation\b([^>]+)>/i);
+    const repAttrs = repMatch ? repMatch[1] : '';
+
+    const codecsMatch = repAttrs.match(/codecs="([^"]+)"/i);
+    const codecs = codecsMatch ? codecsMatch[1].toLowerCase() : 'flac';
+
+    const mimeMatch = manifestXml.match(/mimeType="([^"]+)"/i);
+    const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : 'audio/mp4';
+
+    // 2. Locate SegmentTemplate
+    const templateMatch = manifestXml.match(/<SegmentTemplate\b([^>]+)>/i);
+    if (!templateMatch) {
+        throw new Error('MPEG-DASH manifest is missing <SegmentTemplate>');
+    }
+    const templateAttrs = templateMatch[1];
+
+    const initMatch = templateAttrs.match(/initialization="([^"]+)"/i);
+    if (!initMatch) {
+        throw new Error('MPEG-DASH <SegmentTemplate> missing initialization attribute');
+    }
+    const rawInit = unescapeXml(initMatch[1]);
+    const initUrl = new URL(rawInit, manifestBaseUrl).toString();
+
+    const mediaMatch = templateAttrs.match(/media="([^"]+)"/i);
+    if (!mediaMatch) {
+        throw new Error('MPEG-DASH <SegmentTemplate> missing media attribute');
+    }
+    const rawMedia = unescapeXml(mediaMatch[1]);
+
+    const startNumMatch = templateAttrs.match(/startNumber="([^"]+)"/i);
+    const startNumber = startNumMatch ? parseInt(startNumMatch[1], 10) : 1;
+
+    const timescaleMatch = templateAttrs.match(/timescale="([^"]+)"/i);
+    const timescale = timescaleMatch ? parseInt(timescaleMatch[1], 10) : 48000;
+
+    // 3. Parse SegmentTimeline
+    const timelineMatch = manifestXml.match(/<SegmentTimeline\b[^>]*>([\s\S]*?)<\/SegmentTimeline>/i);
+    const segmentNumbers: number[] = [];
+
+    if (timelineMatch) {
+        const sRegex = /<S\b([^>]+?)\/?>/gi;
+        let sMatch: RegExpExecArray | null;
+        let currentNum = startNumber;
+
+        while ((sMatch = sRegex.exec(timelineMatch[1])) !== null) {
+            const attrs = sMatch[1];
+            const dMatch = attrs.match(/d="([^"]+)"/i);
+            const rMatch = attrs.match(/r="([^"]+)"/i);
+            const duration = dMatch ? parseInt(dMatch[1], 10) : 0;
+            const repeat = rMatch ? parseInt(rMatch[1], 10) : 0;
+
+            const count = 1 + repeat;
+            for (let i = 0; i < count; i++) {
+                segmentNumbers.push(currentNum++);
+            }
+        }
+    } else {
+        // Fallback for duration / timescale calculation if SegmentTimeline is absent
+        const durationMatch = templateAttrs.match(/duration="([^"]+)"/i);
+        const presDurationMatch = manifestXml.match(/mediaPresentationDuration="PT(?:(\d+)M)?([\d.]+)S"/i);
+        if (durationMatch && presDurationMatch) {
+            const segDuration = parseInt(durationMatch[1], 10);
+            const mins = presDurationMatch[1] ? parseInt(presDurationMatch[1], 10) : 0;
+            const secs = parseFloat(presDurationMatch[2] || '0');
+            const totalSecs = mins * 60 + secs;
+            const segSecs = segDuration / timescale;
+            const count = Math.ceil(totalSecs / segSecs);
+            for (let i = 0; i < count; i++) {
+                segmentNumbers.push(startNumber + i);
+            }
+        }
+    }
+
+    if (segmentNumbers.length === 0) {
+        throw new Error('Unable to determine segment list from MPEG-DASH manifest');
+    }
+
+    return {
+        timescale,
+        startNumber,
+        codecs,
+        mimeType,
+        initUrl,
+        mediaUrlTemplate: rawMedia,
+        segmentNumbers,
+    };
+}
+
+/**
+ * Builds the media segment URL for a given segment number.
+ */
+export function buildSegmentUrl(mediaTemplate: string, num: number, baseUrl: string): string {
+    const formatted = mediaTemplate
+        .replace(/\$Number%0(\d+)d\$/g, (_, width) => String(num).padStart(parseInt(width, 10), '0'))
+        .replace(/\$Number\$/g, String(num));
+    return new URL(formatted, baseUrl).toString();
+}
+
+/**
+ * Executes FFmpeg to remux or copy audio from temporary container into destination audio file.
+ */
+export async function remuxWithFfmpeg(inputPath: string, outputPath: string, codec = 'flac'): Promise<void> {
+    const isFlac = codec.toLowerCase().includes('flac');
+
+    // 1. First attempt bitstream copy (-c:a copy)
+    const copyArgs = ['-v', 'error', '-y', '-i', inputPath, '-c:a', 'copy', outputPath];
+    const copySuccess = await new Promise<boolean>((resolve) => {
+        const child = spawn('ffmpeg', copyArgs, { shell: false, windowsHide: true });
+        const timer = setTimeout(() => {
+            child.kill();
+            resolve(false);
+        }, 30000);
+
+        child.on('close', (code) => {
+            clearTimeout(timer);
+            resolve(code === 0 && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1024);
+        });
+        child.on('error', () => {
+            clearTimeout(timer);
+            resolve(false);
+        });
+    });
+
+    if (copySuccess) {
+        return;
+    }
+
+    // 2. Fallback: Remux/re-encode to target container/codec
+    const fallbackArgs = isFlac
+        ? ['-v', 'error', '-y', '-i', inputPath, '-c:a', 'flac', outputPath]
+        : ['-v', 'error', '-y', '-i', inputPath, outputPath];
+
+    const fallbackSuccess = await new Promise<boolean>((resolve) => {
+        const child = spawn('ffmpeg', fallbackArgs, { shell: false, windowsHide: true });
+        const timer = setTimeout(() => {
+            child.kill();
+            resolve(false);
+        }, 60000);
+
+        child.on('close', (code) => {
+            clearTimeout(timer);
+            resolve(code === 0 && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1024);
+        });
+        child.on('error', () => {
+            clearTimeout(timer);
+            resolve(false);
+        });
+    });
+
+    if (!fallbackSuccess) {
+        throw new Error('FFmpeg failed to remux downloaded MPEG-DASH audio stream into final audio file');
+    }
+}
+
+/**
+ * Downloads all segments of an MPEG-DASH audio stream, stitches them, and remuxes into destination audio file.
+ */
+export async function downloadDashAudioStream({
+    manifestXml,
+    manifestUrl,
+    destinationPath,
+    customHeaders,
+    addonUrl,
+    onProgress,
+}: {
+    manifestXml: string;
+    manifestUrl: string;
+    destinationPath: string;
+    customHeaders?: Record<string, string>;
+    addonUrl?: string;
+    onProgress?: (current: number, total: number) => void;
+}): Promise<{ destinationPath: string; sizeBytes: number; segmentsCount: number }> {
+    const info = parseDashMpd(manifestXml, manifestUrl);
+    const targetDir = path.dirname(destinationPath);
+    if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const tempFragmentedMp4 = destinationPath + '.part.mp4';
+    if (fs.existsSync(tempFragmentedMp4)) {
+        try {
+            fs.unlinkSync(tempFragmentedMp4);
+        } catch {}
+    }
+
+    const writeStream = fs.createWriteStream(tempFragmentedMp4, { flags: 'a' });
+
+    try {
+        // 1. Download Initialization Segment (0.mp4)
+        console.log(`[DASH:DOWNLOAD] Fetching init segment: ${info.initUrl}`);
+        let initRes = await loggedFetch(
+            info.initUrl,
+            {
+                headers: {
+                    Accept: '*/*',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                    ...(customHeaders || {}),
+                },
+                signal: AbortSignal.timeout(30000),
+            },
+            { action: 'dash-init-segment', targetAddon: addonUrl }
+        );
+
+        if (!initRes.ok) {
+            throw new Error(`Failed to download DASH init segment (HTTP ${initRes.status})`);
+        }
+
+        const initBuffer = Buffer.from(await initRes.arrayBuffer());
+        writeStream.write(initBuffer);
+
+        // 2. Download Media Segments (1..N) with batch concurrency (4 at a time)
+        const total = info.segmentNumbers.length;
+        console.log(`[DASH:DOWNLOAD] Downloading ${total} media segments for codec "${info.codecs}"...`);
+
+        const BATCH_SIZE = 4;
+        for (let i = 0; i < total; i += BATCH_SIZE) {
+            const batchNumbers = info.segmentNumbers.slice(i, i + BATCH_SIZE);
+            const batchPromises = batchNumbers.map(async (num) => {
+                const segUrl = buildSegmentUrl(info.mediaUrlTemplate, num, manifestUrl);
+                let attempts = 3;
+                let lastError = '';
+
+                while (attempts > 0) {
+                    try {
+                        const res = await loggedFetch(
+                            segUrl,
+                            {
+                                headers: {
+                                    Accept: '*/*',
+                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                                    ...(customHeaders || {}),
+                                },
+                                signal: AbortSignal.timeout(30000),
+                            },
+                            { action: `dash-segment-${num}`, targetAddon: addonUrl }
+                        );
+
+                        if (res.status === 503 || res.status === 429) {
+                            const retryAfter = parseInt(res.headers?.get('Retry-After') || '2', 10);
+                            await new Promise((r) => setTimeout(r, Math.min(10, retryAfter) * 1000));
+                            attempts--;
+                            continue;
+                        }
+
+                        if (!res.ok) {
+                            throw new Error(`HTTP ${res.status}`);
+                        }
+
+                        const buf = Buffer.from(await res.arrayBuffer());
+                        return { num, buf };
+                    } catch (e: any) {
+                        lastError = e?.message || 'Download failed';
+                        attempts--;
+                        await new Promise((r) => setTimeout(r, 1000));
+                    }
+                }
+                throw new Error(`Segment ${num} failed after 3 attempts: ${lastError}`);
+            });
+
+            const results = await Promise.all(batchPromises);
+            // Sort in order to append sequentially
+            results.sort((a, b) => a.num - b.num);
+            for (const res of results) {
+                writeStream.write(res.buf);
+            }
+
+            onProgress?.(Math.min(i + BATCH_SIZE, total), total);
+        }
+
+        // Wait for file stream flush
+        await new Promise<void>((resolve, reject) => {
+            writeStream.end(() => resolve());
+            writeStream.on('error', reject);
+        });
+
+        // 3. Remux temporary fragmented MP4 into final audio file using FFmpeg
+        console.log(`[DASH:DOWNLOAD] All ${total} segments assembled into ${tempFragmentedMp4}. Remuxing with FFmpeg to ${destinationPath}...`);
+        await remuxWithFfmpeg(tempFragmentedMp4, destinationPath, info.codecs);
+
+        // 4. Clean up temporary .part.mp4 file
+        if (fs.existsSync(tempFragmentedMp4)) {
+            try {
+                fs.unlinkSync(tempFragmentedMp4);
+            } catch {}
+        }
+
+        const finalStats = fs.statSync(destinationPath);
+        return {
+            destinationPath,
+            sizeBytes: finalStats.size,
+            segmentsCount: total,
+        };
+    } catch (err) {
+        // Clean up partial files on failure
+        try {
+            writeStream.destroy();
+            if (fs.existsSync(tempFragmentedMp4)) fs.unlinkSync(tempFragmentedMp4);
+            if (fs.existsSync(destinationPath)) fs.unlinkSync(destinationPath);
+        } catch {}
+        throw err;
+    }
+}

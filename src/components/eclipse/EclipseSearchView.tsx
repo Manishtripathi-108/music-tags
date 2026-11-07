@@ -27,6 +27,7 @@ export function EclipseSearchView() {
         downloadTrack,
         downloadingTrackIds,
         downloadedTrackPaths,
+        trackQualityStatus,
         currentTrack,
         isPlaying,
         openAlbum,
@@ -194,6 +195,9 @@ export function EclipseSearchView() {
                                                 const isCurrent = currentTrack?.id === track.id;
                                                 const isDownloading = downloadingTrackIds.has(track.id);
                                                 const downloadedPath = downloadedTrackPaths[track.id];
+                                                const qStatus = trackQualityStatus[track.id];
+                                                const isSkipped = qStatus?.status === 'skipped';
+                                                const isUpgrade = qStatus?.status === 'upgrade';
 
                                                 return (
                                                     <tr key={track.id} className={`hover:bg-muted/40 transition-colors ${isCurrent ? 'bg-primary/5' : ''}`}>
@@ -226,12 +230,31 @@ export function EclipseSearchView() {
                                                             {track.album || '-'}
                                                         </td>
                                                         <td className="p-2.5 hidden sm:table-cell">
-                                                            <div className="flex items-center gap-1.5">
+                                                            <div className="flex flex-wrap items-center gap-1.5">
                                                                 <Badge variant="outline" size="xs" className="uppercase font-mono text-[10px]">
                                                                     {track.format || 'Audio'}
                                                                 </Badge>
                                                                 {track.audioQuality && (
                                                                     <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px]">{track.audioQuality}</span>
+                                                                )}
+                                                                {isSkipped && (
+                                                                    <Badge
+                                                                        variant="secondary"
+                                                                        size="xs"
+                                                                        className="bg-amber-500/15 border-amber-500/30 text-amber-300 font-mono text-[9px] cursor-help"
+                                                                        title={qStatus?.message}
+                                                                    >
+                                                                        In Library (Same/Higher)
+                                                                    </Badge>
+                                                                )}
+                                                                {isUpgrade && (
+                                                                    <Badge
+                                                                        variant="secondary"
+                                                                        size="xs"
+                                                                        className="bg-emerald-500/15 border-emerald-500/30 text-emerald-300 font-mono text-[9px]"
+                                                                    >
+                                                                        Upgraded
+                                                                    </Badge>
                                                                 )}
                                                             </div>
                                                         </td>
@@ -251,17 +274,31 @@ export function EclipseSearchView() {
                                                                     <span>{isCurrent && isPlaying ? 'Playing' : 'Play'}</span>
                                                                 </Button>
 
-                                                                <Button
-                                                                    variant={downloadedPath ? 'secondary' : 'outline'}
-                                                                    size="xs"
-                                                                    disabled={isDownloading}
-                                                                    onClick={() => downloadTrack(track)}
-                                                                    className={`h-7 px-2 text-xs gap-1 ${downloadedPath ? 'text-emerald-400 border-emerald-500/40' : ''}`}
-                                                                    title={downloadedPath ? `Saved to: ${downloadedPath}` : 'Download to local directory'}
-                                                                >
-                                                                    <Icon icon={isDownloading ? 'loading' : downloadedPath ? 'check' : 'download'} className={`size-3 ${isDownloading ? 'animate-spin' : ''}`} />
-                                                                    <span>{isDownloading ? '...' : downloadedPath ? 'Saved' : 'Get'}</span>
-                                                                </Button>
+                                                                {isSkipped ? (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="xs"
+                                                                        disabled={isDownloading}
+                                                                        onClick={() => downloadTrack(track, true)}
+                                                                        className="h-7 px-2 text-xs gap-1 border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                                                                        title={`${qStatus.message}\nClick to force re-download`}
+                                                                    >
+                                                                        <Icon icon={isDownloading ? 'loading' : 'download'} className={`size-3 ${isDownloading ? 'animate-spin' : ''}`} />
+                                                                        <span>{isDownloading ? '...' : 'Force'}</span>
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button
+                                                                        variant={downloadedPath ? 'secondary' : 'outline'}
+                                                                        size="xs"
+                                                                        disabled={isDownloading}
+                                                                        onClick={() => downloadTrack(track)}
+                                                                        className={`h-7 px-2 text-xs gap-1 ${downloadedPath ? 'text-emerald-400 border-emerald-500/40' : ''}`}
+                                                                        title={downloadedPath ? `Saved to: ${downloadedPath}` : 'Check library quality and download'}
+                                                                    >
+                                                                        <Icon icon={isDownloading ? 'loading' : downloadedPath ? 'check' : 'download'} className={`size-3 ${isDownloading ? 'animate-spin' : ''}`} />
+                                                                        <span>{isDownloading ? '...' : downloadedPath ? 'Saved' : 'Get'}</span>
+                                                                    </Button>
+                                                                )}
                                                             </div>
                                                         </td>
                                                     </tr>

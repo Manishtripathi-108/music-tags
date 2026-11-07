@@ -15,6 +15,7 @@ export function EclipseCatalogsView() {
         downloadTrack,
         downloadingTrackIds,
         downloadedTrackPaths,
+        trackQualityStatus,
         currentTrack,
         isPlaying,
         openAlbum,
@@ -157,31 +158,50 @@ export function EclipseCatalogsView() {
                                                 <div className="text-[11px] text-muted-foreground truncate">{item.artist}</div>
                                             )}
 
-                                            {isTrack && (
-                                                <div className="mt-2 pt-1 border-t flex items-center justify-between text-[10px] font-mono">
-                                                    <div className="flex items-center gap-1">
-                                                        {item.hiRes && (
-                                                            <Badge variant="secondary" size="xs" className="text-[9px] bg-amber-500/10 text-amber-500 border-amber-500/20">
-                                                                Hi-Res
-                                                            </Badge>
-                                                        )}
-                                                        {item.isrc && (
-                                                            <span className="text-muted-foreground/70 truncate max-w-[80px]" title={item.isrc}>
-                                                                {item.isrc}
-                                                            </span>
+                                            {isTrack && (() => {
+                                                const qStatus = trackQualityStatus[item.id];
+                                                const isSkipped = qStatus?.status === 'skipped';
+
+                                                return (
+                                                    <div className="mt-2 pt-1 border-t flex items-center justify-between text-[10px] font-mono">
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            {isSkipped ? (
+                                                                <Badge variant="secondary" size="xs" className="text-[9px] bg-amber-500/15 text-amber-300 border-amber-500/30" title={qStatus?.message}>
+                                                                    In Library
+                                                                </Badge>
+                                                            ) : item.hiRes ? (
+                                                                <Badge variant="secondary" size="xs" className="text-[9px] bg-amber-500/10 text-amber-500 border-amber-500/20">
+                                                                    Hi-Res
+                                                                </Badge>
+                                                            ) : item.isrc ? (
+                                                                <span className="text-muted-foreground/70 truncate max-w-[80px]" title={item.isrc}>
+                                                                    {item.isrc}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+
+                                                        {isSkipped ? (
+                                                            <button
+                                                                onClick={() => downloadTrack(item, true)}
+                                                                disabled={isDownloading}
+                                                                className="px-1.5 py-0.5 rounded text-[10px] border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 transition-colors"
+                                                                title={`${qStatus.message}\nClick to force re-download`}
+                                                            >
+                                                                {isDownloading ? '...' : 'Force'}
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => downloadTrack(item)}
+                                                                disabled={isDownloading}
+                                                                className={`p-1 rounded hover:bg-muted transition-colors ${downloadedPath ? 'text-emerald-400' : 'text-muted-foreground hover:text-foreground'}`}
+                                                                title={downloadedPath ? `Saved to: ${downloadedPath}` : 'Download to local directory'}
+                                                            >
+                                                                <Icon icon={isDownloading ? 'loading' : downloadedPath ? 'check' : 'download'} className={`size-3.5 ${isDownloading ? 'animate-spin' : ''}`} />
+                                                            </button>
                                                         )}
                                                     </div>
-
-                                                    <button
-                                                        onClick={() => downloadTrack(item)}
-                                                        disabled={isDownloading}
-                                                        className={`p-1 rounded hover:bg-muted transition-colors ${downloadedPath ? 'text-emerald-400' : 'text-muted-foreground hover:text-foreground'}`}
-                                                        title={downloadedPath ? `Saved to: ${downloadedPath}` : 'Download to local directory'}
-                                                    >
-                                                        <Icon icon={isDownloading ? 'loading' : downloadedPath ? 'check' : 'download'} className={`size-3.5 ${isDownloading ? 'animate-spin' : ''}`} />
-                                                    </button>
-                                                </div>
-                                            )}
+                                                );
+                                            })()}
                                         </div>
                                     );
                                 })}

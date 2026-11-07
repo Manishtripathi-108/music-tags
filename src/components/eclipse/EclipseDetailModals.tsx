@@ -13,7 +13,7 @@ function formatDuration(seconds?: number): string {
 }
 
 export function EclipseDetailModals() {
-    const { activeModal, closeModal, playTrack, downloadTrack, downloadingTrackIds, downloadedTrackPaths, currentTrack, isPlaying } = useEclipseStore();
+    const { activeModal, closeModal, playTrack, downloadTrack, downloadingTrackIds, downloadedTrackPaths, trackQualityStatus, currentTrack, isPlaying } = useEclipseStore();
 
     if (!activeModal) return null;
 
@@ -74,13 +74,22 @@ export function EclipseDetailModals() {
                                             const isCurrent = currentTrack?.id === t.id;
                                             const isDownloading = downloadingTrackIds.has(t.id);
                                             const downloadedPath = downloadedTrackPaths[t.id];
+                                            const qStatus = trackQualityStatus[t.id];
+                                            const isSkipped = qStatus?.status === 'skipped';
 
                                             return (
                                                 <tr key={t.id || idx} className={`hover:bg-muted/30 transition-colors ${isCurrent ? 'bg-primary/5' : ''}`}>
                                                     <td className="p-2 text-center text-muted-foreground font-mono w-8 text-xs">{idx + 1}</td>
                                                     <td className="p-2">
                                                         <div className="font-semibold text-foreground truncate">{t.title}</div>
-                                                        <div className="text-[11px] text-muted-foreground truncate">{t.artist || data.artist || data.name}</div>
+                                                        <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
+                                                            <span>{t.artist || data.artist || data.name}</span>
+                                                            {isSkipped && (
+                                                                <span className="text-[9px] font-mono text-amber-400 bg-amber-500/15 px-1 py-0.5 rounded border border-amber-500/30" title={qStatus?.message}>
+                                                                    In Library
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="p-2 text-center font-mono text-[11px] text-muted-foreground w-16">
                                                         {formatDuration(t.duration)}
@@ -96,15 +105,30 @@ export function EclipseDetailModals() {
                                                                 <Icon icon={isCurrent && isPlaying ? 'pause' : 'play'} className="size-3" />
                                                             </Button>
 
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="xs"
-                                                                disabled={isDownloading}
-                                                                onClick={() => downloadTrack(t)}
-                                                                className={`size-7 p-0 ${downloadedPath ? 'text-emerald-400' : 'text-muted-foreground'}`}
-                                                            >
-                                                                <Icon icon={isDownloading ? 'loading' : downloadedPath ? 'check' : 'download'} className={`size-3 ${isDownloading ? 'animate-spin' : ''}`} />
-                                                            </Button>
+                                                            {isSkipped ? (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="xs"
+                                                                    disabled={isDownloading}
+                                                                    onClick={() => downloadTrack(t, true)}
+                                                                    className="h-7 px-1.5 text-[10px] text-amber-300 border border-amber-500/40 hover:bg-amber-500/10"
+                                                                    title={`${qStatus.message}\nClick to force re-download`}
+                                                                >
+                                                                    <Icon icon={isDownloading ? 'loading' : 'download'} className={`size-3 ${isDownloading ? 'animate-spin' : ''}`} />
+                                                                    <span>Force</span>
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="xs"
+                                                                    disabled={isDownloading}
+                                                                    onClick={() => downloadTrack(t)}
+                                                                    className={`size-7 p-0 ${downloadedPath ? 'text-emerald-400' : 'text-muted-foreground'}`}
+                                                                    title={downloadedPath ? `Saved to: ${downloadedPath}` : 'Download to local directory'}
+                                                                >
+                                                                    <Icon icon={isDownloading ? 'loading' : downloadedPath ? 'check' : 'download'} className={`size-3 ${isDownloading ? 'animate-spin' : ''}`} />
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
