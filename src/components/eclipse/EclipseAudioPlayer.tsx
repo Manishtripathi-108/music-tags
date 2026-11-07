@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import { useEclipseStore } from '@/store/eclipseStore';
 import { formatEclipseTrackQuality, isTrackDolbyAtmos } from '@/domain/remote-audio/eclipse-quality';
+import { isDashManifestUrl, getAudioProxyUrl } from '@/domain/remote-audio/eclipse-stream';
 
 function formatDuration(seconds: number): string {
     if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -15,44 +16,150 @@ function formatDuration(seconds: number): string {
 }
 
 export function EclipseAudioPlayer() {
-    const { currentTrack, currentStream, isPlaying, isLoadingStream, notices, dismissNotice, downloadTrack, downloadingTrackIds } = useEclipseStore();
+    const {
+        currentTrack,
+        currentStream,
+        isPlaying,
+        isLoadingStream,
+        notices,
+        dismissNotice,
+        downloadTrack,
+        downloadingTrackIds,
+        getHeadersRecord,
+    } = useEclipseStore();
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const dashPlayerRef = useRef<any>(null);
+
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
+    const [playbackError, setPlaybackError] = useState<string | null>(null);
 
-    // Sync play/pause with store
+    // Initialize playback when currentStream changes
     useEffect(() => {
-        if (!audioRef.current) return;
-        if (currentStream?.url) {
-            audioRef.current.src = currentStream.url;
-            if (isPlaying) {
-                audioRef.current.play().catch(console.error);
+        const audio = audioRef.current;
+        if (!audio || !currentStream?.url) return;
+
+        let isCancelled = false;
+        setPlaybackError(null);
+
+        const initPlayer = async () => {
+            const rawUrl = currentStream.url;
+            const isDash = isDashManifestUrl(rawUrl, currentStream.format);
+            const headers = getHeadersRecord();
+            const proxyUrl = getAudioProxyUrl(rawUrl, headers);
+
+            // Clean up existing dashjs player instance if active
+            if (dashPlayerRef.current) {
+                try {
+                    dashPlayerRef.current.destroy();
+                } catch {}
+                dashPlayerRef.current = null;
             }
-        }
+
+            if (isDash) {
+                try {
+                    console.log(`[ECLIPSE:PLAYER] Initializing Dash.js for stream: ${rawUrl}`);
+                    const dashjs = await import('dashjs');
+                    if (isCancelled || !audioRef.current) return;
+
+                    const mediaPlayerFactory = dashjs.MediaPlayer || (dashjs as any).default?.MediaPlayer;
+                    if (!mediaPlayerFactory) {
+                        throw new Error('Dash.js MediaPlayer factory not found');
+                    }
+                    const player = mediaPlayerFactory().create();
+                    player.updateSettings({
+                        streaming: {
+                            retryIntervals: {
+                                MPD: 500,
+                                InitializationSegment: 500,
+                                MediaSegment: 1000,
+                            },
+                            retryAttempts: {
+                                MPD: 3,
+                                InitializationSegment: 3,
+                                MediaSegment: 3,
+                            },
+                        },
+                    });
+
+                    player.initialize(audio, proxyUrl, isPlaying);
+
+                    const errorEvent = (dashjs.MediaPlayer as any)?.events?.ERROR || 'error';
+                    player.on(errorEvent, (e: any) => {
+                        console.error('[ECLIPSE:DASH:ERROR]', e);
+                        const msg = e?.error?.message || e?.event?.message || 'Playback stream error';
+                        setPlaybackError(`DASH error: ${msg}`);
+                    });
+
+                    dashPlayerRef.current = player;
+                } catch (err: unknown) {
+                    console.error('[ECLIPSE:PLAYER:DASH_FAILED]', err);
+                    // Fallback to native audio proxy stream
+                    audio.src = proxyUrl;
+                    if (isPlaying) {
+                        audio.play().catch((playErr) => {
+                            console.warn('Native playback error:', playErr);
+                        });
+                    }
+                }
+            } else {
+                console.log(`[ECLIPSE:PLAYER] Playing direct audio stream: ${rawUrl}`);
+                audio.src = proxyUrl;
+                if (isPlaying) {
+                    audio.play().catch((err) => {
+                        console.warn('Native audio play error:', err);
+                    });
+                }
+            }
+        };
+
+        initPlayer();
+
+        return () => {
+            isCancelled = true;
+            if (dashPlayerRef.current) {
+                try {
+                    dashPlayerRef.current.destroy();
+                } catch {}
+                dashPlayerRef.current = null;
+            }
+        };
     }, [currentStream?.url]);
 
+    // Handle isPlaying toggle
     useEffect(() => {
-        if (!audioRef.current) return;
+        const audio = audioRef.current;
+        if (!audio) return;
+
         if (isPlaying) {
-            audioRef.current.play().catch(console.error);
+            if (dashPlayerRef.current) {
+                dashPlayerRef.current.play();
+            } else {
+                audio.play().catch((err) => {
+                    console.warn('Audio play failed:', err);
+                });
+            }
         } else {
-            audioRef.current.pause();
+            if (dashPlayerRef.current) {
+                dashPlayerRef.current.pause();
+            }
+            audio.pause();
         }
     }, [isPlaying]);
 
     if (!currentTrack && notices.length === 0) return null;
 
-    const isLossless = currentStream?.codec === 'flac' || currentStream?.bitDepth;
     const isDownloading = currentTrack ? downloadingTrackIds.has(currentTrack.id) : false;
 
     return (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t shadow-2xl p-2.5 sm:px-4 select-none">
-            {/* Hidden native audio element */}
+            {/* Native audio element driven by Dash.js or direct audio */}
             <audio
                 ref={audioRef}
+                preload="auto"
                 onTimeUpdate={() => {
                     if (audioRef.current) {
                         setCurrentTime(audioRef.current.currentTime);
@@ -65,7 +172,27 @@ export function EclipseAudioPlayer() {
                     }
                 }}
                 onEnded={() => useEclipseStore.setState({ isPlaying: false })}
+                onError={(e) => {
+                    const err = (e.target as HTMLAudioElement).error;
+                    if (err) {
+                        console.error('[ECLIPSE:AUDIO:ERROR]', err);
+                        setPlaybackError(`Audio playback error (code ${err.code})`);
+                    }
+                }}
             />
+
+            {/* Playback Error Toast */}
+            {playbackError && (
+                <div className="mb-2 px-3 py-1.5 rounded-lg text-xs font-mono border bg-rose-500/15 border-rose-500/30 text-rose-300 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <Icon icon="warning" className="size-3.5 text-rose-400 shrink-0" />
+                        <span className="truncate">{playbackError}</span>
+                    </div>
+                    <button onClick={() => setPlaybackError(null)} className="p-0.5 hover:opacity-80">
+                        <Icon icon="close" className="size-3" />
+                    </button>
+                </div>
+            )}
 
             {/* Addon Notices Toast (if any) */}
             {notices.length > 0 && (
@@ -164,7 +291,12 @@ export function EclipseAudioPlayer() {
                                 onChange={(e) => {
                                     const next = parseFloat(e.target.value);
                                     setCurrentTime(next);
-                                    if (audioRef.current) audioRef.current.currentTime = next;
+                                    if (dashPlayerRef.current) {
+                                        dashPlayerRef.current.seek(next);
+                                    }
+                                    if (audioRef.current) {
+                                        audioRef.current.currentTime = next;
+                                    }
                                 }}
                                 className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
                             />

@@ -212,7 +212,70 @@ export async function remuxWithFfmpeg(inputPath: string, outputPath: string, cod
 }
 
 /**
- * Downloads all segments of an MPEG-DASH audio stream, stitches them, and remuxes into destination audio file.
+ * Extracts FLAC stream header (dfLa box) from an initialization segment (0.mp4).
+ */
+export function extractFlacHeaderFromInitSegment(initSegment: Buffer): Buffer | null {
+    const dflaIndex = initSegment.indexOf(Buffer.from('dfLa', 'ascii'));
+    if (dflaIndex !== -1 && dflaIndex >= 4) {
+        const boxSize = initSegment.readUInt32BE(dflaIndex - 4);
+        const contentStart = dflaIndex + 8; // skip 'dfLa' (4B), version (1B), flags (3B)
+        const contentEnd = dflaIndex - 4 + boxSize;
+        if (contentEnd <= initSegment.length && contentStart < contentEnd) {
+            const dflaPayload = initSegment.subarray(contentStart, contentEnd);
+            if (dflaPayload.subarray(0, 4).toString('ascii') === 'fLaC') {
+                return dflaPayload;
+            }
+            return Buffer.concat([Buffer.from('fLaC', 'ascii'), dflaPayload]);
+        }
+    }
+    return null;
+}
+
+/**
+ * Extracts media data (raw audio frames) from mdat boxes in a media segment.
+ */
+export function extractMdatPayload(segment: Buffer): Buffer {
+    let offset = 0;
+    const parts: Buffer[] = [];
+    while (offset < segment.length - 8) {
+        let boxSize = segment.readUInt32BE(offset);
+        const boxType = segment.subarray(offset + 4, offset + 8).toString('ascii');
+        let headerSize = 8;
+        if (boxSize === 1) {
+            if (offset + 16 > segment.length) break;
+            boxSize = Number(segment.readBigUInt64BE(offset + 8));
+            headerSize = 16;
+        } else if (boxSize === 0) {
+            boxSize = segment.length - offset;
+        }
+
+        if (boxType === 'mdat') {
+            const end = Math.min(segment.length, offset + boxSize);
+            parts.push(segment.subarray(offset + headerSize, end));
+        }
+
+        if (boxSize <= 0) break;
+        offset += boxSize;
+    }
+    return parts.length > 0 ? Buffer.concat(parts) : segment;
+}
+
+/**
+ * Extracts pure FLAC stream from DASH segments without FFmpeg or re-encoding.
+ */
+export function extractFlacFromDashSegments(initSegment: Buffer, mediaSegments: Buffer[]): Buffer {
+    const header = extractFlacHeaderFromInitSegment(initSegment);
+    if (!header) {
+        // Fallback: concatenate container segments as-is
+        return Buffer.concat([initSegment, ...mediaSegments]);
+    }
+    const frames = mediaSegments.map((seg) => extractMdatPayload(seg));
+    return Buffer.concat([header, ...frames]);
+}
+
+/**
+ * Downloads all segments of an MPEG-DASH audio stream and losslessly writes the final audio file
+ * without using FFmpeg and without re-encoding the stream.
  */
 export async function downloadDashAudioStream({
     manifestXml,
@@ -235,19 +298,20 @@ export async function downloadDashAudioStream({
         fs.mkdirSync(targetDir, { recursive: true });
     }
 
-    const tempFragmentedMp4 = destinationPath + '.part.mp4';
-    if (fs.existsSync(tempFragmentedMp4)) {
+    const isFlac = info.codecs.toLowerCase().includes('flac') && destinationPath.toLowerCase().endsWith('.flac');
+    const tempFile = destinationPath + '.part';
+    if (fs.existsSync(tempFile)) {
         try {
-            fs.unlinkSync(tempFragmentedMp4);
+            fs.unlinkSync(tempFile);
         } catch {}
     }
 
-    const writeStream = fs.createWriteStream(tempFragmentedMp4, { flags: 'a' });
+    const writeStream = fs.createWriteStream(tempFile, { flags: 'a' });
 
     try {
         // 1. Download Initialization Segment (0.mp4)
         console.log(`[DASH:DOWNLOAD] Fetching init segment: ${info.initUrl}`);
-        let initRes = await loggedFetch(
+        const initRes = await loggedFetch(
             info.initUrl,
             {
                 headers: {
@@ -265,7 +329,20 @@ export async function downloadDashAudioStream({
         }
 
         const initBuffer = Buffer.from(await initRes.arrayBuffer());
-        writeStream.write(initBuffer);
+
+        let extractAsFlac = false;
+        if (isFlac) {
+            const flacHeader = extractFlacHeaderFromInitSegment(initBuffer);
+            if (flacHeader) {
+                console.log(`[DASH:DOWNLOAD] Direct lossless FLAC extraction enabled (no FFmpeg re-encoding)`);
+                writeStream.write(flacHeader);
+                extractAsFlac = true;
+            } else {
+                writeStream.write(initBuffer);
+            }
+        } else {
+            writeStream.write(initBuffer);
+        }
 
         // 2. Download Media Segments (1..N) with batch concurrency (4 at a time)
         const total = info.segmentNumbers.length;
@@ -307,8 +384,8 @@ export async function downloadDashAudioStream({
 
                         const buf = Buffer.from(await res.arrayBuffer());
                         return { num, buf };
-                    } catch (e: any) {
-                        lastError = e?.message || 'Download failed';
+                    } catch (e: unknown) {
+                        lastError = e instanceof Error ? e.message : 'Download failed';
                         attempts--;
                         await new Promise((r) => setTimeout(r, 1000));
                     }
@@ -317,10 +394,15 @@ export async function downloadDashAudioStream({
             });
 
             const results = await Promise.all(batchPromises);
-            // Sort in order to append sequentially
             results.sort((a, b) => a.num - b.num);
+
             for (const res of results) {
-                writeStream.write(res.buf);
+                if (extractAsFlac) {
+                    const rawFrames = extractMdatPayload(res.buf);
+                    writeStream.write(rawFrames);
+                } else {
+                    writeStream.write(res.buf);
+                }
             }
 
             onProgress?.(Math.min(i + BATCH_SIZE, total), total);
@@ -332,18 +414,17 @@ export async function downloadDashAudioStream({
             writeStream.on('error', reject);
         });
 
-        // 3. Remux temporary fragmented MP4 into final audio file using FFmpeg
-        console.log(`[DASH:DOWNLOAD] All ${total} segments assembled into ${tempFragmentedMp4}. Remuxing with FFmpeg to ${destinationPath}...`);
-        await remuxWithFfmpeg(tempFragmentedMp4, destinationPath, info.codecs);
-
-        // 4. Clean up temporary .part.mp4 file
-        if (fs.existsSync(tempFragmentedMp4)) {
+        // Rename temp file to destination path directly (zero FFmpeg, bit-perfect lossless stream)
+        if (fs.existsSync(destinationPath)) {
             try {
-                fs.unlinkSync(tempFragmentedMp4);
+                fs.unlinkSync(destinationPath);
             } catch {}
         }
+        fs.renameSync(tempFile, destinationPath);
 
         const finalStats = fs.statSync(destinationPath);
+        console.log(`[DASH:DOWNLOAD] Download complete: ${destinationPath} (${(finalStats.size / (1024 * 1024)).toFixed(2)} MB, zero-encoded)`);
+
         return {
             destinationPath,
             sizeBytes: finalStats.size,
@@ -353,7 +434,7 @@ export async function downloadDashAudioStream({
         // Clean up partial files on failure
         try {
             writeStream.destroy();
-            if (fs.existsSync(tempFragmentedMp4)) fs.unlinkSync(tempFragmentedMp4);
+            if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
             if (fs.existsSync(destinationPath)) fs.unlinkSync(destinationPath);
         } catch {}
         throw err;

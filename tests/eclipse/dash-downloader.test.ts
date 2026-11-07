@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { isDashManifest, unescapeXml, parseDashMpd, buildSegmentUrl } from '@/services/eclipse/dashDownloader';
+import {
+    isDashManifest,
+    unescapeXml,
+    parseDashMpd,
+    buildSegmentUrl,
+    extractFlacHeaderFromInitSegment,
+    extractMdatPayload,
+    extractFlacFromDashSegments,
+} from '@/services/eclipse/dashDownloader';
 
 describe('Eclipse DASH Audio Downloader', () => {
     const sampleMpdXml = `<?xml version='1.0' encoding='UTF-8'?>
@@ -55,5 +63,64 @@ describe('Eclipse DASH Audio Downloader', () => {
 
         const seg40Url = buildSegmentUrl(parsed.mediaUrlTemplate, 40, baseUrl);
         expect(seg40Url).toContain('/40.mp4?');
+    });
+
+    it('extracts lossless FLAC header from MP4 dfLa box without FFmpeg', () => {
+        // Construct mock MP4 container with dfLa box
+        const ftyp = Buffer.from([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x36, 0, 0, 0, 0]);
+        const flacMetadataPayload = Buffer.concat([
+            Buffer.from('fLaC', 'ascii'),
+            Buffer.alloc(38, 0x42), // Mock 38-byte STREAMINFO block
+        ]);
+        const dfLaBox = Buffer.concat([
+            Buffer.from([0, 0, 0, 4 + 4 + 4 + flacMetadataPayload.length]),
+            Buffer.from('dfLa', 'ascii'),
+            Buffer.from([0, 0, 0, 0]), // version + flags (4 bytes)
+            flacMetadataPayload,
+        ]);
+        const initSegment = Buffer.concat([ftyp, dfLaBox]);
+
+        const header = extractFlacHeaderFromInitSegment(initSegment);
+        expect(header).not.toBeNull();
+        expect(header!.subarray(0, 4).toString('ascii')).toBe('fLaC');
+        expect(header!.length).toBe(42);
+    });
+
+    it('extracts raw audio frames from media segment mdat boxes without FFmpeg re-encoding', () => {
+        const frameData = Buffer.from([0xff, 0xf8, 0x12, 0x34, 0x56, 0x78]);
+        const mdatBox = Buffer.concat([
+            Buffer.from([0, 0, 0, 8 + frameData.length]),
+            Buffer.from('mdat', 'ascii'),
+            frameData,
+        ]);
+
+        const extracted = extractMdatPayload(mdatBox);
+        expect(extracted).toEqual(frameData);
+    });
+
+    it('stitches pure lossless FLAC file from DASH init and media segments', () => {
+        const flacMetadataPayload = Buffer.concat([
+            Buffer.from('fLaC', 'ascii'),
+            Buffer.alloc(38, 0x01),
+        ]);
+        const dfLaBox = Buffer.concat([
+            Buffer.from([0, 0, 0, 4 + 4 + 4 + flacMetadataPayload.length]),
+            Buffer.from('dfLa', 'ascii'),
+            Buffer.from([0, 0, 0, 0]),
+            flacMetadataPayload,
+        ]);
+        const initSegment = Buffer.concat([Buffer.alloc(16), dfLaBox]);
+
+        const frame1 = Buffer.from([0xff, 0xf8, 0xaa, 0xbb]);
+        const mdat1 = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('mdat', 'ascii'), frame1]);
+
+        const frame2 = Buffer.from([0xff, 0xf8, 0xcc, 0xdd]);
+        const mdat2 = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('mdat', 'ascii'), frame2]);
+
+        const fullFlac = extractFlacFromDashSegments(initSegment, [mdat1, mdat2]);
+        expect(fullFlac.subarray(0, 4).toString('ascii')).toBe('fLaC');
+        expect(fullFlac.length).toBe(42 + frame1.length + frame2.length);
+        expect(fullFlac.subarray(42, 46)).toEqual(frame1);
+        expect(fullFlac.subarray(46, 50)).toEqual(frame2);
     });
 });
