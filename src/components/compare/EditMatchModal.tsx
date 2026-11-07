@@ -111,7 +111,7 @@ export function EditMatchModal() {
                         {remoteTrack ? (
                             <div className="flex items-start gap-3 bg-muted/20 p-2.5 rounded border border-border/40">
                                 {remoteTrack.artworkURL ? (
-                                    <img src={remoteTrack.artworkURL} alt="" className="size-12 rounded object-cover border shrink-0" />
+                                    <img src={remoteTrack.artworkURL} alt="" loading="lazy" decoding="async" className="size-12 rounded object-cover border shrink-0" />
                                 ) : (
                                     <div className="size-12 rounded bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
                                         <Icon icon="audio" className="size-5" />
@@ -207,7 +207,7 @@ export function EditMatchModal() {
                                         >
                                             <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
                                                 {cand.artworkURL ? (
-                                                    <img src={cand.artworkURL} alt="" className="size-9 rounded object-cover border shrink-0" />
+                                                    <img src={cand.artworkURL} alt="" loading="lazy" decoding="async" className="size-9 rounded object-cover border shrink-0" />
                                                 ) : (
                                                     <div className="size-9 rounded bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
                                                         <Icon icon="audio" className="size-4" />

@@ -1,14 +1,51 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import Image from 'next/image';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FieldInput } from '@/components/ui/Field';
 import Icon from '@/components/ui/Icon';
 import { type AudioComparisonItem } from '@/domain/remote-audio/types';
-import { type CompareFilter, useCompareStore } from '@/store/compareStore';
+import { type CompareFilter, type CompareSortField, useCompareStore } from '@/store/compareStore';
+
+function LazyArtwork({ src, alt }: { src?: string; alt?: string }) {
+    const [loaded, setLoaded] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        setLoaded(false);
+        setFailed(false);
+    }, [src]);
+
+    if (!src || failed) {
+        return (
+            <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0 text-muted-foreground border border-border/80">
+                <Icon icon="audio" className="size-4" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="size-8 rounded bg-muted relative overflow-hidden shrink-0 border border-border/80">
+            {!loaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground/40">
+                    <Icon icon="audio" className="size-3.5" />
+                </div>
+            )}
+            <img
+                src={src}
+                alt={alt || ''}
+                loading="lazy"
+                decoding="async"
+                onLoad={() => setLoaded(true)}
+                onError={() => setFailed(true)}
+                className={`size-full object-cover transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+            />
+        </div>
+    );
+}
 
 export function CompareTrackTable() {
     const {
@@ -34,6 +71,8 @@ export function CompareTrackTable() {
         toggleSort,
         setSort,
     } = useCompareStore();
+
+    const parentRef = useRef<HTMLDivElement>(null);
 
     // Filtering and sorting logic
     const filteredItems = useMemo(() => {
@@ -68,7 +107,25 @@ export function CompareTrackTable() {
         }
 
         // Apply sorting
-        if (sortBy === 'confidence') {
+        if (sortBy === 'quality') {
+            list.sort((a, b) => {
+                const getRemoteScore = (item: AudioComparisonItem) => {
+                    if (!item.remoteQuality) return -1;
+                    let s = item.remoteQuality.score;
+                    if (item.isDolbyAvailable || item.remoteQuality.isDolbyAtmos) {
+                        s += 5000; // Prioritize spatial Dolby Atmos mixes at top
+                    }
+                    return s;
+                };
+                const diff = getRemoteScore(a) - getRemoteScore(b);
+                return sortOrder === 'asc' ? diff : -diff;
+            });
+        } else if (sortBy === 'local_quality') {
+            list.sort((a, b) => {
+                const diff = a.localQuality.score - b.localQuality.score;
+                return sortOrder === 'asc' ? diff : -diff;
+            });
+        } else if (sortBy === 'confidence') {
             list.sort((a, b) => {
                 const diff = (a.confidence ?? 0) - (b.confidence ?? 0);
                 return sortOrder === 'asc' ? diff : -diff;
@@ -88,14 +145,31 @@ export function CompareTrackTable() {
                 return sortOrder === 'asc' ? cmp : -cmp;
             });
         } else if (sortBy === 'status') {
+            const statusOrder: Record<string, number> = {
+                upgrade_available: 5,
+                dolby_available: 4,
+                same_quality: 3,
+                local_higher: 2,
+                no_match: 1,
+                not_searched: 0,
+            };
             list.sort((a, b) => {
-                const cmp = a.status.localeCompare(b.status);
-                return sortOrder === 'asc' ? cmp : -cmp;
+                const diff = (statusOrder[a.status] ?? 0) - (statusOrder[b.status] ?? 0);
+                return sortOrder === 'asc' ? diff : -diff;
             });
         }
 
         return list;
     }, [items, activeFilter, searchQuery, operationErrors, sortBy, sortOrder]);
+
+    const rowVirtualizer = useVirtualizer({
+        count: filteredItems.length,
+        getScrollElement: () => parentRef.current,
+        estimateSize: () => 60,
+        overscan: 10,
+    });
+
+    const virtualItems = rowVirtualizer.getVirtualItems();
 
     const upgradeCount = items.filter((i) => i.status === 'upgrade_available').length;
     const dolbyCount = items.filter((i) => i.isDolbyAvailable).length;
@@ -197,21 +271,45 @@ export function CompareTrackTable() {
                     )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {sortBy !== 'none' && (
-                        <div className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground bg-muted/50 px-2 py-0.5 rounded border border-border/60">
-                            <span>Sort:</span>
-                            <span className="text-foreground font-semibold uppercase">{sortBy}</span>
-                            <span className="text-primary font-bold">({sortOrder === 'asc' ? '▲ Low→High' : '▼ High→Low'})</span>
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Sort Selector Dropdown & Order Toggle */}
+                    <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-md border text-[11px] font-mono">
+                        <span className="text-muted-foreground px-1 flex items-center gap-1">
+                            <Icon icon="sort" className="size-3" />
+                            Sort:
+                        </span>
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSort(e.target.value as CompareSortField, sortOrder)}
+                            className="bg-transparent text-foreground text-[11px] font-mono outline-hidden cursor-pointer pr-1"
+                        >
+                            <option value="none" className="bg-popover text-popover-foreground">Default (None)</option>
+                            <option value="quality" className="bg-popover text-popover-foreground">Available Quality (Hi-Res / Dolby)</option>
+                            <option value="local_quality" className="bg-popover text-popover-foreground">Local Quality</option>
+                            <option value="confidence" className="bg-popover text-popover-foreground">Match Confidence</option>
+                            <option value="title" className="bg-popover text-popover-foreground">Title</option>
+                            <option value="artist" className="bg-popover text-popover-foreground">Artist</option>
+                            <option value="status" className="bg-popover text-popover-foreground">Comparison Status</option>
+                        </select>
+                        {sortBy !== 'none' && (
+                            <button
+                                onClick={() => setSort(sortBy, sortOrder === 'asc' ? 'desc' : 'asc')}
+                                className="px-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                title={`Order: ${sortOrder === 'asc' ? 'Ascending (Low→High)' : 'Descending (High→Low)'} - Click to toggle`}
+                            >
+                                <Icon icon={sortOrder === 'asc' ? 'up' : 'down'} className="size-3" />
+                            </button>
+                        )}
+                        {sortBy !== 'none' && (
                             <button
                                 onClick={() => setSort('none')}
-                                className="ml-1 text-muted-foreground hover:text-foreground text-[10px] cursor-pointer"
+                                className="px-1 text-muted-foreground hover:text-foreground text-[10px] cursor-pointer"
                                 title="Reset sorting"
                             >
                                 ✕
                             </button>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     <div className="relative w-64">
                         <Icon icon="search" className="text-muted-foreground absolute top-2 left-2 size-3.5" />
@@ -235,7 +333,7 @@ export function CompareTrackTable() {
             </div>
 
             {/* Comparison table */}
-            <div className="flex-1 overflow-auto">
+            <div ref={parentRef} className="flex-1 overflow-auto">
                 <table className="w-full text-left text-xs border-collapse">
                     <thead className="bg-muted/60 text-muted-foreground sticky top-0 z-10 border-b backdrop-blur-xs font-mono text-[11px]">
                         <tr>
@@ -261,8 +359,36 @@ export function CompareTrackTable() {
                                     )}
                                 </div>
                             </th>
-                            <th className="p-2.5 min-w-[130px]">Local Specs</th>
-                            <th className="p-2.5 min-w-[240px]">Remote Available Match</th>
+                            <th
+                                onClick={() => toggleSort('local_quality')}
+                                className="p-2.5 min-w-[130px] cursor-pointer hover:text-foreground transition-colors select-none group"
+                                title="Click to sort by local audio quality"
+                            >
+                                <div className="flex items-center gap-1">
+                                    <span>Local Specs</span>
+                                    {sortBy === 'local_quality' ? (
+                                        <Badge variant="outline" size="xs" className="px-1 py-0 text-primary border-primary/40 font-bold">
+                                            {sortOrder === 'asc' ? '▲ Low→High' : '▼ High→Low'}
+                                        </Badge>
+                                    ) : (
+                                        <Icon icon="sort" className="size-3 text-muted-foreground/30 group-hover:text-foreground" />
+                                    )}
+                                </div>
+                            </th>
+                            <th
+                                onClick={() => toggleSort('artist')}
+                                className="p-2.5 min-w-[240px] cursor-pointer hover:text-foreground transition-colors select-none group"
+                                title="Click to sort by artist"
+                            >
+                                <div className="flex items-center gap-1">
+                                    <span>Remote Available Match</span>
+                                    {sortBy === 'artist' ? (
+                                        <span className="text-primary font-bold">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                                    ) : (
+                                        <Icon icon="sort" className="size-3 text-muted-foreground/30 group-hover:text-foreground" />
+                                    )}
+                                </div>
+                            </th>
                             <th
                                 onClick={() => toggleSort('confidence')}
                                 className="p-2.5 min-w-[130px] cursor-pointer hover:text-foreground transition-colors select-none group"
@@ -279,8 +405,36 @@ export function CompareTrackTable() {
                                     )}
                                 </div>
                             </th>
-                            <th className="p-2.5 min-w-[140px]">Available Quality</th>
-                            <th className="p-2.5 min-w-[170px]">Comparison Status</th>
+                            <th
+                                onClick={() => toggleSort('quality')}
+                                className="p-2.5 min-w-[140px] cursor-pointer hover:text-foreground transition-colors select-none group"
+                                title="Click to sort by Available Remote Quality (Hi-Res & Dolby Atmos first)"
+                            >
+                                <div className="flex items-center gap-1.5">
+                                    <span>Available Quality</span>
+                                    {sortBy === 'quality' ? (
+                                        <Badge variant="outline" size="xs" className="px-1 py-0 text-primary border-primary/40 font-bold">
+                                            {sortOrder === 'asc' ? '▲ Low→High' : '▼ High→Low'}
+                                        </Badge>
+                                    ) : (
+                                        <Icon icon="sort" className="size-3 text-muted-foreground/30 group-hover:text-foreground" />
+                                    )}
+                                </div>
+                            </th>
+                            <th
+                                onClick={() => toggleSort('status')}
+                                className="p-2.5 min-w-[170px] cursor-pointer hover:text-foreground transition-colors select-none group"
+                                title="Click to sort by comparison status"
+                            >
+                                <div className="flex items-center gap-1">
+                                    <span>Comparison Status</span>
+                                    {sortBy === 'status' ? (
+                                        <span className="text-primary font-bold">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                                    ) : (
+                                        <Icon icon="sort" className="size-3 text-muted-foreground/30 group-hover:text-foreground" />
+                                    )}
+                                </div>
+                            </th>
                             <th className="p-2.5 min-w-[110px] text-right">Actions</th>
                         </tr>
                     </thead>
@@ -299,316 +453,333 @@ export function CompareTrackTable() {
                                 </td>
                             </tr>
                         ) : (
-                            filteredItems.map((item) => {
-                                const isSelected = selectedIds.has(item.localTrack.id);
-                                const isDownloaded = item.cachedMatch?.downloadStatus === 'completed';
-                                const activeError = operationErrors.find((e) => e.trackId === item.localTrack.id);
-                                const downloadFailure = item.cachedMatch?.downloadStatus === 'failed' ? item.cachedMatch.downloadError : null;
+                            <>
+                                {virtualItems.length > 0 && virtualItems[0].start > 0 && (
+                                    <tr style={{ height: `${virtualItems[0].start}px` }}>
+                                        <td colSpan={8} className="p-0 border-0" />
+                                    </tr>
+                                )}
+                                {virtualItems.map((virtualRow) => {
+                                    const item = filteredItems[virtualRow.index];
+                                    if (!item) return null;
 
-                                return (
-                                    <tr
-                                        key={item.localTrack.id}
-                                        onClick={(e) => {
-                                            const target = e.target as HTMLElement;
-                                            if (target.closest('button, a, input, [role="button"]')) {
-                                                return;
-                                            }
-                                            toggleSelect(item.localTrack.id, e.shiftKey, visibleIds);
-                                        }}
-                                        className={`transition-colors cursor-pointer hover:bg-muted/30 select-none ${
-                                            isSelected ? 'bg-primary/5' : ''
-                                        } ${activeError || downloadFailure ? 'bg-rose-500/5 border-l-2 border-l-rose-500' : ''}`}
-                                    >
-                                        {/* Checkbox */}
-                                        <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                                            <input
-                                                type="checkbox"
-                                                checked={isSelected}
-                                                onClick={(e) => {
-                                                    toggleSelect(item.localTrack.id, e.shiftKey, visibleIds);
-                                                }}
-                                                onChange={() => {}}
-                                                className="cursor-pointer rounded"
-                                            />
-                                        </td>
+                                    const isSelected = selectedIds.has(item.localTrack.id);
+                                    const isDownloaded = item.cachedMatch?.downloadStatus === 'completed';
+                                    const activeError = operationErrors.find((e) => e.trackId === item.localTrack.id);
+                                    const downloadFailure = item.cachedMatch?.downloadStatus === 'failed' ? item.cachedMatch.downloadError : null;
 
-                                        {/* Local Audio & File */}
-                                        <td className="p-2.5">
-                                            <div className="font-semibold text-foreground truncate max-w-xs" title={item.localTrack.title || item.localTrack.filename}>
-                                                {item.localTrack.title || item.localTrack.filename}
-                                            </div>
-                                            <div className="text-[11px] text-muted-foreground truncate max-w-xs">
-                                                {item.localTrack.artist || 'Unknown Artist'}
-                                                {item.localTrack.album ? ` • ${item.localTrack.album}` : ''}
-                                            </div>
-                                            {item.localTrack.isrc && (
-                                                <div className="text-[10px] font-mono text-muted-foreground/80">
-                                                    ISRC: {item.localTrack.isrc}
-                                                </div>
-                                            )}
-                                            {isDownloaded && (
-                                                <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 mt-0.5" title={item.cachedMatch?.downloadPath || 'Saved'}>
-                                                    <Icon icon="check" className="size-2.5 text-emerald-400 shrink-0" />
-                                                    <span className="truncate">Saved: {item.cachedMatch?.downloadPath ? item.cachedMatch.downloadPath.split(/[/\\]/).pop() : 'Downloaded'}</span>
-                                                </div>
-                                            )}
-                                            {activeError && (
-                                                <div
-                                                    className="mt-1 flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/25 px-1.5 py-0.5 rounded font-mono truncate max-w-xs"
-                                                    title={`${activeError.action.toUpperCase()} ERROR: ${activeError.errorMessage}`}
-                                                >
-                                                    <Icon icon="warning" className="size-3 shrink-0 text-rose-400" />
-                                                    <span className="truncate">
-                                                        {activeError.action.toUpperCase()}: {activeError.errorMessage}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </td>
+                                    return (
+                                        <tr
+                                            key={item.localTrack.id}
+                                            data-index={virtualRow.index}
+                                            ref={rowVirtualizer.measureElement}
+                                            onClick={(e) => {
+                                                const target = e.target as HTMLElement;
+                                                if (target.closest('button, a, input, [role="button"]')) {
+                                                    return;
+                                                }
+                                                toggleSelect(item.localTrack.id, e.shiftKey, visibleIds);
+                                            }}
+                                            className={`transition-colors cursor-pointer hover:bg-muted/30 select-none ${
+                                                isSelected ? 'bg-primary/5' : ''
+                                            } ${activeError || downloadFailure ? 'bg-rose-500/5 border-l-2 border-l-rose-500' : ''}`}
+                                        >
+                                            {/* Checkbox */}
+                                            <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onClick={(e) => {
+                                                        toggleSelect(item.localTrack.id, e.shiftKey, visibleIds);
+                                                    }}
+                                                    onChange={() => {}}
+                                                    className="cursor-pointer rounded"
+                                                />
+                                            </td>
 
-                                        {/* Local Specs */}
-                                        <td className="p-2.5 font-mono text-[11px]">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                <Badge
-                                                    variant={item.localQuality.isLossless ? 'success' : 'secondary'}
-                                                    size="xs"
-                                                    className={item.localQuality.isLossless ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : ''}
-                                                >
-                                                    {item.localQuality.codec.toUpperCase() || (item.localQuality.isLossless ? 'FLAC' : 'MP3')}
-                                                </Badge>
-                                                {item.localQuality.bitDepth && (
-                                                    <span className="text-foreground">{item.localQuality.bitDepth}-bit</span>
+                                            {/* Local Audio & File */}
+                                            <td className="p-2.5">
+                                                <div className="font-semibold text-foreground truncate max-w-xs" title={item.localTrack.title || item.localTrack.filename}>
+                                                    {item.localTrack.title || item.localTrack.filename}
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground truncate max-w-xs">
+                                                    {item.localTrack.artist || 'Unknown Artist'}
+                                                    {item.localTrack.album ? ` • ${item.localTrack.album}` : ''}
+                                                </div>
+                                                {item.localTrack.isrc && (
+                                                    <div className="text-[10px] font-mono text-muted-foreground/80">
+                                                        ISRC: {item.localTrack.isrc}
+                                                    </div>
                                                 )}
-                                                {item.localQuality.sampleRateHz && (
-                                                    <span className="text-muted-foreground">{item.localQuality.sampleRateHz / 1000}kHz</span>
+                                                {isDownloaded && (
+                                                    <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 mt-0.5" title={item.cachedMatch?.downloadPath || 'Saved'}>
+                                                        <Icon icon="check" className="size-2.5 text-emerald-400 shrink-0" />
+                                                        <span className="truncate">Saved: {item.cachedMatch?.downloadPath ? item.cachedMatch.downloadPath.split(/[/\\]/).pop() : 'Downloaded'}</span>
+                                                    </div>
                                                 )}
-                                            </div>
-                                            {item.localQuality.bitrateKbps && !item.localQuality.isLossless && (
-                                                <div className="text-[10px] text-muted-foreground">
-                                                    {item.localQuality.bitrateKbps} kbps
-                                                </div>
-                                            )}
-                                        </td>
+                                                {activeError && (
+                                                    <div
+                                                        className="mt-1 flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/25 px-1.5 py-0.5 rounded font-mono truncate max-w-xs"
+                                                        title={`${activeError.action.toUpperCase()} ERROR: ${activeError.errorMessage}`}
+                                                    >
+                                                        <Icon icon="warning" className="size-3 shrink-0 text-rose-400" />
+                                                        <span className="truncate">
+                                                            {activeError.action.toUpperCase()}: {activeError.errorMessage}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </td>
 
-                                        {/* Remote Available Match */}
-                                        <td className="p-2.5">
-                                            {item.remoteTrack ? (
-                                                <div className="flex items-start gap-2.5">
-                                                    {item.remoteTrack.artworkURL ? (
-                                                        <img
-                                                            src={item.remoteTrack.artworkURL}
-                                                            alt=""
-                                                            className="size-8 rounded object-cover border border-border/80 shrink-0"
-                                                        />
-                                                    ) : (
-                                                        <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
-                                                            <Icon icon="audio" className="size-4" />
-                                                        </div>
+                                            {/* Local Specs */}
+                                            <td className="p-2.5 font-mono text-[11px]">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <Badge
+                                                        variant={item.localQuality.isLossless ? 'success' : 'secondary'}
+                                                        size="xs"
+                                                        className={item.localQuality.isLossless ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : ''}
+                                                    >
+                                                        {item.localQuality.codec.toUpperCase() || (item.localQuality.isLossless ? 'FLAC' : 'MP3')}
+                                                    </Badge>
+                                                    {item.localQuality.bitDepth && (
+                                                        <span className="text-foreground">{item.localQuality.bitDepth}-bit</span>
                                                     )}
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="font-medium text-foreground truncate max-w-xs" title={item.remoteTrack.title}>
-                                                            {item.remoteTrack.title}
-                                                        </div>
-                                                        <div className="text-[11px] text-muted-foreground truncate max-w-xs">
-                                                            {item.remoteTrack.artist || '—'}
-                                                            {item.remoteTrack.album ? ` • ${item.remoteTrack.album}` : ''}
-                                                        </div>
-                                                        <div className="flex items-center gap-1 mt-0.5">
-                                                            <span className="text-[9px] font-mono text-muted-foreground/70 bg-muted px-1 py-0.5 rounded">
-                                                                ID: {item.remoteTrack.id}
-                                                            </span>
-                                                            {item.cachedMatch?.lastCheckedAt && (
-                                                                <span className="text-[9px] text-muted-foreground/60 font-mono">
-                                                                    (Cached)
+                                                    {item.localQuality.sampleRateHz && (
+                                                        <span className="text-muted-foreground">{item.localQuality.sampleRateHz / 1000}kHz</span>
+                                                    )}
+                                                </div>
+                                                {item.localQuality.bitrateKbps && !item.localQuality.isLossless && (
+                                                    <div className="text-[10px] text-muted-foreground">
+                                                        {item.localQuality.bitrateKbps} kbps
+                                                    </div>
+                                                )}
+                                            </td>
+
+                                            {/* Remote Available Match */}
+                                            <td className="p-2.5">
+                                                {item.remoteTrack ? (
+                                                    <div className="flex items-start gap-2.5">
+                                                        <LazyArtwork
+                                                            src={item.remoteTrack.artworkURL}
+                                                            alt={item.remoteTrack.title}
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="font-medium text-foreground truncate max-w-xs" title={item.remoteTrack.title}>
+                                                                {item.remoteTrack.title}
+                                                            </div>
+                                                            <div className="text-[11px] text-muted-foreground truncate max-w-xs">
+                                                                {item.remoteTrack.artist || '—'}
+                                                                {item.remoteTrack.album ? ` • ${item.remoteTrack.album}` : ''}
+                                                            </div>
+                                                            <div className="flex items-center gap-1 mt-0.5">
+                                                                <span className="text-[9px] font-mono text-muted-foreground/70 bg-muted px-1 py-0.5 rounded">
+                                                                    ID: {item.remoteTrack.id}
                                                                 </span>
-                                                            )}
+                                                                {item.cachedMatch?.lastCheckedAt && (
+                                                                    <span className="text-[9px] text-muted-foreground/60 font-mono">
+                                                                        (Cached)
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ) : item.status === 'no_match' ? (
-                                                <span className="text-muted-foreground italic text-[11px]">No match in remote catalogue</span>
-                                            ) : (
-                                                <span className="text-muted-foreground/60 italic text-[11px]">Not searched yet</span>
-                                            )}
-                                        </td>
+                                                ) : item.status === 'no_match' ? (
+                                                    <span className="text-muted-foreground italic text-[11px]">No match in remote catalogue</span>
+                                                ) : (
+                                                    <span className="text-muted-foreground/60 italic text-[11px]">Not searched yet</span>
+                                                )}
+                                            </td>
 
-                                        {/* Match Confidence Score */}
-                                        <td className="p-2.5 font-mono text-[11px]">
-                                            {item.remoteTrack ? (
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-1.5">
+                                            {/* Match Confidence Score */}
+                                            <td className="p-2.5 font-mono text-[11px]">
+                                                {item.remoteTrack ? (
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Badge
+                                                                variant="outline"
+                                                                size="xs"
+                                                                className={`font-semibold font-mono ${
+                                                                    (item.confidence ?? 0) >= 0.85
+                                                                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                                                        : (item.confidence ?? 0) >= 0.65
+                                                                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                                                        : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                                                }`}
+                                                            >
+                                                                {Math.round((item.confidence ?? 0) * 100)}% Match
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="w-16 bg-muted/60 h-1 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full transition-all duration-300 ${
+                                                                    (item.confidence ?? 0) >= 0.85
+                                                                        ? 'bg-emerald-500'
+                                                                        : (item.confidence ?? 0) >= 0.65
+                                                                        ? 'bg-amber-500'
+                                                                        : 'bg-rose-500'
+                                                                }`}
+                                                                style={{ width: `${Math.round((item.confidence ?? 0) * 100)}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ) : item.status === 'no_match' ? (
+                                                    <span className="text-muted-foreground/50 text-[10px]">0%</span>
+                                                ) : (
+                                                    <span className="text-muted-foreground/40 text-[10px]">—</span>
+                                                )}
+                                            </td>
+
+                                            {/* Available Quality */}
+                                            <td className="p-2.5 font-mono text-[11px]">
+                                                {item.remoteQuality ? (
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className="font-semibold text-foreground">{item.remoteQuality.label}</span>
+                                                        </div>
+                                                        {item.isDolbyAvailable && (
+                                                            <Badge variant="outline" size="xs" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
+                                                                Dolby Atmos Mix
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground/60">—</span>
+                                                )}
+                                            </td>
+
+                                            {/* Comparison Status */}
+                                            <td className="p-2.5">
+                                                {item.status === 'upgrade_available' ? (
+                                                    <Badge variant="success" size="sm" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30 gap-1">
+                                                        <Icon icon="magic" className="size-3" />
+                                                        <span>Upgrade Available</span>
+                                                    </Badge>
+                                                ) : item.status === 'dolby_available' ? (
+                                                    <Badge variant="outline" size="sm" className="bg-purple-500/15 text-purple-400 border-purple-500/30 gap-1">
+                                                        <Icon icon="audio" className="size-3" />
+                                                        <span>Dolby Atmos Available</span>
+                                                    </Badge>
+                                                ) : item.status === 'same_quality' ? (
+                                                    <Badge variant="secondary" size="sm" className="gap-1 text-muted-foreground">
+                                                        <Icon icon="check" className="size-3" />
+                                                        <span>Same Quality</span>
+                                                    </Badge>
+                                                ) : item.status === 'local_higher' ? (
+                                                    <Badge variant="outline" size="sm" className="gap-1 text-amber-500 border-amber-500/30">
+                                                        <span>Local is Higher</span>
+                                                    </Badge>
+                                                ) : item.status === 'no_match' ? (
+                                                    <Badge variant="outline" size="sm" className="text-muted-foreground/60">
+                                                        No Match
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-muted-foreground/60 text-[11px]">Ready to search</span>
+                                                )}
+
+                                                {isDownloaded && (
+                                                    <div className="mt-1">
                                                         <Badge
                                                             variant="outline"
                                                             size="xs"
-                                                            className={`font-semibold font-mono ${
-                                                                (item.confidence ?? 0) >= 0.85
-                                                                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                                                    : (item.confidence ?? 0) >= 0.65
-                                                                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                                                                    : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                                                            }`}
+                                                            className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 cursor-help flex items-center gap-1 font-semibold"
+                                                            title={
+                                                                item.cachedMatch?.downloadPath
+                                                                    ? `Saved to: ${item.cachedMatch.downloadPath}\nDownloaded: ${item.cachedMatch.downloadedAt ? new Date(item.cachedMatch.downloadedAt).toLocaleString() : 'Yes'}`
+                                                                    : 'Downloaded'
+                                                            }
                                                         >
-                                                            {Math.round((item.confidence ?? 0) * 100)}% Match
+                                                            <Icon icon="check" className="size-2.5 shrink-0" />
+                                                            <span>✓ Downloaded</span>
                                                         </Badge>
                                                     </div>
-                                                    <div className="w-16 bg-muted/60 h-1 rounded-full overflow-hidden">
-                                                        <div
-                                                            className={`h-full transition-all duration-300 ${
-                                                                (item.confidence ?? 0) >= 0.85
-                                                                    ? 'bg-emerald-500'
-                                                                    : (item.confidence ?? 0) >= 0.65
-                                                                    ? 'bg-amber-500'
-                                                                    : 'bg-rose-500'
-                                                            }`}
-                                                            style={{ width: `${Math.round((item.confidence ?? 0) * 100)}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            ) : item.status === 'no_match' ? (
-                                                <span className="text-muted-foreground/50 text-[10px]">0%</span>
-                                            ) : (
-                                                <span className="text-muted-foreground/40 text-[10px]">—</span>
-                                            )}
-                                        </td>
+                                                )}
 
-                                        {/* Available Quality */}
-                                        <td className="p-2.5 font-mono text-[11px]">
-                                            {item.remoteQuality ? (
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <span className="font-semibold text-foreground">{item.remoteQuality.label}</span>
-                                                    </div>
-                                                    {item.isDolbyAvailable && (
-                                                        <Badge variant="outline" size="xs" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
-                                                            Dolby Atmos Mix
+                                                {downloadFailure && (
+                                                    <div className="mt-1">
+                                                        <Badge
+                                                            variant="outline"
+                                                            size="xs"
+                                                            className="bg-rose-500/15 text-rose-400 border-rose-500/30 cursor-help flex items-center gap-1 truncate max-w-[140px]"
+                                                            title={downloadFailure}
+                                                        >
+                                                            <Icon icon="warning" className="size-2.5 shrink-0" />
+                                                            <span className="truncate">Download Failed</span>
                                                         </Badge>
+                                                    </div>
+                                                )}
+                                            </td>
+
+                                            {/* Actions */}
+                                            <td className="p-2.5 text-right font-mono">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    {/* Edit / Manage match (set ID, clear, select candidate) */}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="xs"
+                                                        onClick={() => setEditingMatchItem(item)}
+                                                        title="Manage Match (Set ID, Alternative Candidates, or Remove Match)"
+                                                        className="size-7 p-0 text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        <Icon icon="edit" className="size-3.5" />
+                                                    </Button>
+
+                                                    {/* Re-search single track */}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="xs"
+                                                        onClick={() => startSequentialSearch([item])}
+                                                        disabled={isSearching}
+                                                        title="Search this track individually"
+                                                        className="size-7 p-0"
+                                                    >
+                                                        <Icon icon="search" className="size-3 text-muted-foreground hover:text-foreground" />
+                                                    </Button>
+
+                                                    {/* Download / Re-download single track */}
+                                                    {item.remoteTrack && (
+                                                        <Button
+                                                            variant={isDownloaded ? 'secondary' : 'outline'}
+                                                            size="xs"
+                                                            onClick={() => startSequentialDownload([item])}
+                                                            disabled={
+                                                                isDownloading ||
+                                                                (downloadMode === 'highest_lossless' && (!item.canDownloadLossless || item.remoteTrack.atmos)) ||
+                                                                (downloadMode === 'dolby_atmos' && !item.isDolbyAvailable && !item.remoteTrack.atmos)
+                                                            }
+                                                            className={`h-7 px-2 text-[10px] gap-1 ${
+                                                                isDownloaded
+                                                                    ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
+                                                                    : downloadMode === 'dolby_atmos' && (item.isDolbyAvailable || item.remoteTrack.atmos)
+                                                                    ? 'border-purple-500/40 text-purple-400 hover:bg-purple-500/10'
+                                                                    : ''
+                                                            }`}
+                                                            title={
+                                                                isDownloaded
+                                                                    ? `Re-download (already saved to ${item.cachedMatch?.downloadPath || 'disk'}). Click to remove old and re-download.`
+                                                                    : `Download (${downloadMode === 'highest_lossless' ? 'Lossless' : 'Dolby'}) as ${item.localTrack.isrc || item.localTrack.id}.ext`
+                                                            }
+                                                        >
+                                                            <Icon icon={isDownloaded ? 'refresh' : 'download'} className="size-3" />
+                                                            <span>{isDownloaded ? 'Re-download' : 'Download'}</span>
+                                                        </Button>
                                                     )}
                                                 </div>
-                                            ) : (
-                                                <span className="text-muted-foreground/60">—</span>
-                                            )}
-                                        </td>
-
-                                        {/* Comparison Status */}
-                                        <td className="p-2.5">
-                                            {item.status === 'upgrade_available' ? (
-                                                <Badge variant="success" size="sm" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30 gap-1">
-                                                    <Icon icon="magic" className="size-3" />
-                                                    <span>Upgrade Available</span>
-                                                </Badge>
-                                            ) : item.status === 'dolby_available' ? (
-                                                <Badge variant="outline" size="sm" className="bg-purple-500/15 text-purple-400 border-purple-500/30 gap-1">
-                                                    <Icon icon="audio" className="size-3" />
-                                                    <span>Dolby Atmos Available</span>
-                                                </Badge>
-                                            ) : item.status === 'same_quality' ? (
-                                                <Badge variant="secondary" size="sm" className="gap-1 text-muted-foreground">
-                                                    <Icon icon="check" className="size-3" />
-                                                    <span>Same Quality</span>
-                                                </Badge>
-                                            ) : item.status === 'local_higher' ? (
-                                                <Badge variant="outline" size="sm" className="gap-1 text-amber-500 border-amber-500/30">
-                                                    <span>Local is Higher</span>
-                                                </Badge>
-                                            ) : item.status === 'no_match' ? (
-                                                <Badge variant="outline" size="sm" className="text-muted-foreground/60">
-                                                    No Match
-                                                </Badge>
-                                            ) : (
-                                                <span className="text-muted-foreground/60 text-[11px]">Ready to search</span>
-                                            )}
-
-                                            {isDownloaded && (
-                                                <div className="mt-1">
-                                                    <Badge
-                                                        variant="outline"
-                                                        size="xs"
-                                                        className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 cursor-help flex items-center gap-1 font-semibold"
-                                                        title={
-                                                            item.cachedMatch?.downloadPath
-                                                                ? `Saved to: ${item.cachedMatch.downloadPath}\nDownloaded: ${item.cachedMatch.downloadedAt ? new Date(item.cachedMatch.downloadedAt).toLocaleString() : 'Yes'}`
-                                                                : 'Downloaded'
-                                                        }
-                                                    >
-                                                        <Icon icon="check" className="size-2.5 shrink-0" />
-                                                        <span>✓ Downloaded</span>
-                                                    </Badge>
-                                                </div>
-                                            )}
-
-                                            {downloadFailure && (
-                                                <div className="mt-1">
-                                                    <Badge
-                                                        variant="outline"
-                                                        size="xs"
-                                                        className="bg-rose-500/15 text-rose-400 border-rose-500/30 cursor-help flex items-center gap-1 truncate max-w-[140px]"
-                                                        title={downloadFailure}
-                                                    >
-                                                        <Icon icon="warning" className="size-2.5 shrink-0" />
-                                                        <span className="truncate">Download Failed</span>
-                                                    </Badge>
-                                                </div>
-                                            )}
-                                        </td>
-
-                                        {/* Actions */}
-                                        <td className="p-2.5 text-right font-mono">
-                                            <div className="flex items-center justify-end gap-1.5">
-                                                {/* Edit / Manage match (set ID, clear, select candidate) */}
-                                                <Button
-                                                    variant="ghost"
-                                                    size="xs"
-                                                    onClick={() => setEditingMatchItem(item)}
-                                                    title="Manage Match (Set ID, Alternative Candidates, or Remove Match)"
-                                                    className="size-7 p-0 text-muted-foreground hover:text-foreground"
-                                                >
-                                                    <Icon icon="edit" className="size-3.5" />
-                                                </Button>
-
-                                                {/* Re-search single track */}
-                                                <Button
-                                                    variant="ghost"
-                                                    size="xs"
-                                                    onClick={() => startSequentialSearch([item])}
-                                                    disabled={isSearching}
-                                                    title="Search this track individually"
-                                                    className="size-7 p-0"
-                                                >
-                                                    <Icon icon="search" className="size-3 text-muted-foreground hover:text-foreground" />
-                                                </Button>
-
-                                                {/* Download / Re-download single track */}
-                                                {item.remoteTrack && (
-                                                    <Button
-                                                        variant={isDownloaded ? 'secondary' : 'outline'}
-                                                        size="xs"
-                                                        onClick={() => startSequentialDownload([item])}
-                                                        disabled={
-                                                            isDownloading ||
-                                                            (downloadMode === 'highest_lossless' && (!item.canDownloadLossless || item.remoteTrack.atmos)) ||
-                                                            (downloadMode === 'dolby_atmos' && !item.isDolbyAvailable && !item.remoteTrack.atmos)
-                                                        }
-                                                        className={`h-7 px-2 text-[10px] gap-1 ${
-                                                            isDownloaded
-                                                                ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
-                                                                : downloadMode === 'dolby_atmos' && (item.isDolbyAvailable || item.remoteTrack.atmos)
-                                                                ? 'border-purple-500/40 text-purple-400 hover:bg-purple-500/10'
-                                                                : ''
-                                                        }`}
-                                                        title={
-                                                            isDownloaded
-                                                                ? `Re-download (already saved to ${item.cachedMatch?.downloadPath || 'disk'}). Click to remove old and re-download.`
-                                                                : `Download (${downloadMode === 'highest_lossless' ? 'Lossless' : 'Dolby'}) as ${item.localTrack.isrc || item.localTrack.id}.ext`
-                                                        }
-                                                    >
-                                                        <Icon icon={isDownloaded ? 'refresh' : 'download'} className="size-3" />
-                                                        <span>{isDownloaded ? 'Re-download' : 'Download'}</span>
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </td>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                                {virtualItems.length > 0 && (
+                                    <tr
+                                        style={{
+                                            height: `${Math.max(
+                                                0,
+                                                rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+                                            )}px`,
+                                        }}
+                                    >
+                                        <td colSpan={8} className="p-0 border-0" />
                                     </tr>
-                                );
-                            })
+                                )}
+                            </>
                         )}
                     </tbody>
                 </table>

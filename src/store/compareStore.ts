@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { type AudioComparisonItem, type AudioComparisonStatus } from '@/domain/remote-audio/types';
 
 export type CompareFilter = 'all' | 'upgrade' | 'dolby' | 'downloaded' | 'same' | 'nomatch' | 'error';
+export type CompareSortField = 'confidence' | 'title' | 'artist' | 'status' | 'quality' | 'local_quality' | 'none';
 
 export interface CompareOperationError {
     id: string;
@@ -24,10 +25,10 @@ export interface CompareState {
     lastSelectedId: string | null;
 
     // Sorting
-    sortBy: 'confidence' | 'title' | 'artist' | 'status' | 'none';
+    sortBy: CompareSortField;
     sortOrder: 'asc' | 'desc';
-    setSort: (by: 'confidence' | 'title' | 'artist' | 'status' | 'none', order?: 'asc' | 'desc') => void;
-    toggleSort: (by: 'confidence' | 'title' | 'artist' | 'status') => void;
+    setSort: (by: CompareSortField, order?: 'asc' | 'desc') => void;
+    toggleSort: (by: CompareSortField) => void;
 
     // Config
     apiUrl: string;
