@@ -417,4 +417,33 @@ describe('Eclipse Music Addon Client Route', () => {
         expect(data.reason).toBe('same_or_higher_quality');
         expect(data.message).toContain('Already have same or higher quality');
     });
+
+    it('normalizes addonUrl ending with /manifest.json to avoid /manifest.json/search duplication', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({
+                tracks: [{ id: '1', title: 'Kalyani', artist: 'Artist' }],
+            }),
+            headers: new Headers({ 'content-type': 'application/json' }),
+        } as Response);
+
+        const req = createPostRequest({
+            addonUrl: 'https://addon.example.com/path/manifest.json',
+            action: 'search',
+            query: 'kalyani',
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.stringContaining('https://addon.example.com/path/search?q=kalyani'),
+            expect.anything()
+        );
+        expect(global.fetch).not.toHaveBeenCalledWith(
+            expect.stringContaining('/manifest.json/search'),
+            expect.anything()
+        );
+    });
 });

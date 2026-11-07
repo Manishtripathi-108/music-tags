@@ -191,7 +191,7 @@ async function extractAddonErrorMessage(res: Response, defaultAction: string): P
 }
 
 function buildUrlWithSettings(baseUrl: string, endpointPath: string, settings?: Record<string, string | number | boolean>): URL {
-    const normalizedBase = baseUrl.replace(/\/+$/, '');
+    const normalizedBase = baseUrl.trim().replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
     const cleanEndpoint = endpointPath.replace(/^\/+/, '');
     const fullUrl = new URL(`${normalizedBase}/${cleanEndpoint}`);
 
@@ -276,7 +276,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             return NextResponse.json({ error: 'Missing required parameter: addonUrl' }, { status: 400 });
         }
 
-        const normalizedAddonUrl = addonUrl.replace(/\/+$/, '');
+        // Strip trailing /manifest.json or slashes so addonUrl is always the base addon URL
+        const normalizedAddonUrl = addonUrl
+            .trim()
+            .replace(/\/manifest\.json$/i, '')
+            .replace(/\/+$/, '');
         const fetchHeaders = getFetchHeaders(customHeaders);
 
         // 1. MANIFEST: GET /manifest.json

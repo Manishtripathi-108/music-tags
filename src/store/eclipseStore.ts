@@ -188,8 +188,9 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     notices: [],
 
     setAddonUrl: (url) => {
-        if (typeof window !== 'undefined') localStorage.setItem('eclipse_addon_url', url);
-        set({ addonUrl: url, connectionError: null, lastError: null });
+        const clean = url.trim().replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
+        if (typeof window !== 'undefined') localStorage.setItem('eclipse_addon_url', clean);
+        set({ addonUrl: clean, connectionError: null, lastError: null });
     },
 
     setDownloadDirectory: (dir) => {
@@ -371,7 +372,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     },
 
     connectAddon: async (customUrl) => {
-        const targetUrl = customUrl || get().addonUrl;
+        const rawUrl = customUrl || get().addonUrl;
+        const targetUrl = rawUrl.trim().replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
         if (!targetUrl) return false;
 
         // Ensure fresh token if eclipse auth is configured
@@ -421,8 +423,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
 
             return true;
         } catch (err: unknown) {
-            // Check for 401: if auth token exists, attempt refresh once
-            if (axios.isAxiosError(err) && err.response?.status === 401 && get().eclipseAuthToken) {
+            // Check for 401 / 403 (token expired): if auth token exists, attempt refresh once
+            if (axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403) && get().eclipseAuthToken) {
                 const refreshed = await get().fetchAddonAccessToken();
                 if (refreshed) {
                     try {
@@ -489,8 +491,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 notices,
             });
         } catch (err: unknown) {
-            // Auto refresh token and retry on 401
-            if (axios.isAxiosError(err) && err.response?.status === 401 && get().eclipseAuthToken) {
+            // Auto refresh token and retry on 401 / 403
+            if (axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403) && get().eclipseAuthToken) {
                 const refreshed = await get().fetchAddonAccessToken();
                 if (refreshed) {
                     try {
@@ -712,8 +714,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 notices,
             });
         } catch (err: unknown) {
-            // Check 401 retry
-            if (axios.isAxiosError(err) && err.response?.status === 401 && get().eclipseAuthToken) {
+            // Check 401 / 403 retry
+            if (axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403) && get().eclipseAuthToken) {
                 const refreshed = await get().fetchAddonAccessToken();
                 if (refreshed) {
                     try {
@@ -829,8 +831,8 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
                 }));
             }
         } catch (err: unknown) {
-            // Check 401 retry
-            if (axios.isAxiosError(err) && err.response?.status === 401 && get().eclipseAuthToken) {
+            // Check 401 / 403 retry
+            if (axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403) && get().eclipseAuthToken) {
                 const refreshed = await get().fetchAddonAccessToken();
                 if (refreshed) {
                     try {
