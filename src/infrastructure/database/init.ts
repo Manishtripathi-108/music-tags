@@ -189,6 +189,7 @@ export async function ensureDatabaseInitialized(): Promise<void> {
                 download_status TEXT DEFAULT 'idle',
                 download_error TEXT,
                 download_path TEXT,
+                previous_download_path TEXT,
                 downloaded_at INTEGER,
                 last_checked_at INTEGER,
                 created_at INTEGER NOT NULL,
@@ -198,6 +199,10 @@ export async function ensureDatabaseInitialized(): Promise<void> {
 
         try {
             await db.run(sql`ALTER TABLE remote_track_matches ADD COLUMN match_confidence REAL;`);
+        } catch {}
+
+        try {
+            await db.run(sql`ALTER TABLE remote_track_matches ADD COLUMN previous_download_path TEXT;`);
         } catch {}
 
         await db.run(sql`

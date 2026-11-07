@@ -335,6 +335,12 @@ export function CompareTrackTable() {
                                                     ISRC: {item.localTrack.isrc}
                                                 </div>
                                             )}
+                                            {isDownloaded && (
+                                                <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 mt-0.5" title={item.cachedMatch?.downloadPath || 'Saved'}>
+                                                    <Icon icon="check" className="size-2.5 text-emerald-400 shrink-0" />
+                                                    <span className="truncate">Saved: {item.cachedMatch?.downloadPath ? item.cachedMatch.downloadPath.split(/[/\\]/).pop() : 'Downloaded'}</span>
+                                                </div>
+                                            )}
                                             {activeError && (
                                                 <div
                                                     className="mt-1 flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/25 px-1.5 py-0.5 rounded font-mono truncate max-w-xs"
@@ -505,10 +511,15 @@ export function CompareTrackTable() {
                                                     <Badge
                                                         variant="outline"
                                                         size="xs"
-                                                        className="bg-blue-500/15 text-blue-400 border-blue-500/30 cursor-help"
-                                                        title={item.cachedMatch?.downloadPath || 'Downloaded'}
+                                                        className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 cursor-help flex items-center gap-1 font-semibold"
+                                                        title={
+                                                            item.cachedMatch?.downloadPath
+                                                                ? `Saved to: ${item.cachedMatch.downloadPath}\nDownloaded: ${item.cachedMatch.downloadedAt ? new Date(item.cachedMatch.downloadedAt).toLocaleString() : 'Yes'}`
+                                                                : 'Downloaded'
+                                                        }
                                                     >
-                                                        ✓ Saved to disk
+                                                        <Icon icon="check" className="size-2.5 shrink-0" />
+                                                        <span>✓ Downloaded</span>
                                                     </Badge>
                                                 </div>
                                             )}
@@ -554,10 +565,10 @@ export function CompareTrackTable() {
                                                     <Icon icon="search" className="size-3 text-muted-foreground hover:text-foreground" />
                                                 </Button>
 
-                                                {/* Download single track */}
+                                                {/* Download / Re-download single track */}
                                                 {item.remoteTrack && (
                                                     <Button
-                                                        variant="outline"
+                                                        variant={isDownloaded ? 'secondary' : 'outline'}
                                                         size="xs"
                                                         onClick={() => startSequentialDownload([item])}
                                                         disabled={
@@ -566,14 +577,20 @@ export function CompareTrackTable() {
                                                             (downloadMode === 'dolby_atmos' && !item.isDolbyAvailable && !item.remoteTrack.atmos)
                                                         }
                                                         className={`h-7 px-2 text-[10px] gap-1 ${
-                                                            downloadMode === 'dolby_atmos' && (item.isDolbyAvailable || item.remoteTrack.atmos)
+                                                            isDownloaded
+                                                                ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
+                                                                : downloadMode === 'dolby_atmos' && (item.isDolbyAvailable || item.remoteTrack.atmos)
                                                                 ? 'border-purple-500/40 text-purple-400 hover:bg-purple-500/10'
                                                                 : ''
                                                         }`}
-                                                        title={`Download (${downloadMode === 'highest_lossless' ? 'Lossless' : 'Dolby'}) as ${item.localTrack.isrc || item.localTrack.id}.ext`}
+                                                        title={
+                                                            isDownloaded
+                                                                ? `Re-download (already saved to ${item.cachedMatch?.downloadPath || 'disk'}). Click to remove old and re-download.`
+                                                                : `Download (${downloadMode === 'highest_lossless' ? 'Lossless' : 'Dolby'}) as ${item.localTrack.isrc || item.localTrack.id}.ext`
+                                                        }
                                                     >
-                                                        <Icon icon="download" className="size-3" />
-                                                        <span>Download</span>
+                                                        <Icon icon={isDownloaded ? 'refresh' : 'download'} className="size-3" />
+                                                        <span>{isDownloaded ? 'Re-download' : 'Download'}</span>
                                                     </Button>
                                                 )}
                                             </div>

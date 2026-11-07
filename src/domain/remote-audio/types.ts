@@ -71,6 +71,7 @@ export interface RemoteTrackMatchRecord {
     downloadStatus: 'idle' | 'downloading' | 'completed' | 'failed';
     downloadError: string | null;
     downloadPath: string | null;
+    previousDownloadPath?: string | null;
     downloadedAt: Date | null;
     lastCheckedAt: Date | null;
 }

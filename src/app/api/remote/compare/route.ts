@@ -59,6 +59,7 @@ export async function GET(): Promise<NextResponse<{ items: AudioComparisonItem[]
                     downloadStatus: (cached.downloadStatus as 'idle' | 'downloading' | 'completed' | 'failed') || 'idle',
                     downloadError: cached.downloadError,
                     downloadPath: cached.downloadPath,
+                    previousDownloadPath: cached.previousDownloadPath ?? null,
                     downloadedAt: cached.downloadedAt,
                     lastCheckedAt: cached.lastCheckedAt,
                 };

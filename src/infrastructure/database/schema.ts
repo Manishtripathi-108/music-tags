@@ -170,6 +170,7 @@ export const remoteTrackMatches = sqliteTable('remote_track_matches', {
     downloadStatus: text('download_status').default('idle'),
     downloadError: text('download_error'),
     downloadPath: text('download_path'),
+    previousDownloadPath: text('previous_download_path'),
     downloadedAt: integer('downloaded_at', { mode: 'timestamp_ms' }),
     lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

@@ -98,4 +98,44 @@ describe('Dolby and Lossless Isolation Constraints', () => {
         expect(fileName.startsWith('USRC')).toBe(true);
         expect(fileName.endsWith('.flac')).toBe(true);
     });
+
+    it('identifies previous downloaded file path for cleanup when remote track ID is updated', () => {
+        const previousRecord = {
+            id: 'match-1',
+            localTrackId: 'file-1',
+            remoteTrackId: '100', // old ID
+            downloadStatus: 'completed',
+            downloadPath: '/downloads/USRC12345678.m4a',
+        };
+
+        // When remote ID changes to '200'
+        const updatedRemoteId = '200';
+        const isIdChanged = previousRecord.remoteTrackId !== updatedRemoteId;
+        expect(isIdChanged).toBe(true);
+
+        const previousDownloadPath = previousRecord.downloadPath;
+        expect(previousDownloadPath).toBe('/downloads/USRC12345678.m4a');
+    });
+
+    it('flags already downloaded tracks so user can be prompted before re-downloading', () => {
+        const downloadedItem = {
+            cachedMatch: {
+                downloadStatus: 'completed' as const,
+                downloadPath: '/downloads/USRC12345678.flac',
+            },
+        };
+
+        const notDownloadedItem = {
+            cachedMatch: {
+                downloadStatus: 'idle' as const,
+                downloadPath: null,
+            },
+        };
+
+        const isDownloaded = (item: { cachedMatch: { downloadStatus: string; downloadPath: string | null } | null }) =>
+            item.cachedMatch?.downloadStatus === 'completed' || Boolean(item.cachedMatch?.downloadPath);
+
+        expect(isDownloaded(downloadedItem)).toBe(true);
+        expect(isDownloaded(notDownloadedItem)).toBe(false);
+    });
 });

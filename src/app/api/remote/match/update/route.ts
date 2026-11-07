@@ -100,6 +100,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const matchId = existingRecord.length ? existingRecord[0].id : randomUUID();
             const confidence = calculateMatchConfidence(localTrack, candidate);
             candidate.confidence = confidence;
+            const prevPath = existingRecord[0]?.downloadPath || existingRecord[0]?.previousDownloadPath || null;
 
             const recordValues = {
                 id: matchId,
@@ -121,6 +122,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 downloadStatus: 'idle',
                 downloadError: null,
                 downloadPath: null,
+                previousDownloadPath: prevPath,
                 lastCheckedAt: now,
                 updatedAt: now,
             };
@@ -191,6 +193,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const now = new Date();
             const matchId = existingRecord.length ? existingRecord[0].id : randomUUID();
             const confidence = 1.0; // User explicitly assigned this ID
+            const prevPath = existingRecord[0]?.downloadPath || existingRecord[0]?.previousDownloadPath || null;
 
             const customRemoteTrack: RemoteTrackSummary = {
                 id: rawId,
@@ -225,6 +228,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 downloadStatus: 'idle',
                 downloadError: null,
                 downloadPath: null,
+                previousDownloadPath: prevPath,
                 lastCheckedAt: now,
                 updatedAt: now,
             };

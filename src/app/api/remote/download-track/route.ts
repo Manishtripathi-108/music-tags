@@ -20,6 +20,7 @@ interface DownloadTrackRequestBody {
     mode: 'highest_lossless' | 'dolby_atmos';
     quality?: string;
     atmos?: string;
+    removeExisting?: boolean;
 }
 
 function resolveExtension(stream: RemoteStreamInfo, fallbackFormat?: string): string {
@@ -215,7 +216,45 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 throw new Error(`Downloaded file is corrupted or too small (${stats.size} bytes)`);
             }
 
-            // Atomic rename from temp to destination
+            // 1. If remote track ID was changed, remove the previous file from disk
+            if (cachedMatch?.previousDownloadPath && fs.existsSync(/*turbopackIgnore: true*/ cachedMatch.previousDownloadPath)) {
+                console.log(`[API:DOWNLOAD:CLEANUP] Track ID was updated. Removing previous downloaded file: "${cachedMatch.previousDownloadPath}"`);
+                try {
+                    fs.unlinkSync(cachedMatch.previousDownloadPath);
+                } catch (cleanupErr) {
+                    console.warn(`[API:DOWNLOAD:CLEANUP] Could not remove previous file:`, cleanupErr);
+                }
+            }
+
+            // 2. If cached downloadPath exists and differs from destinationPath, remove old file
+            if (
+                cachedMatch?.downloadPath &&
+                cachedMatch.downloadPath !== destinationPath &&
+                fs.existsSync(/*turbopackIgnore: true*/ cachedMatch.downloadPath)
+            ) {
+                console.log(`[API:DOWNLOAD:CLEANUP] Removing stale downloaded file: "${cachedMatch.downloadPath}"`);
+                try {
+                    fs.unlinkSync(cachedMatch.downloadPath);
+                } catch (cleanupErr) {
+                    console.warn(`[API:DOWNLOAD:CLEANUP] Could not remove stale file:`, cleanupErr);
+                }
+            }
+
+            // 3. Remove any other format variants of the same track in targetDir (e.g. old .mp3 vs new .flac)
+            const commonAudioExts = ['flac', 'm4a', 'mp3', 'wav', 'mp4', 'aac', 'alac', 'ogg'];
+            for (const ext of commonAudioExts) {
+                if (ext !== extension) {
+                    const altFilePath = path.join(/*turbopackIgnore: true*/ targetDir, `${baseName}.${ext}`);
+                    if (fs.existsSync(/*turbopackIgnore: true*/ altFilePath)) {
+                        console.log(`[API:DOWNLOAD:CLEANUP] Removing alternate format file: "${altFilePath}"`);
+                        try {
+                            fs.unlinkSync(altFilePath);
+                        } catch {}
+                    }
+                }
+            }
+
+            // 4. Atomic rename from temp to destination (overwrite existing if present)
             if (fs.existsSync(/*turbopackIgnore: true*/ destinationPath)) {
                 fs.unlinkSync(destinationPath);
             }
@@ -231,6 +270,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                         downloadStatus: 'completed',
                         downloadError: null,
                         downloadPath: destinationPath,
+                        previousDownloadPath: null, // Clear previous path upon successful download
                         streamUrl: streamData.url,
                         rawStreamJson: JSON.stringify(streamData),
                         downloadedAt: now,

@@ -98,7 +98,7 @@ export interface CompareState {
     testConnection: () => Promise<void>;
     startSequentialSearch: (itemsToSearch?: AudioComparisonItem[]) => Promise<void>;
     stopSequentialSearch: () => void;
-    startSequentialDownload: (itemsToDownload?: AudioComparisonItem[]) => Promise<void>;
+    startSequentialDownload: (itemsToDownload?: AudioComparisonItem[], options?: { forceRedownload?: boolean }) => Promise<void>;
     stopSequentialDownload: () => void;
 }
 
@@ -406,7 +406,7 @@ export const useCompareStore = create<CompareState>((set, get) => ({
         set({ isSearching: false });
     },
 
-    startSequentialDownload: async (customList) => {
+    startSequentialDownload: async (customList, options) => {
         const { apiUrl, downloadDirectory, downloadMode, qualityPreference, atmosPreference, items, selectedIds } = get();
         if (!apiUrl) {
             alert('Please provide the API URL.');
@@ -435,16 +435,54 @@ export const useCompareStore = create<CompareState>((set, get) => ({
             return;
         }
 
+        // Before download, check if file is already downloaded and prompt:
+        // "before download check if file is already downloaded ask if to remove already downloaded file."
+        const alreadyDownloaded = targets.filter(
+            (it) => it.cachedMatch?.downloadStatus === 'completed' || Boolean(it.cachedMatch?.downloadPath)
+        );
+
+        let finalTargets = targets;
+
+        if (alreadyDownloaded.length > 0 && !options?.forceRedownload) {
+            if (targets.length === 1) {
+                const single = targets[0];
+                const trackName = single.localTrack.title || single.localTrack.filename;
+                const pathNote = single.cachedMatch?.downloadPath ? `\n(Saved to: ${single.cachedMatch.downloadPath})` : '';
+                const confirmRedownload = window.confirm(
+                    `"${trackName}" is already downloaded${pathNote}.\n\nDo you want to remove the existing file and re-download?`
+                );
+                if (!confirmRedownload) {
+                    return;
+                }
+            } else {
+                const confirmAll = window.confirm(
+                    `${alreadyDownloaded.length} of ${targets.length} selected tracks are already downloaded.\n\n` +
+                    `• Click "OK" to remove existing files and re-download all ${targets.length} tracks.\n` +
+                    `• Click "Cancel" to skip existing files and only download the ${targets.length - alreadyDownloaded.length} new tracks.`
+                );
+
+                if (!confirmAll) {
+                    finalTargets = targets.filter(
+                        (it) => it.cachedMatch?.downloadStatus !== 'completed' && !it.cachedMatch?.downloadPath
+                    );
+                    if (finalTargets.length === 0) {
+                        alert('All selected tracks are already downloaded. Nothing new to download.');
+                        return;
+                    }
+                }
+            }
+        }
+
         activeDownloadAbort = new AbortController();
         set({
             isDownloading: true,
-            downloadProgress: { current: 0, total: targets.length, currentTitle: '', currentFileName: '', errorCount: 0 },
+            downloadProgress: { current: 0, total: finalTargets.length, currentTitle: '', currentFileName: '', errorCount: 0 },
         });
 
-        for (let i = 0; i < targets.length; i++) {
+        for (let i = 0; i < finalTargets.length; i++) {
             if (activeDownloadAbort.signal.aborted) break;
 
-            const target = targets[i];
+            const target = finalTargets[i];
             const titleDisplay = target.localTrack.title || target.localTrack.filename;
             set((s) => ({
                 downloadProgress: {
@@ -466,6 +504,7 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                         mode: downloadMode,
                         quality: qualityPreference,
                         atmos: atmosPreference,
+                        removeExisting: true,
                     },
                     { signal: activeDownloadAbort.signal }
                 );
@@ -480,6 +519,7 @@ export const useCompareStore = create<CompareState>((set, get) => ({
                                         ...it.cachedMatch,
                                         downloadStatus: 'completed',
                                         downloadPath: res.data.filePath,
+                                        previousDownloadPath: null,
                                         downloadedAt: new Date(),
                                         downloadError: null,
                                     },
