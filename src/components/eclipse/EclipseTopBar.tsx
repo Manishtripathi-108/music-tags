@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import ThemeToggler from '@/components/ui/ThemeToggler';
 import { useEclipseStore } from '@/store/eclipseStore';
+import { useApiLogStore } from '@/store/apiLogStore';
 
 export function EclipseTopBar() {
     const {
@@ -23,6 +24,9 @@ export function EclipseTopBar() {
         addonAccessToken,
         addonTokenExpiresAt,
     } = useEclipseStore();
+
+    const { toggleOpen: toggleApiLogs, logs, isOpen: isApiLogOpen } = useApiLogStore();
+    const apiErrorCount = logs.filter((l) => l.status >= 400 || Boolean(l.error)).length;
 
     const [inputUrl, setInputUrl] = useState(addonUrl);
     const [inputDir, setInputDir] = useState(downloadDirectory);
@@ -69,6 +73,33 @@ export function EclipseTopBar() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/* API Request Logs Button */}
+                    <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={toggleApiLogs}
+                        className={`h-7 gap-1.5 text-xs font-mono transition-colors ${
+                            isApiLogOpen
+                                ? 'border-primary text-primary bg-primary/10'
+                                : apiErrorCount > 0
+                                ? 'border-rose-500/40 text-rose-300 bg-rose-500/10'
+                                : ''
+                        }`}
+                        title="Live Addon API Request/Response Logs"
+                    >
+                        <Icon icon="link" className="size-3 text-primary" />
+                        <span>API Logs</span>
+                        {logs.length > 0 && (
+                            <span
+                                className={`px-1 py-0.2 rounded-full text-[10px] font-bold ${
+                                    apiErrorCount > 0 ? 'bg-rose-500/20 text-rose-300' : 'bg-primary/20 text-primary'
+                                }`}
+                            >
+                                {logs.length}
+                            </span>
+                        )}
+                    </Button>
+
                     {/* Headers & Authentication Button */}
                     <Button
                         variant="outline"

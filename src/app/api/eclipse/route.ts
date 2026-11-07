@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { loggedFetch } from '@/services/logger/apiLogger';
 
 export interface EclipseManifestSetting {
     key: string;
@@ -235,24 +236,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const bearerToken = rawToken.toLowerCase().startsWith('bearer ') ? rawToken : `Bearer ${rawToken}`;
             const tokenUrl = `https://api.eclipsemusic.app/api/addon-access/token?addon=${encodeURIComponent(targetAddonId)}`;
 
-            const res = await fetch(tokenUrl, {
-                method: 'POST',
-                headers: {
-                    Accept: '*/*',
-                    Authorization: bearerToken,
-                    Origin: 'https://eclipsemusic.app',
-                    Referer: 'https://eclipsemusic.app/',
-                    'Content-Length': '0',
-                    'sec-ch-ua': '"Not-A.Brand";v="99", "Brave";v="157", "Chromium";v="157"',
-                    'sec-ch-ua-mobile': '?0',
-                    'sec-ch-ua-platform': '"Windows"',
-                    'sec-fetch-dest': 'empty',
-                    'sec-fetch-mode': 'cors',
-                    'sec-fetch-site': 'same-site',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            const res = await loggedFetch(
+                tokenUrl,
+                {
+                    method: 'POST',
+                    headers: {
+                        Accept: '*/*',
+                        Authorization: bearerToken,
+                        Origin: 'https://eclipsemusic.app',
+                        Referer: 'https://eclipsemusic.app/',
+                        'Content-Length': '0',
+                        'sec-ch-ua': '"Not-A.Brand";v="99", "Brave";v="157", "Chromium";v="157"',
+                        'sec-ch-ua-mobile': '?0',
+                        'sec-ch-ua-platform': '"Windows"',
+                        'sec-fetch-dest': 'empty',
+                        'sec-fetch-mode': 'cors',
+                        'sec-fetch-site': 'same-site',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                    },
+                    signal: AbortSignal.timeout(10000),
                 },
-                signal: AbortSignal.timeout(10000),
-            });
+                { action: 'get-addon-token', targetAddon: targetAddonId }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, 'addon-access/token');
@@ -273,10 +278,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         // 1. MANIFEST: GET /manifest.json
         if (action === 'manifest') {
             const manifestUrl = `${normalizedAddonUrl}/manifest.json`;
-            const res = await fetch(manifestUrl, {
-                headers: fetchHeaders,
-                signal: AbortSignal.timeout(10000),
-            });
+            const res = await loggedFetch(
+                manifestUrl,
+                {
+                    headers: fetchHeaders,
+                    signal: AbortSignal.timeout(10000),
+                },
+                { action: 'manifest', targetAddon: normalizedAddonUrl }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, 'manifest.json');
@@ -295,10 +304,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const searchUrl = buildUrlWithSettings(normalizedAddonUrl, 'search', settings);
             searchUrl.searchParams.set('q', query || '');
 
-            const res = await fetch(searchUrl.toString(), {
-                headers: fetchHeaders,
-                signal: AbortSignal.timeout(15000),
-            });
+            const res = await loggedFetch(
+                searchUrl.toString(),
+                {
+                    headers: fetchHeaders,
+                    signal: AbortSignal.timeout(15000),
+                },
+                { action: 'search', targetAddon: normalizedAddonUrl }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, 'search');
@@ -331,10 +344,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             let lastNotice: EclipseNotice | null = null;
 
             while (maxRetries > 0) {
-                currentRes = await fetch(streamUrl.toString(), {
-                    headers: fetchHeaders,
-                    signal: AbortSignal.timeout(15000),
-                });
+                currentRes = await loggedFetch(
+                    streamUrl.toString(),
+                    {
+                        headers: fetchHeaders,
+                        signal: AbortSignal.timeout(15000),
+                    },
+                    { action: 'stream', targetAddon: normalizedAddonUrl }
+                );
 
                 if (currentRes.status === 503) {
                     const err = await extractAddonErrorMessage(currentRes.clone(), 'stream');
@@ -380,10 +397,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const isrcUrl = buildUrlWithSettings(normalizedAddonUrl, 'resolve-isrc');
             isrcUrl.searchParams.set('isrc', isrc);
 
-            const res = await fetch(isrcUrl.toString(), {
-                headers: fetchHeaders,
-                signal: AbortSignal.timeout(10000),
-            });
+            const res = await loggedFetch(
+                isrcUrl.toString(),
+                {
+                    headers: fetchHeaders,
+                    signal: AbortSignal.timeout(10000),
+                },
+                { action: 'resolve-isrc', targetAddon: normalizedAddonUrl }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, 'resolve-isrc');
@@ -403,10 +424,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             if (artist) resolveUrl.searchParams.set('artist', artist);
             if (durationMs) resolveUrl.searchParams.set('durationMs', String(durationMs));
 
-            const res = await fetch(resolveUrl.toString(), {
-                headers: fetchHeaders,
-                signal: AbortSignal.timeout(10000),
-            });
+            const res = await loggedFetch(
+                resolveUrl.toString(),
+                {
+                    headers: fetchHeaders,
+                    signal: AbortSignal.timeout(10000),
+                },
+                { action: 'resolve', targetAddon: normalizedAddonUrl }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, 'resolve');
@@ -422,10 +447,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             if (!id) return NextResponse.json({ error: 'Missing album id' }, { status: 400 });
 
             const albumUrl = buildUrlWithSettings(normalizedAddonUrl, `album/${encodeURIComponent(id)}`, settings);
-            const res = await fetch(albumUrl.toString(), {
-                headers: fetchHeaders,
-                signal: AbortSignal.timeout(15000),
-            });
+            const res = await loggedFetch(
+                albumUrl.toString(),
+                {
+                    headers: fetchHeaders,
+                    signal: AbortSignal.timeout(15000),
+                },
+                { action: 'album', targetAddon: normalizedAddonUrl }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, `album/${id}`);
@@ -441,10 +470,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             if (!id) return NextResponse.json({ error: 'Missing artist id' }, { status: 400 });
 
             const artistUrl = buildUrlWithSettings(normalizedAddonUrl, `artist/${encodeURIComponent(id)}`, settings);
-            const res = await fetch(artistUrl.toString(), {
-                headers: fetchHeaders,
-                signal: AbortSignal.timeout(15000),
-            });
+            const res = await loggedFetch(
+                artistUrl.toString(),
+                {
+                    headers: fetchHeaders,
+                    signal: AbortSignal.timeout(15000),
+                },
+                { action: 'artist', targetAddon: normalizedAddonUrl }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, `artist/${id}`);
@@ -460,10 +493,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             if (!id) return NextResponse.json({ error: 'Missing playlist id' }, { status: 400 });
 
             const playlistUrl = buildUrlWithSettings(normalizedAddonUrl, `playlist/${encodeURIComponent(id)}`, settings);
-            const res = await fetch(playlistUrl.toString(), {
-                headers: fetchHeaders,
-                signal: AbortSignal.timeout(15000),
-            });
+            const res = await loggedFetch(
+                playlistUrl.toString(),
+                {
+                    headers: fetchHeaders,
+                    signal: AbortSignal.timeout(15000),
+                },
+                { action: 'playlist', targetAddon: normalizedAddonUrl }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, `playlist/${id}`);
@@ -481,10 +518,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const catalogUrl = buildUrlWithSettings(normalizedAddonUrl, `catalog/${encodeURIComponent(id)}`, settings);
             catalogUrl.searchParams.set('skip', String(skip || 0));
 
-            const res = await fetch(catalogUrl.toString(), {
-                headers: fetchHeaders,
-                signal: AbortSignal.timeout(15000),
-            });
+            const res = await loggedFetch(
+                catalogUrl.toString(),
+                {
+                    headers: fetchHeaders,
+                    signal: AbortSignal.timeout(15000),
+                },
+                { action: 'catalog', targetAddon: normalizedAddonUrl }
+            );
 
             if (!res.ok) {
                 const err = await extractAddonErrorMessage(res, `catalog/${id}`);
@@ -518,10 +559,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     let maxRetries = 5;
                     let lastRes: Response | null = null;
                     while (maxRetries > 0) {
-                        lastRes = await fetch(streamUrl.toString(), {
-                            headers: fetchHeaders,
-                            signal: AbortSignal.timeout(25000),
-                        });
+                        lastRes = await loggedFetch(
+                            streamUrl.toString(),
+                            {
+                                headers: fetchHeaders,
+                                signal: AbortSignal.timeout(25000),
+                            },
+                            { action: 'download-stream-resolve', targetAddon: normalizedAddonUrl }
+                        );
                         if (lastRes.status === 503) {
                             const retryAfterHeader = lastRes.headers.get('Retry-After');
                             const waitSec = Math.min(30, Math.max(2, parseInt(retryAfterHeader || '3', 10)));
@@ -569,9 +614,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 const tempPath = path.join(targetDir, `${fileName}.part`);
 
                 // Download media stream immediately before link expires
-                let mediaRes = await fetch(finalMediaUrl, {
-                    headers: getFetchHeaders(customHeaders, '*/*'),
-                });
+                let mediaRes = await loggedFetch(
+                    finalMediaUrl,
+                    {
+                        headers: getFetchHeaders(customHeaders, '*/*'),
+                    },
+                    { action: 'download-media-stream', targetAddon: normalizedAddonUrl }
+                );
 
                 // If link expired or failed, immediately re-resolve fresh stream URL and retry once
                 if (!mediaRes.ok || !mediaRes.body) {
@@ -579,9 +628,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     try {
                         streamInfo = await resolveStream();
                         finalMediaUrl = streamInfo.url;
-                        mediaRes = await fetch(finalMediaUrl, {
-                            headers: getFetchHeaders(customHeaders, '*/*'),
-                        });
+                        mediaRes = await loggedFetch(
+                            finalMediaUrl,
+                            {
+                                headers: getFetchHeaders(customHeaders, '*/*'),
+                            },
+                            { action: 'download-media-retry', targetAddon: normalizedAddonUrl }
+                        );
                     } catch {}
                     if (!mediaRes.ok || !mediaRes.body) {
                         const err = await extractAddonErrorMessage(mediaRes, 'audio stream download');

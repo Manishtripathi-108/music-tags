@@ -9,6 +9,7 @@ import { buildTrackFromDb } from '@/domain/media/mappers';
 import { evaluateQualityComparison, getLocalTrackQuality, isDolbyAtmosAudio, parseQualityString } from '@/domain/remote-audio/quality-analyzer';
 import { calculateMatchConfidence, selectBestTrackMatch } from '@/domain/remote-audio/track-matcher';
 import { type AudioComparisonItem, type RemoteTrackMatchRecord, type RemoteTrackSummary } from '@/domain/remote-audio/types';
+import { loggedFetch } from '@/services/logger/apiLogger';
 
 interface SearchTrackRequestBody {
     trackId: string;
@@ -176,15 +177,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         let remoteData: { tracks?: RemoteTrackSummary[] } = { tracks: [] };
         try {
-            const res = await fetch(searchUrl.toString(), {
-                method: 'GET',
-                headers: {
-                    Accept: 'application/json',
-                    'User-Agent': 'MetaTagStudio/1.0',
-                    ...customHeaders,
+            const res = await loggedFetch(
+                searchUrl.toString(),
+                {
+                    method: 'GET',
+                    headers: {
+                        Accept: 'application/json',
+                        'User-Agent': 'Eclipse-Addon-Client/1.0',
+                        ...customHeaders,
+                    },
+                    signal: controller.signal,
                 },
-                signal: controller.signal,
-            });
+                {
+                    action: 'search',
+                    targetAddon: normalizedApiUrl,
+                }
+            );
 
             clearTimeout(timeoutId);
 

@@ -7,6 +7,7 @@ import { CompareProgressBar } from '@/components/compare/CompareProgressBar';
 import { CompareTopBar } from '@/components/compare/CompareTopBar';
 import { CompareTrackTable } from '@/components/compare/CompareTrackTable';
 import { EditMatchModal } from '@/components/compare/EditMatchModal';
+import { ApiLogDrawer } from '@/components/common/ApiLogDrawer';
 import { useCompareStore } from '@/store/compareStore';
 
 export default function ComparePage() {
@@ -23,6 +24,7 @@ export default function ComparePage() {
             <CompareProgressBar />
             <CompareTrackTable />
             <EditMatchModal />
+            <ApiLogDrawer />
         </main>
     );
 }

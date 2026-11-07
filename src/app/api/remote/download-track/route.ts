@@ -11,6 +11,7 @@ import { audioFiles, canonicalAudioMetadata, remoteTrackMatches } from '@/infras
 import { buildTrackFromDb } from '@/domain/media/mappers';
 import { isDolbyAtmosAudio, parseQualityString } from '@/domain/remote-audio/quality-analyzer';
 import { type RemoteStreamInfo, type RemoteTrackSummary } from '@/domain/remote-audio/types';
+import { loggedFetch } from '@/services/logger/apiLogger';
 
 interface DownloadTrackRequestBody {
     trackId: string;
@@ -137,15 +138,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 let lastErrorDetail = '';
 
                 while (maxRetries > 0) {
-                    const streamRes = await fetch(streamUrl.toString(), {
-                        method: 'GET',
-                        headers: {
-                            Accept: 'application/json',
-                            'User-Agent': 'Eclipse-Addon-Client/1.0',
-                            ...customHeaders,
+                    const streamRes = await loggedFetch(
+                        streamUrl.toString(),
+                        {
+                            method: 'GET',
+                            headers: {
+                                Accept: 'application/json',
+                                'User-Agent': 'Eclipse-Addon-Client/1.0',
+                                ...customHeaders,
+                            },
+                            signal: AbortSignal.timeout(25000),
                         },
-                        signal: AbortSignal.timeout(25000),
-                    });
+                        {
+                            action: 'stream',
+                            targetAddon: normalizedApiUrl,
+                        }
+                    );
 
                     // 503 Retry-After Handling: Bitchord / Eclipse addon is busy preparing stream
                     if (streamRes.status === 503) {
@@ -258,14 +266,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             // 6. Download audio stream immediately before link expires
             try {
                 console.log(`[API:DOWNLOAD:STREAMING] Initiating HTTP stream from: ${streamData.url}`);
-                let mediaResponse = await fetch(streamData.url, {
-                    method: 'GET',
-                    headers: {
-                        Accept: '*/*',
-                        'User-Agent': 'Eclipse-Addon-Client/1.0',
-                        ...customHeaders,
+                let mediaResponse = await loggedFetch(
+                    streamData.url,
+                    {
+                        method: 'GET',
+                        headers: {
+                            Accept: '*/*',
+                            'User-Agent': 'Eclipse-Addon-Client/1.0',
+                            ...customHeaders,
+                        },
                     },
-                });
+                    {
+                        action: 'download',
+                        targetAddon: normalizedApiUrl,
+                    }
+                );
 
                 // If link expired or failed, immediately re-resolve fresh stream URL and retry once
                 if (!mediaResponse.ok || !mediaResponse.body) {
@@ -274,14 +289,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                     if (!streamData.url) {
                         throw new Error('Re-resolved stream endpoint returned no playable URL');
                     }
-                    mediaResponse = await fetch(streamData.url, {
-                        method: 'GET',
-                        headers: {
-                            Accept: '*/*',
-                            'User-Agent': 'Eclipse-Addon-Client/1.0',
-                            ...customHeaders,
+                    mediaResponse = await loggedFetch(
+                        streamData.url,
+                        {
+                            method: 'GET',
+                            headers: {
+                                Accept: '*/*',
+                                'User-Agent': 'Eclipse-Addon-Client/1.0',
+                                ...customHeaders,
+                            },
                         },
-                    });
+                        {
+                            action: 'download-retry',
+                            targetAddon: normalizedApiUrl,
+                        }
+                    );
                     if (!mediaResponse.ok || !mediaResponse.body) {
                         throw new Error(`Media stream download failed with HTTP ${mediaResponse.status}: ${mediaResponse.statusText}`);
                     }

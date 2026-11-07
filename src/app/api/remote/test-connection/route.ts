@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
+import { loggedFetch } from '@/services/logger/apiLogger';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
@@ -28,16 +29,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 const timeoutId = setTimeout(() => controller.abort(), 8000);
 
                 // Try manifest first, if 404 try a test search
-                let res = await fetch(`${normalized}/manifest.json`, {
-                    headers: { 'User-Agent': 'MetaTagStudio/1.0' },
-                    signal: controller.signal,
-                });
+                let res = await loggedFetch(
+                    `${normalized}/manifest.json`,
+                    {
+                        headers: { 'User-Agent': 'Eclipse-Addon-Client/1.0' },
+                        signal: controller.signal,
+                    },
+                    { action: 'test-manifest', targetAddon: normalized }
+                );
 
                 if (!res.ok) {
-                    res = await fetch(`${normalized}/search?q=test`, {
-                        headers: { 'User-Agent': 'MetaTagStudio/1.0' },
-                        signal: controller.signal,
-                    });
+                    res = await loggedFetch(
+                        `${normalized}/search?q=test`,
+                        {
+                            headers: { 'User-Agent': 'Eclipse-Addon-Client/1.0' },
+                            signal: controller.signal,
+                        },
+                        { action: 'test-search', targetAddon: normalized }
+                    );
                 }
 
                 clearTimeout(timeoutId);

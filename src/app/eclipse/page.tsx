@@ -9,6 +9,7 @@ import { EclipseSearchView } from '@/components/eclipse/EclipseSearchView';
 import { EclipseCatalogsView } from '@/components/eclipse/EclipseCatalogsView';
 import { EclipseDetailModals } from '@/components/eclipse/EclipseDetailModals';
 import { EclipseAudioPlayer } from '@/components/eclipse/EclipseAudioPlayer';
+import { ApiLogDrawer } from '@/components/common/ApiLogDrawer';
 import { useEclipseStore } from '@/store/eclipseStore';
 
 export default function EclipsePage() {
@@ -63,6 +64,7 @@ export default function EclipsePage() {
             <EclipseDetailModals />
             <EclipseHeadersModal />
             <EclipseAudioPlayer />
+            <ApiLogDrawer />
         </div>
     );
 }
