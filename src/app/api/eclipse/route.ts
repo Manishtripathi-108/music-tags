@@ -52,6 +52,15 @@ export interface EclipseTrack {
     format?: string;
     streamURL?: string;
     audioQuality?: string;
+    isAtmos?: boolean;
+    atmos?: boolean;
+    isHiRes?: boolean;
+    hiRes?: boolean;
+    audioModes?: string[];
+    bitDepth?: number;
+    sampleRate?: number;
+    sampleRateHz?: number;
+    mediaMetadata?: { tags?: string[] };
 }
 
 export interface EclipseAlbum {

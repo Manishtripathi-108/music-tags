@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import { useEclipseStore } from '@/store/eclipseStore';
+import { formatEclipseTrackQuality, isTrackDolbyAtmos } from '@/domain/remote-audio/eclipse-quality';
 
 function formatDuration(seconds: number): string {
     if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -109,13 +110,18 @@ export function EclipseAudioPlayer() {
                         <div className="min-w-0">
                             <div className="font-semibold text-xs text-foreground truncate">{currentTrack.title}</div>
                             <div className="text-[11px] text-muted-foreground truncate">{currentTrack.artist}</div>
-                            <div className="flex items-center gap-1 mt-0.5">
+                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                {(isTrackDolbyAtmos(currentTrack) || currentStream?.tier === 'DOLBY_ATMOS' || currentStream?.codec === 'eac3-joc') && (
+                                    <Badge size="xs" className="bg-purple-950/90 border border-purple-500/60 text-purple-200 font-bold text-[8px] px-1 py-0 shadow-xs">
+                                        DOLBY ATMOS
+                                    </Badge>
+                                )}
                                 <Badge variant="outline" size="xs" className="uppercase font-mono text-[9px]">
                                     {currentStream?.format || currentStream?.codec || currentTrack.format || 'AUDIO'}
                                 </Badge>
-                                {currentStream?.quality && (
-                                    <span className="text-[9px] font-mono text-muted-foreground/80 truncate max-w-[110px]">
-                                        {currentStream.quality}
+                                {(currentStream?.quality || currentTrack) && (
+                                    <span className="text-[9px] font-mono text-muted-foreground/90 truncate max-w-[150px]">
+                                        {currentStream?.quality || formatEclipseTrackQuality(currentTrack).displayQuality}
                                     </span>
                                 )}
                             </div>

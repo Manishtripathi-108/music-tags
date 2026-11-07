@@ -9,6 +9,14 @@ import {
     type EclipseNotice,
     type EclipseStreamResponse,
 } from '@/app/api/eclipse/route';
+import {
+    type EclipseQualityFilter,
+    type EclipseSortOption,
+    filterEclipseTracks,
+    sortEclipseTracks,
+    formatEclipseTrackQuality,
+    isTrackDolbyAtmos,
+} from '@/domain/remote-audio/eclipse-quality';
 
 export interface EclipseHeaderEntry {
     id: string;
@@ -50,6 +58,9 @@ export interface EclipseState {
     searchQuery: string;
     isSearching: boolean;
     searchFilter: 'all' | 'tracks' | 'albums' | 'artists' | 'playlists';
+    qualityFilter: EclipseQualityFilter;
+    sortBy: EclipseSortOption;
+    sortOrder: 'asc' | 'desc';
     searchResults: {
         tracks: EclipseTrack[];
         albums: EclipseAlbum[];
@@ -84,6 +95,10 @@ export interface EclipseState {
     setActiveTab: (tab: 'search' | 'catalogs' | 'library') => void;
     setSearchQuery: (query: string) => void;
     setSearchFilter: (filter: 'all' | 'tracks' | 'albums' | 'artists' | 'playlists') => void;
+    setQualityFilter: (filter: EclipseQualityFilter) => void;
+    setSortBy: (sort: EclipseSortOption) => void;
+    setSortOrder: (order: 'asc' | 'desc') => void;
+    toggleSort: (sort?: EclipseSortOption) => void;
     updateSetting: (key: string, value: string | number | boolean) => void;
     closeModal: () => void;
     dismissNotice: (id?: string) => void;
@@ -172,6 +187,9 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     searchQuery: '',
     isSearching: false,
     searchFilter: 'all',
+    qualityFilter: 'all',
+    sortBy: 'default',
+    sortOrder: 'asc',
     searchResults: { tracks: [], albums: [], artists: [], playlists: [] },
 
     catalogsData: {},
@@ -201,6 +219,18 @@ export const useEclipseStore = create<EclipseState>((set, get) => ({
     setActiveTab: (tab) => set({ activeTab: tab }),
     setSearchQuery: (query) => set({ searchQuery: query }),
     setSearchFilter: (filter) => set({ searchFilter: filter }),
+    setQualityFilter: (filter) => set({ qualityFilter: filter }),
+    setSortBy: (sort) => set({ sortBy: sort }),
+    setSortOrder: (order) => set({ sortOrder: order }),
+    toggleSort: (sort) => {
+        const { sortBy, sortOrder } = get();
+        const targetSort = sort || sortBy;
+        if (sortBy === targetSort) {
+            set({ sortOrder: sortOrder === 'asc' ? 'desc' : 'asc' });
+        } else {
+            set({ sortBy: targetSort, sortOrder: 'asc' });
+        }
+    },
     setIsHeadersModalOpen: (open) => set({ isHeadersModalOpen: open }),
 
     clearErrors: () => set({ connectionError: null, searchError: null, lastError: null, tokenError: null }),

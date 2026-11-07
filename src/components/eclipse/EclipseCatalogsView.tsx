@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import { useEclipseStore } from '@/store/eclipseStore';
+import { formatEclipseTrackQuality } from '@/domain/remote-audio/eclipse-quality';
 
 export function EclipseCatalogsView() {
     const {
@@ -161,16 +162,21 @@ export function EclipseCatalogsView() {
                                             {isTrack && (() => {
                                                 const qStatus = trackQualityStatus[item.id];
                                                 const isSkipped = qStatus?.status === 'skipped';
+                                                const q = formatEclipseTrackQuality(item);
 
                                                 return (
                                                     <div className="mt-2 pt-1 border-t flex items-center justify-between text-[10px] font-mono">
-                                                        <div className="flex items-center gap-1 min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-1 min-w-0">
                                                             {isSkipped ? (
                                                                 <Badge variant="secondary" size="xs" className="text-[9px] bg-amber-500/15 text-amber-300 border-amber-500/30" title={qStatus?.message}>
                                                                     In Library
                                                                 </Badge>
-                                                            ) : item.hiRes ? (
-                                                                <Badge variant="secondary" size="xs" className="text-[9px] bg-amber-500/10 text-amber-500 border-amber-500/20">
+                                                            ) : q.isDolbyAtmos ? (
+                                                                <Badge size="xs" className="text-[8px] font-bold bg-purple-950/80 text-purple-300 border border-purple-500/50">
+                                                                    DOLBY
+                                                                </Badge>
+                                                            ) : q.isHiRes ? (
+                                                                <Badge variant="secondary" size="xs" className="text-[9px] bg-amber-500/15 text-amber-300 border-amber-500/30">
                                                                     Hi-Res
                                                                 </Badge>
                                                             ) : item.isrc ? (

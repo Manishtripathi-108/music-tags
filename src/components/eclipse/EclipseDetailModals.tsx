@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import { useEclipseStore } from '@/store/eclipseStore';
+import { formatEclipseTrackQuality } from '@/domain/remote-audio/eclipse-quality';
 
 function formatDuration(seconds?: number): string {
     if (!seconds || seconds <= 0) return '--:--';
@@ -76,14 +78,30 @@ export function EclipseDetailModals() {
                                             const downloadedPath = downloadedTrackPaths[t.id];
                                             const qStatus = trackQualityStatus[t.id];
                                             const isSkipped = qStatus?.status === 'skipped';
+                                            const q = formatEclipseTrackQuality(t);
 
                                             return (
                                                 <tr key={t.id || idx} className={`hover:bg-muted/30 transition-colors ${isCurrent ? 'bg-primary/5' : ''}`}>
                                                     <td className="p-2 text-center text-muted-foreground font-mono w-8 text-xs">{idx + 1}</td>
                                                     <td className="p-2">
                                                         <div className="font-semibold text-foreground truncate">{t.title}</div>
-                                                        <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
+                                                        <div className="text-[11px] text-muted-foreground truncate flex flex-wrap items-center gap-1.5 mt-0.5">
                                                             <span>{t.artist || data.artist || data.name}</span>
+                                                            {q.isDolbyAtmos && (
+                                                                <span className="text-[9px] font-bold font-mono bg-purple-950/80 border border-purple-500/60 text-purple-300 px-1 py-0.2 rounded">
+                                                                    DOLBY ATMOS
+                                                                </span>
+                                                            )}
+                                                            {q.isHiRes && (
+                                                                <span className="text-[9px] font-bold font-mono bg-amber-500/15 border border-amber-500/40 text-amber-300 px-1 py-0.2 rounded">
+                                                                    HI-RES
+                                                                </span>
+                                                            )}
+                                                            {q.displayQuality && !q.isDolbyAtmos && (
+                                                                <span className="text-[10px] font-mono text-muted-foreground/80">
+                                                                    {q.displayQuality}
+                                                                </span>
+                                                            )}
                                                             {isSkipped && (
                                                                 <span className="text-[9px] font-mono text-amber-400 bg-amber-500/15 px-1 py-0.5 rounded border border-amber-500/30" title={qStatus?.message}>
                                                                     In Library
