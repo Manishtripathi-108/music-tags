@@ -1,0 +1,731 @@
+Addon Developer Guide
+Build addons that extend Eclipse Music with new music sources. Your addon is a simple HTTP server that provides search results and stream URLs. Eclipse handles everything else - playback, UI, queue management, playlists, lyrics, and more.
+
+How It Works
+An addon is a web server (Node.js, Python, Go, Rust - any language) that exposes these endpoints:
+
+Endpoint	Required	Purpose
+GET /manifest.json	Yes	Describes your addon
+GET /search?q={query}	Yes	Returns search results
+GET /stream/{id}	Yes	Returns a playable stream URL
+GET /album/{id}	No	Returns album tracks (for browsing)
+GET /artist/{id}	No	Returns artist top tracks + albums
+GET /playlist/{id}	No	Returns playlist tracks
+Users install your addon by pasting its URL into Eclipse. Your addon appears in the search dropdown, and Eclipse routes playback through it. If you implement the optional detail endpoints, users can browse albums, artists, and playlists natively inside Eclipse.
+
+Quick Start
+1. Create the manifest
+Your server must respond to GET /manifest.json:
+
+{
+  "id": "com.yourname.myaddon",
+  "name": "My Music Addon",
+  "version": "1.0.0",
+  "description": "Streams music from my service",
+  "icon": "https://your-cdn.com/addon-icon.png",
+  "resources": ["search", "stream"],
+  "types": ["track", "album", "artist"],
+  "contentType": "music"
+}
+Required fields:
+
+Field	Type	Description
+id	String	Unique identifier (reverse domain, e.g. com.yourname.myaddon)
+name	String	Display name shown in Eclipse's search dropdown
+version	String	Semver version (e.g. 1.0.0)
+resources	Array	What your addon provides: "search", "stream", or both
+Optional fields:
+
+Field	Type	Description
+description	String	Brief description
+icon	String	URL to your addon's icon (PNG/JPEG, square, recommended 128x128 or larger). Shown in the search provider dropdown, addon management, and anywhere your addon is referenced. Falls back to a puzzle piece icon if not provided.
+types	Array	Content types: "track", "album", "artist"
+contentType	String	Player UI mode: "music" (default), "audiobook", or "podcast". See Content Type Player Modes.
+Content Type Player Modes
+If your addon serves audiobooks or podcasts, set contentType in your manifest and Eclipse will automatically switch to the appropriate player UI for every track your addon streams.
+
+Value	Player behaviour
+"music" (default)	Standard player - prev/next skip, shuffle, lyrics
+"audiobook"	±30 second skip buttons, speed control (0.75×–2×), sleep timer. No shuffle.
+"podcast"	±15 second skip buttons, speed control (0.75×–2×), sleep timer. No shuffle.
+Omitting contentType (or setting it to "music") gives the standard music player. Eclipse never infers content type from track metadata - the manifest field is the only signal.
+
+2. Implement search
+Respond to GET /search?q={query} with:
+
+{
+  "tracks": [
+    {
+      "id": "track_123",
+      "title": "Song Title",
+      "artist": "Artist Name",
+      "album": "Album Name",
+      "duration": 240,
+      "artworkURL": "https://example.com/cover.jpg",
+      "isrc": "USRC12345678",
+      "format": "mp3"
+    }
+  ],
+  "albums": [
+    {
+      "id": "album_456",
+      "title": "Album Title",
+      "artist": "Artist Name",
+      "artworkURL": "https://example.com/album.jpg",
+      "trackCount": 12,
+      "year": "2024"
+    }
+  ],
+  "artists": [
+    {
+      "id": "artist_789",
+      "name": "Artist Name",
+      "artworkURL": "https://example.com/artist.jpg",
+      "genres": ["Pop", "Rock"]
+    }
+  ],
+  "playlists": [
+    {
+      "id": "playlist_123",
+      "title": "Best of 2024",
+      "creator": "Curator Name",
+      "artworkURL": "https://example.com/playlist.jpg",
+      "trackCount": 50
+    }
+  ]
+}
+All four arrays are optional - return only what you have.
+
+Track fields:
+
+Field	Type	Required	Description
+id	String	Yes	Unique ID within your addon
+title	String	Yes	Song title
+artist	String	Yes	Artist name
+album	String	No	Album name
+duration	Int	No	Duration in seconds
+artworkURL	String	No	Cover art URL
+isrc	String	No	ISRC code - highly recommended (enables MusicKit metadata enrichment)
+format	String	No	Audio format: "mp3", "flac", "aac", "m4a"
+streamURL	String	No	Direct stream URL (if provided, Eclipse skips the /stream call)
+Playlist fields (in search response):
+
+Field	Type	Required	Description
+id	String	Yes	Unique playlist ID
+title	String	Yes	Playlist name
+description	String	No	Playlist description
+artworkURL	String	No	Cover image URL
+creator	String	No	Playlist creator name
+trackCount	Int	No	Number of tracks
+3. Implement stream resolution
+Respond to GET /stream/{id} with:
+
+{
+  "url": "https://cdn.example.com/audio/track_123.mp3",
+  "format": "mp3",
+  "quality": "320kbps"
+}
+Response fields:
+
+Field	Type	Required	Description
+url	String	Yes	Direct HTTP/HTTPS URL to the audio file
+format	String	No	Audio format
+quality	String	No	Quality description (e.g. "320kbps", "lossless")
+expiresAt	Number	No	Unix timestamp when the URL expires
+chapters	Array	No	Chapter list for audiobooks - see below
+codec	String	No	Audio codec: flac, aac, he-aac, alac, mp3, opus, vorbis, eac3_joc
+container	String	No	What the bytes are wrapped in: flac, mp3, mp4, fmp4, ogg, wav
+manifest	String	No	none when the URL is the audio file itself, hls for an .m3u8 playlist, dash for an .mpd
+sampleRate	Number	No	Sample rate in Hz (e.g. 44100, 96000)
+bitDepth	Number	No	Bit depth for lossless audio (16, 24); omit for lossy
+The URL must be a direct link to an audio file - no HTML pages, no redirects to login pages. Eclipse supports MP3, AAC, M4A, FLAC, WAV, and OGG.
+
+Routing fields. codec, container, manifest, encrypted, sampleRate and bitDepth are optional, but when present the apps use them to pick a playback engine before the first byte arrives instead of probing the file. Send them whenever you know them. A plain FLAC file is {"codec": "flac", "container": "flac", "manifest": "none", "encrypted": false, "sampleRate": 44100, "bitDepth": 16}; an HLS playlist of FLAC-in-fMP4 segments is {"codec": "flac", "container": "fmp4", "manifest": "hls", "encrypted": false}. The Eclipse Music addon fills them in on every reply.
+
+Audiobook chapters (optional)
+If your addon serves audiobooks and the track has chapter information, include a chapters array in the /stream response. Eclipse will show a chapter list UI and display the current chapter name in the player.
+
+{
+  "url": "https://cdn.example.com/audio/chapter_audio.mp3",
+  "format": "mp3",
+  "chapters": [
+    { "title": "Chapter 1 – The Beginning", "startTime": 0 },
+    { "title": "Chapter 2 – The Journey",   "startTime": 1823 },
+    { "title": "Chapter 3 – The Return",    "startTime": 4201 }
+  ]
+}
+Chapter fields:
+
+Field	Type	Description
+title	String	Chapter name displayed in the UI
+startTime	Number	Start position in seconds from the beginning of the track
+Chapters only appear in the player when contentType is "audiobook". Eclipse also automatically detects embedded chapters from M4B/MP4 files (via AVFoundation) - addon-provided chapters take priority if both are present.
+
+4. Album details (optional)
+If your addon returns albums in search results, implement GET /album/{id} so users can browse album tracks:
+
+{
+  "id": "album_456",
+  "title": "Album Title",
+  "artist": "Artist Name",
+  "artworkURL": "https://example.com/album.jpg",
+  "year": "2024",
+  "description": "Optional album description",
+  "trackCount": 12,
+  "tracks": [
+    {
+      "id": "track_1",
+      "title": "Track One",
+      "artist": "Artist Name",
+      "duration": 240,
+      "artworkURL": "https://example.com/cover.jpg",
+      "streamURL": "https://cdn.example.com/track1.mp3"
+    }
+  ]
+}
+Without this endpoint, Eclipse falls back to searching Apple Music by album name. If your content isn't on Apple Music (unreleased music, remixes, etc.), you need this endpoint.
+
+5. Artist details (optional)
+If your addon returns artists in search results, implement GET /artist/{id} so users can see top tracks and albums:
+
+{
+  "id": "artist_789",
+  "name": "Artist Name",
+  "artworkURL": "https://example.com/artist.jpg",
+  "bio": "Optional artist biography",
+  "genres": ["Hip-Hop", "R&B"],
+  "topTracks": [
+    {
+      "id": "track_1",
+      "title": "Hit Song",
+      "artist": "Artist Name",
+      "duration": 200,
+      "streamURL": "https://cdn.example.com/hit.mp3"
+    }
+  ],
+  "albums": [
+    {
+      "id": "album_1",
+      "title": "Album Name",
+      "artist": "Artist Name",
+      "artworkURL": "https://example.com/album.jpg",
+      "trackCount": 14,
+      "year": "2024"
+    }
+  ]
+}
+Without this endpoint, Eclipse falls back to searching Apple Music by artist name.
+
+6. Playlist details (optional)
+If your addon provides playlists, implement GET /playlist/{id}:
+
+{
+  "id": "playlist_123",
+  "title": "Playlist Name",
+  "description": "Curated collection",
+  "artworkURL": "https://example.com/playlist.jpg",
+  "creator": "Curator Name",
+  "tracks": [
+    {
+      "id": "track_1",
+      "title": "Track One",
+      "artist": "Artist Name",
+      "duration": 240,
+      "streamURL": "https://cdn.example.com/track1.mp3"
+    }
+  ]
+}
+7. ISRC lookup (optional, recommended)
+Add "isrc" to resources and implement GET /resolve-isrc?isrc={isrc}. Eclipse calls it before searching whenever it already knows which recording it wants (songs from Home, Radio, Discover, Daily Mix, Autoplay, Jam, shared links, and every fallback from another source). Return the id of the track that carries that ISRC in your catalog:
+
+{
+  "trackId": "track_123"
+}
+{"id": "track_123"} is accepted too. Eclipse then calls GET /stream/{trackId} as usual. If you do not have that recording, respond with 404 or {"trackId": null} - never return a different track. Eclipse treats any id you return as an exact match and plays it without further checks, so a guess here plays the wrong song.
+
+ISRC: The Secret Weapon
+Highly recommended - include ISRC whenever possible.
+If your tracks include ISRC (International Standard Recording Code), Eclipse can:
+
+Fetch high-quality artwork from Apple Music
+Show genre tags, album info, and editorial notes
+Display lyrics (synced and unsynced)
+Cross-reference with other services for fallback playback
+Pick the right track from your search results with certainty - a result whose ISRC equals the requested one wins outright
+Going the other way, implement GET /resolve-isrc so Eclipse can ask you for a recording by ISRC instead of searching by text. This is the most reliable way to have your addon play songs that were chosen elsewhere in the app.
+
+Addon Settings
+Declare settings and Eclipse builds the UI for them. Your users get a settings cog next to your addon in Settings → Connections, and whatever they choose is sent back to you on every request.
+
+Add "settings" to resources and describe the fields in the manifest:
+
+{
+  "id": "com.example.myaddon",
+  "name": "My Addon",
+  "version": "1.0.0",
+  "resources": ["search", "stream", "settings"],
+  "settings": [
+    {
+      "key": "quality",
+      "type": "select",
+      "label": "Audio quality",
+      "help": "Higher quality uses more data.",
+      "default": "high",
+      "perNetwork": true,
+      "options": [
+        { "value": "high",   "label": "High (320kbps)" },
+        { "value": "normal", "label": "Normal (160kbps)" },
+        { "value": "low",    "label": "Low (96kbps)" }
+      ]
+    },
+    {
+      "key": "videoQuality",
+      "type": "select",
+      "label": "Video quality",
+      "default": "1080p",
+      "options": [
+        { "value": "2160p", "label": "4K" },
+        { "value": "1080p", "label": "1080p" },
+        { "value": "720p",  "label": "720p" }
+      ]
+    },
+    { "key": "preferOpus", "type": "toggle", "label": "Prefer Opus", "default": true },
+    { "key": "region", "type": "text", "label": "Region code", "default": "US", "maxLength": 2 }
+  ]
+}
+Field types
+type	Renders as	Extra keys
+"select"	A picker	options (required): { value, label }
+"toggle"	A switch	-
+"text"	A text field	maxLength, placeholder
+"number"	A number field	min, max, step
+Every field takes key, label, an optional help line, and a default. The default is what Eclipse sends until the user changes anything, so an addon that never reads a setting still behaves correctly.
+
+How values reach you
+Eclipse appends the current values as query parameters, using your key verbatim, on every request it makes to your addon - search, stream, and the detail endpoints:
+
+GET /{token}/stream/abc123?quality=high&videoQuality=1080p&preferOpus=true&region=US
+Nothing is stored on your side. Read the parameter, or ignore it and fall back to your default - both are fine, and an addon that ships new settings works immediately for people who installed it before those settings existed.
+
+Per-network settings
+"perNetwork": true makes Eclipse store two values for that field and show both in the UI - one for Wi-Fi and one for cellular. You still receive a single parameter; Eclipse sends whichever matches the connection the device is on right now.
+
+The name field is free
+Eclipse always offers a display-name field, whether or not you declare settings. Renaming is purely cosmetic and never reaches your addon - your manifest name stays what it is.
+
+Video Playback
+If a track has a video, say so in the stream response and Eclipse shows a video toggle on the fullscreen player. Tapping it switches to a 16:9 player that can go fullscreen. The toggle appears only when the currently-playing track came from an addon that offered a video for it.
+
+{
+  "url": "https://cdn.example.com/track.m4a",
+  "format": "m4a",
+  "video": {
+    "url": "https://cdn.example.com/track.mp4",
+    "mimeType": "video/mp4",
+    "muxed": true,
+    "width": 1920,
+    "height": 1080
+  }
+}
+muxed
+Value	Meaning
+true	video.url contains picture and sound. Eclipse plays that one url in video mode. Works on every platform.
+false	video.url is picture only and must be played alongside the audio url. Eclipse combines them, and only offers the toggle on platforms that can.
+Serve muxed: true if you possibly can. A single file plays everywhere with no work; separate streams have to be combined and synchronised by the player, and not every platform can do it.
+
+Multiple renditions
+Offer renditions when you have several and let the user's videoQuality setting choose - this is exactly what the settings capability above is for:
+
+"video": {
+  "muxed": true,
+  "renditions": [
+    { "url": "...", "height": 2160, "mimeType": "video/mp4" },
+    { "url": "...", "height": 1080, "mimeType": "video/mp4" },
+    { "url": "...", "height": 720,  "mimeType": "video/mp4" }
+  ]
+}
+Eclipse picks the largest rendition at or below the user's preference, and falls back to the smallest available if none qualifies. A bare url and a renditions list can both be present; the list wins when it is non-empty.
+
+Rules
+Audio stays the source of truth. The url field is still required - video is an alternative view of the same track, not a replacement for it.
+Position carries across. Toggling to video and back keeps the playhead where it was, so both renditions must be the same cut of the same recording. If yours is not (an official video with an intro, a longer edit), say so with "independent": true: Eclipse then starts the video from the beginning and, on the way back, resumes the audio at the video's position, clamped to the audio's length.
+Omit video entirely for tracks that have none. Do not send an empty object; the toggle is driven by whether the field is present.
+Catalogs
+Catalogs let your addon fill Eclipse's Home, Discover and Browse screens with rows of your own choosing, made of your own items. Without them Eclipse shows its built-in Apple Music shelves and has to match each song into your addon when the listener presses play; a catalog item already carries your id, so there is nothing to match and nothing to get wrong.
+
+Declare the rows in your manifest and add "catalog" to resources:
+
+{
+  "id": "com.example.myaddon",
+  "name": "My Addon",
+  "version": "1.0.0",
+  "resources": ["search", "stream", "catalog"],
+  "catalogs": [
+    { "id": "top",     "type": "track",    "name": "Top Songs" },
+    { "id": "new",     "type": "album",    "name": "New Releases" },
+    { "id": "editors", "type": "playlist", "name": "Editor's Picks" }
+  ]
+}
+Eclipse then asks for each row separately:
+
+GET /catalog/{id}?skip=0
+
+{
+  "items": [
+    {
+      "id": "516681628",
+      "type": "track",
+      "title": "Spend Dat",
+      "artist": "Yung Miami",
+      "album": "Spend Dat",
+      "durationMs": 181000,
+      "isrc": "USUG12400123",
+      "artworkURL": "https://.../cover.jpg",
+      "explicit": false,
+      "hiRes": true
+    }
+  ]
+}
+Catalog fields
+field	required	notes
+id	yes	Unique per addon. Sent back to you as /catalog/{id}
+type	yes	"track", "album", "artist" or "playlist". Every item in the row is this type
+name	yes	The row heading Eclipse shows. You name and order your own rows
+Item fields
+field	required	notes
+id	yes	Your id. Passed straight back to your /stream or detail endpoints
+type	yes	Matches the catalog's type
+title	yes	
+artist	tracks, albums	
+isrc	tracks	See below. An empty string is not an ISRC
+artworkURL	recommended	Any size; Eclipse scales it
+album, durationMs, explicit, hiRes, year	optional	durationMs is a number of milliseconds, not a string
+ISRC is required on tracks, and here is why
+An item without an ISRC can only ever be played by the addon that produced it. With one, the same recording can be recognised by every other source a listener has, which is what lets playback fall back when your addon is unavailable, keeps their listening history from splitting one song into two entries, and lets Blend and Replay count it correctly. Send the real ISRC or omit the field; never send "".
+
+Paging
+skip is how many items to skip, always a multiple of 100. Returning fewer than 100 items tells Eclipse it has reached the end of that row. A row that is naturally short simply returns everything and is never asked again.
+
+Drilling in
+Album, artist and playlist items open through the detail endpoints described under 4. Album, 5. Artist and 6. Playlist. An addon that ships the detail endpoints as well gets browsable rows all the way down; one without them shows rows whose items open a track list only.
+
+Resolve
+Catalogs cover the screens a listener browses. Everything Eclipse generates - song radio, artist radio, autoplay, smart shuffle, Daily Mixes, Eclipse Stations and the AI DJ - produces tracks by identity (title, artist, and an isrc when one is known) rather than by any one service's ids, because the same queue has to play for listeners on completely different sources.
+
+Today Eclipse guesses which of your tracks each one means, by searching your addon and scoring the results. Implement resolve and it stops guessing: you tell it exactly which of your items a recording is.
+
+{ "resources": ["search", "stream", "resolve"] }
+
+GET /resolve?isrc=USUG12400123&title=Spend%20Dat&artist=Yung%20Miami&durationMs=181000
+
+{ "item": { "id": "516681628", "type": "track", "title": "Spend Dat",
+            "artist": "Yung Miami", "isrc": "USUG12400123" } }
+Return {"item": null} - with status 200 - when you genuinely do not have the recording. That is a normal answer, not an error, and Eclipse moves on to the next source in the listener's chain.
+
+What you are given
+parameter	notes
+isrc	Present when known. When it is, match on it alone and ignore the rest
+title, artist	Always present. Often the only identity available, because similar-track suggestions carry no ids
+durationMs	Optional. Useful for telling an edit or live version from the original
+Match strictly. A wrong answer here is worse than none: it plays the wrong recording, and because it came from you rather than from a guess, Eclipse trusts it and stops looking. If you are not confident it is the same recording, return null.
+
+Notifications
+Your addon can tell the listener what is going on: that it is rate limited, why a song could not play, or that a song is still being prepared. Eclipse shows it as a toast in the style of the listener's skin, with your addon's icon and name on it.
+
+Add "notifications" to resources:
+
+{
+  "id": "com.example.myaddon",
+  "name": "My Addon",
+  "version": "1.0.0",
+  "resources": ["search", "stream", "notifications"]
+}
+Then put a notice object in any JSON reply. It works on errors too:
+
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+
+{
+  "notice": {
+    "level": "warning",
+    "title": "Rate limited",
+    "message": "Too many new songs this hour. They play again in about 5 minutes."
+  }
+}
+Notice fields
+Field	Type	Required	Description
+message	String	Yes	The text shown. Up to 120 characters; longer text is cut.
+title	String	No	A short heading above the message. Up to 40 characters.
+level	String	No	"info" (default), "success", "warning" or "error". Sets the toast's icon and colour.
+id	String	No	Names the notice. A later notice with the same id replaces it in place instead of adding a second toast.
+progress	Number	No	0 to 1. Shows a progress bar. Leave it out when you do not know.
+duration	Number	No	Seconds on screen, 2 to 10. Default 4, or 6 for warning and error.
+Where notices can go
+In any JSON reply: the manifest, search, stream, album, artist, playlist, catalog, resolve and resolve-isrc, with any status code. A notice cannot ride inside an audio file; send it on the JSON reply that hands out the url.
+
+A notice on the manifest is for news that is not tied to a song. Eclipse shows it once per id, so give it an id and change the id when you want it shown again.
+
+A song that is not ready yet
+Answer /stream with 503 and a Retry-After header in seconds. Eclipse waits that long (30 seconds at most), asks again a few times, then moves on to the next source in the listener's playback order. Keep the same id on every answer and the toast follows along:
+
+503  { "notice": { "id": "prep-track_123", "title": "Preparing", "message": "Finding a copy of this song." } }
+503  { "notice": { "id": "prep-track_123", "title": "Waiting on TorBox", "message": "Downloaded. TorBox is caching it now." } }
+200  { "url": "https://cdn.example.com/track_123.flac" }
+While Eclipse is still asking, the toast stays up until the next answer replaces it. A 200 without a notice closes it and the song plays. If the song cannot be had, end with an error the listener can act on:
+
+404  { "notice": { "id": "prep-track_123", "level": "error", "title": "Could not prepare this song", "message": "It is not available from the source." } }
+Browsers only let the web player read Retry-After when you also send Access-Control-Expose-Headers: Retry-After. Without it the web player waits 5 seconds between tries.
+
+Rules
+Plain text only. No HTML, Markdown or links, and line breaks are ignored.
+Eclipse puts your addon's icon and name on every toast, so there is no need to repeat your name in the title.
+Use notices for what the listener cannot see otherwise: limits, failures, waits. A search that works needs no notice.
+Eclipse collapses repeats: the same text from the same addon is not shown twice within a minute, and a new notice from your addon replaces the one on screen rather than stacking under it.
+Listeners can turn your notices off with a Notifications switch in your addon's settings. It is on by default and appears only for addons that list "notifications". You are not told when it is off; your notices are simply not shown.
+Without "notifications" in resources, notices are ignored.
+Complete Example (Node.js)
+const express = require('express');
+const cors = require('cors');
+const app = express();
+app.use(cors());
+
+// Manifest
+app.get('/manifest.json', (req, res) => {
+  res.json({
+    id: 'com.example.demo',
+    name: 'Demo Addon',
+    version: '1.0.0',
+    description: 'A demo addon for Eclipse Music',
+    resources: ['search', 'stream'],
+    types: ['track']
+  });
+});
+
+// Search
+app.get('/search', (req, res) => {
+  const query = req.query.q || '';
+  // Replace with your actual search logic
+  res.json({
+    tracks: [
+      {
+        id: 'demo_1',
+        title: `Demo: ${query}`,
+        artist: 'Demo Artist',
+        duration: 180,
+        format: 'mp3'
+      }
+    ]
+  });
+});
+
+// Stream resolution
+app.get('/stream/:id', (req, res) => {
+  const trackId = req.params.id;
+  // Replace with your actual stream URL logic
+  res.json({
+    url: `https://your-cdn.com/audio/${trackId}.mp3`,
+    format: 'mp3',
+    quality: '320kbps'
+  });
+});
+
+app.listen(3000, () => {
+  console.log('Addon running on http://localhost:3000');
+});
+npm init -y
+npm install express cors
+node index.js
+Complete Example (Python)
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app)
+
+@app.route('/manifest.json')
+def manifest():
+    return jsonify({
+        'id': 'com.example.demo',
+        'name': 'Demo Addon',
+        'version': '1.0.0',
+        'description': 'A demo addon for Eclipse Music',
+        'resources': ['search', 'stream'],
+        'types': ['track']
+    })
+
+@app.route('/search')
+def search():
+    query = request.args.get('q', '')
+    # Replace with your actual search logic
+    return jsonify({
+        'tracks': [{
+            'id': 'demo_1',
+            'title': f'Demo: {query}',
+            'artist': 'Demo Artist',
+            'duration': 180,
+            'format': 'mp3'
+        }]
+    })
+
+@app.route('/stream/<track_id>')
+def stream(track_id):
+    # Replace with your actual stream URL logic
+    return jsonify({
+        'url': f'https://your-cdn.com/audio/{track_id}.mp3',
+        'format': 'mp3',
+        'quality': '320kbps'
+    })
+
+if __name__ == '__main__':
+    app.run(port=3000)
+pip install flask flask-cors
+python app.py
+Building a Catalog Without an Addon
+Everything above describes an addon catalog: your server decides what is in a row every time Eclipse asks, so it can change hourly, differ per listener, and page forever. That is the right shape when the row is generated.
+
+A user catalog is the other kind. It is a fixed list of items you choose, stored by Eclipse and installed by link. No server, no hosting, no uptime. You edit it and everyone who installed it sees the change on their next refresh.
+
+Addon catalog	User catalog
+You run	A web server	Nothing
+Contents	Decided per request	A list you saved
+Installed by	Addon URL	Catalog link
+Best for	Generated or personalised rows	A curated set that changes when you change it
+You can build a user catalog three ways: the editor on your account page, pasting a JSON list into that editor, or the API below. The API is there so you can generate a catalog from whatever you already have - a spreadsheet, a script, your own database - without touching the form.
+
+Item Format
+Every item needs an identifier, a title and an artist. Which identifier depends on the catalog type.
+
+Field	Type	Required	Notes
+isrc	String	Yes, except playlist	The 12-character recording code, e.g. USRC11903813. Dashes and lower case are accepted and normalised. This is what makes a catalog play the right recording rather than a re-record or a cover.
+tracks	Array	Only for playlist	The songs in this playlist, 1 to 100 of them. A playlist entry carries its own songs rather than pointing at a playlist you already have - so it opens for everyone who installs your catalog, not just you. Each track needs isrc, title and artist, and may carry album, artworkURL and durationMs. Playlist entries use this instead of a top-level isrc.
+title	String	Yes	Shown on the tile.
+artist	String	Yes	Shown under the title, except on artist tiles.
+album	String	No	Used when opening an album tile.
+artworkURL	String	No	Your own cover for this entry. It wins over whatever the provider has, on the tile and on the screen it opens - so the catalog looks the way you intended.
+durationMs	Number	No	Milliseconds.
+Items with a repeated identifier are collapsed to the first one: the same recording twice in a row is a mistake every time. A playlist entry is identified by its title, so two playlists in one catalog need different names. The server sets id itself and returns it, along with trackCount on a playlist entry; do not send either.
+
+A playlist entry looks like this:
+
+{
+  "title": "90s Road Trip",
+  "artist": "Petar",
+  "tracks": [
+    { "isrc": "USGF19942501", "title": "Smells Like Teen Spirit", "artist": "Nirvana" },
+    { "isrc": "GBAAW9500189", "title": "Wonderwall", "artist": "Oasis" }
+  ]
+}
+Leave artworkURL off a playlist entry and its cover is built from the first four tracks.
+
+{
+  "isrc": "USRC11903813",
+  "title": "Late Night",
+  "artist": "Some Artist",
+  "album": "Small Hours",
+  "artworkURL": "https://example.com/cover.jpg"
+}
+Catalog API
+Every call needs your Eclipse account token: Authorization: Bearer <token>. Base URL https://api.eclipsemusic.app/api.
+
+Endpoint	Purpose
+POST /catalogs	Create one (up to 6 per account)
+GET /catalogs	List the ones you own
+GET /catalogs/{id}	Read one
+PATCH /catalogs/{id}	Edit name, type, items, row size, rotation, sharing
+DELETE /catalogs/{id}	Delete it
+GET /catalogs/{id}/items	The row as a listener sees it today
+POST /catalogs/{id}/install	Put it on your Home
+POST /catalogs/{id}/uninstall	Take it off
+Creating one
+POST /api/catalogs
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "Late Night Drives",
+  "type": "track",
+  "description": "For the long way home.",
+  "rowSize": 12,
+  "rotatesDaily": false,
+  "items": [
+    { "isrc": "USRC11903813", "title": "Late Night", "artist": "Some Artist" },
+    { "isrc": "GBUM71029604", "title": "Another One", "artist": "Someone Else" }
+  ]
+}
+Returns 201 and the catalog document, including the id you will use everywhere else.
+
+You can own up to six catalogs. That is a limit on ones you create, because each is stored on our servers. Installing catalogs other people made is unlimited - that only adds a key to your row order.
+
+Field	Type	Required	Notes
+name	String	Yes	Up to 60 characters.
+type	String	No	track (default), album, artist or playlist. One type per catalog - it decides what tapping a tile does and which identifier the items need.
+items	Array	Yes	At least one, at most 500. See Item Format.
+description	String	No	Up to 200 characters.
+rowSize	Number	No	How many tiles the row shows: 5 to 30, default 12. The rest are reachable from the row heading.
+rotatesDaily	Boolean	No	With more items than rowSize, show a different slice each day. The slice is chosen from the date and the catalog id, so every listener sees the same one on the same day and it moves once a day. The window walks the list rather than reshuffling it, so your ordering still means something inside it.
+Editing one
+PATCH takes the same fields and changes only what you send. Sending items replaces the whole list. Anyone who installed the catalog sees the new version on their next refresh - there is nothing for them to reinstall.
+
+PATCH /api/catalogs/{id}
+{ "name": "Later Night Drives", "rowSize": 20 }
+Sharing it
+A catalog is private until you say otherwise. PATCH with "isPublic": true lists it on the community page, which also requires screenshotURL - a picture of the row so people can see what they are installing. Its link is https://eclipsemusic.app/s/catalog/{id}, and opening that in Eclipse offers to install it.
+
+Errors
+Every rejection names the field, and an item error names its index, so a bad row in a long list is easy to find.
+
+Response	Meaning
+400 item 4: isrc	Item 4 has a missing or malformed ISRC.
+400 item 0: tracks required	A playlist entry has no songs in it.
+400 item 0: track 3: isrc	The fourth song in that playlist entry has a missing or malformed ISRC.
+400 item 2: title required	Item 2 has no title. The same shape is used for artist, and for a value over the length limit.
+400 a catalog needs at least one item	The list was empty, or every item was a duplicate.
+400 rowSize between 5 and 30	Out of range.
+400 you can create up to 6 catalogs	You already own six. Delete one to make room. Catalogs you installed from someone else do not count.
+403 not yours	You can only edit catalogs you own.
+404 no such catalog	Wrong id, or it is private and not yours.
+Hosting
+Your addon must be accessible via HTTPS. Options:
+
+Platform	Free Tier	Notes
+Cloudflare Workers	100k req/day	Serverless, global CDN
+Vercel	Generous	Serverless functions
+Railway	$5/mo	Full server
+Fly.io	3 shared VMs	Docker containers
+Your own server	-	Any VPS with HTTPS
+For local development, use http://localhost:3000 - Eclipse accepts HTTP for local network addresses.
+
+Testing on a real iPhone/iPad: Use your Mac's local IP instead of localhost (e.g. http://192.168.1.100:3000/). Run ipconfig getifaddr en0 on your Mac to get it. Phone must be on the same WiFi. Make sure your server binds to 0.0.0.0 (all interfaces), not just 127.0.0.1.
+
+How Eclipse Uses Your Addon
+Search Flow
+User selects your addon in the search dropdown
+User types a query
+Eclipse calls GET /search?q={query} on your server
+Your results appear in Eclipse's search UI (same layout as Apple Music/Tidal results)
+If tracks have ISRC codes, Eclipse enriches them with MusicKit metadata (high-quality artwork, genre, lyrics availability)
+Playback Flow
+User taps play on a track from your addon
+Eclipse calls GET /stream/{trackId} on your server
+Your server returns the stream URL
+Eclipse plays it through its audio engine (supports MP3, AAC, FLAC, etc.)
+All audio features work automatically - EQ, reverb, speed control, lock screen, AirPlay, CarPlay
+Album/Artist/Playlist Browsing
+When a user taps an album, artist, or playlist from your search results:
+
+If you implement /album/{id}, /artist/{id}, or /playlist/{id} - Eclipse loads the data from your addon
+If you don't - Eclipse falls back to searching Apple Music (MusicKit) by name. This works for mainstream content but fails for content not on Apple Music (unreleased music, remixes, etc.)
+Add "catalog" to your manifest resources to enable the Playlists filter tab in search
+Default Playback
+Users can set your addon as the Default Playback source in Settings → Addon Management. When set:
+
+Songs from the Home tab, Radio, AI DJ, Genre Map, editorial playlists, and Smart Shuffle are played through your addon
+If your addon lists "isrc" in resources and the song has an ISRC, Eclipse calls GET /resolve-isrc first and plays the id you return
+Otherwise Eclipse searches your addon by "artist title" and scores every result against the song it wants (matching ISRC, then title, artist, duration, album). Only a result that clears the threshold is played; the first result is not assumed to be right
+If nothing matches, Eclipse moves on to the next source in the user's playback order. It never plays a close-but-wrong track from your addon
+Playlist/Library Integration
+When a user saves your addon's tracks to a playlist or their library:
+
+Eclipse stores your addon ID, track ID, and stream URL alongside the song metadata
+Tracks with permanent stream URLs (podcast episodes, direct MP3 links) play without your addon installed
+Tracks with expiring URLs need your addon installed - Eclipse calls /stream/{id} to get a fresh UR
